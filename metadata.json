@@ -1,0 +1,6 @@
+{
+  "name": "LeavienAI",
+  "description": "A gamified math learning platform for Grade 11 students with interactive quizzes and real-time progress tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

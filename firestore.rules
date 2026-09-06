@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper to check if user is faculty
+    function isFaculty() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'faculty';
+    }
+
+    // Allow users to read and write their own profile
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (request.auth.uid == userId || isFaculty());
+      
+      // Allow users to manage their own subcollections (like results)
+      match /{allSubcollections=**} {
+        allow read, write: if request.auth != null && (request.auth.uid == userId || isFaculty());
+      }
+    }
+
+    // Allow everyone to read curriculum, but only faculty to write
+    match /curriculum/{topicId} {
+      allow read: if true;
+      allow write: if request.auth != null && isFaculty();
+    }
+
+    // Collaborative study requests between students
+    match /study_requests/{requestId} {
+      allow read: if request.auth != null && (
+        resource.data.fromUserId == request.auth.uid || 
+        resource.data.toUserId == request.auth.uid || 
+        isFaculty()
+      );
+      allow create: if request.auth != null && request.resource.data.fromUserId == request.auth.uid;
+      allow update: if request.auth != null && (
+        resource.data.fromUserId == request.auth.uid || 
+        resource.data.toUserId == request.auth.uid || 
+        isFaculty()
+      );
+      allow delete: if request.auth != null && (
+        resource.data.fromUserId == request.auth.uid || 
+        resource.data.toUserId == request.auth.uid || 
+        isFaculty()
+      );
+    }
+
+    // Direct chat messages between students
+    match /chat_messages/{messageId} {
+      allow read: if request.auth != null && (
+        resource.data.senderId == request.auth.uid || 
+        resource.data.recipientId == request.auth.uid ||
+        request.auth.uid in resource.data.participants ||
+        isFaculty()
+      );
+      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
+      allow update: if request.auth != null && (
+        resource.data.senderId == request.auth.uid || 
+        resource.data.recipientId == request.auth.uid ||
+        isFaculty()
+      );
+      allow delete: if request.auth != null && (
+        resource.data.senderId == request.auth.uid || 
+        isFaculty()
+      );
+    }
+
+    // Video lectures published by faculty
+    match /videoLectures/{lectureId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && isFaculty();
+    }
+  }
+}

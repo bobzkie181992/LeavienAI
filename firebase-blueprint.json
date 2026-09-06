@@ -1,0 +1,94 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user gamification progress",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "lrn": { "type": "string", "description": "Learner Reference Number (12-digit student ID)" },
+        "grade": { "type": "string" },
+        "section": { "type": "string" },
+        "xp": { "type": "number" },
+        "level": { "type": "number" },
+        "streak": { "type": "number" },
+        "lastActive": { "type": "string" },
+        "badges": { "type": "array" }
+      },
+      "required": ["uid", "xp", "level"]
+    },
+    "QuizResult": {
+      "title": "Quiz Result",
+      "description": "Stores individual quiz performance",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "quizId": { "type": "string" },
+        "score": { "type": "number" },
+        "total": { "type": "number" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["userId", "quizId", "score", "total"]
+    },
+    "StudyRequest": {
+      "title": "Study Request",
+      "description": "Collaborative study invite sent between students for specific topics or quizzes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fromUserId": { "type": "string" },
+        "fromUserName": { "type": "string" },
+        "toUserId": { "type": "string" },
+        "toUserName": { "type": "string" },
+        "topicId": { "type": "string" },
+        "topicTitle": { "type": "string" },
+        "quizId": { "type": "string" },
+        "quizTitle": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["fromUserId", "fromUserName", "toUserId", "toUserName", "topicId", "topicTitle", "status", "createdAt"]
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "Direct message sent between peer students for collaborative chat and study requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "participants": { "type": "array" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "recipientName": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "read": { "type": "boolean" },
+        "studyRequestId": { "type": "string" },
+        "studyRequestData": { "type": "object" }
+      },
+      "required": ["conversationId", "participants", "senderId", "senderName", "recipientId", "recipientName", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/users/{userId}/results/{resultId}": {
+      "schema": "QuizResult",
+      "description": "User quiz history"
+    },
+    "/study_requests/{requestId}": {
+      "schema": "StudyRequest",
+      "description": "Collaborative study requests between students"
+    },
+    "/chat_messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Direct chat messages between students"
+    }
+  }
+}
