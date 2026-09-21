@@ -4,6 +4,8 @@ import { Topic, Problem, LearningPathway, isValidatedOrActive, AIMistakeGuidance
 import * as Icons from 'lucide-react';
 import { generateLearningPathway } from '../utils/pathwayGenerator';
 import { generateAIMistakeGuidance, fetchAIMistakeDiagnosis } from '../utils/aiTutorCoach';
+import { playPopSound } from '../utils/audioEffects';
+import { useDiagnosticExam } from '../hooks/useFirebase';
 
 interface DiagnosticAssessmentProps {
   topics: Topic[];
@@ -23,6 +25,8 @@ interface CompetencyDiagnosticItem {
 }
 
 export default function DiagnosticAssessment({ topics, onComplete, onCancel }: DiagnosticAssessmentProps) {
+  const { questions: fetchedQuestions, settings: diagnosticSettings, loading: loadingQuestions } = useDiagnosticExam();
+
   const [assessmentPhase, setAssessmentPhase] = useState<'intro' | 'testing' | 'summary'>('intro');
   const [currentStep, setCurrentStep] = useState(0);
   const [firstAttemptCorrect, setFirstAttemptCorrect] = useState<Record<string, boolean>>({});
@@ -36,46 +40,113 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
   const [isSolutionRevealed, setIsSolutionRevealed] = useState<boolean>(false);
   const [revealedHintTier, setRevealedHintTier] = useState<number>(0);
 
+
+  // Next-Level Transition / Competency Placement Assessment states
+  const [isTakingBooster, setIsTakingBooster] = useState(false);
+  const [boosterStep, setBoosterStep] = useState(0);
+  const [selectedBoosterOption, setSelectedBoosterOption] = useState<number | null>(null);
+  const [boosterAnswers, setBoosterAnswers] = useState<number[]>([]);
+  const [boosterIsSubmitted, setBoosterIsSubmitted] = useState(false);
+  const [boosterFinished, setBoosterFinished] = useState(false);
+  const [boosterScore, setBoosterScore] = useState(0);
+
+  // Premium Next-Level Transition Questions List (Grade 11/12 Mathematics Bridge)
+  const boosterQuestions = useMemo(() => [
+    {
+      id: "booster_1",
+      topic: "Inverse, Exponential & Logarithmic Functions",
+      prerequisiteFor: "Differential Calculus, Population Growth & Radioactive half-lives",
+      question: "To model population growth or continuous decay, you must master exponential properties. Solve for x: 3^(2x - 1) = 27.",
+      options: ["x = 1", "x = 2", "x = 1.5", "x = 3"],
+      correct: 1,
+      explanation: "Since 27 can be expressed as 3^3, we can equate the exponents: 2x - 1 = 3. Solving for x yields 2x = 4, which simplifies to x = 2."
+    },
+    {
+      id: "booster_2",
+      topic: "Rational Equations & Functions",
+      prerequisiteFor: "Advanced curve sketching, finding infinite limits and asymptotes",
+      question: "In Calculus, locating points of infinite discontinuity is essential. Determine the vertical asymptote of f(x) = (x^2 - 4) / (x^2 - 5x + 6).",
+      options: ["x = 2 and x = 3", "x = 3 only", "x = 2 only", "No vertical asymptote"],
+      correct: 1,
+      explanation: "Factoring yields f(x) = [(x - 2)(x + 2)] / [(x - 2)(x - 3)]. The common factor (x - 2) cancels out, producing a removable point discontinuity (hole) at x = 2. Thus, the only vertical asymptote is x = 3 only."
+    },
+    {
+      id: "booster_3",
+      topic: "General Functions & Composites",
+      prerequisiteFor: "The Definition of the Derivative (Difference Quotient)",
+      question: "The difference quotient [f(x+h) - f(x)] / h is the formal foundation of rates of change. If f(x) = 2x^2 + 3, simplify this quotient.",
+      options: ["2h", "4x + 2h", "4x", "4x + h"],
+      correct: 1,
+      explanation: "Expanding f(x+h) gives 2(x^2 + 2xh + h^2) + 3 = 2x^2 + 4xh + 2h^2 + 3. Subtracting f(x) leaves 4xh + 2h^2. Dividing by h results in 4x + 2h."
+    },
+    {
+      id: "booster_4",
+      topic: "Mathematical Logic & Proofs",
+      prerequisiteFor: "Mathematical Induction, Real Analysis, & Logical rigor",
+      question: "Advanced proofs rely heavily on contrapositive equivalence. What is the contrapositive of: 'If x^2 is even, then x is even'?",
+      options: [
+        "If x is even, then x^2 is even.",
+        "If x is odd, then x^2 is odd.",
+        "If x^2 is odd, then x is odd.",
+        "If x is even, then x^2 is odd."
+      ],
+      correct: 1,
+      explanation: "The contrapositive of 'If P then Q' is 'If not Q then not P'. Negating both components yields: 'If x is not even (odd), then x^2 is not even (odd)'."
+    },
+    {
+      id: "booster_5",
+      topic: "General Business Mathematics",
+      prerequisiteFor: "Continuous financial modeling, integrals of continuous streams",
+      question: "To model continuously compounding financial systems, we use Euler's constant (e). If P dollars is invested at rate r compounded continuously, what is the balance after t years?",
+      options: [
+        "A(t) = P(1 + r)^t",
+        "A(t) = P * e^(rt)",
+        "A(t) = P * e^(t)",
+        "A(t) = P(1 + r/n)^(nt)"
+      ],
+      correct: 1,
+      explanation: "Continuous compounding is modeled by the classic exponential equation A(t) = P * e^(rt), where e is the base of natural logarithms."
+    }
+  ], []);
+
   // Generate diagnostic problem set covering key Grade 11 General Mathematics competencies
   const diagnosticProblems = useMemo(() => {
-    const problems: (Problem & { topicId: string; topicTitle: string; competencyLabel: string })[] = [];
+    if (!fetchedQuestions || fetchedQuestions.length === 0) return [];
     
-    topics.forEach((topic) => {
-      // Gather active or validated problems for this topic
-      const activeProblems = topic.quizzes
-        .flatMap(q => q.problems)
-        .filter(isValidatedOrActive);
-      
-      if (activeProblems.length > 0) {
-        // Group problems by competency if available
-        const competencyMap = new Map<string, Problem[]>();
-        activeProblems.forEach(p => {
-          const compKey = p.competency?.trim() || topic.title;
-          if (!competencyMap.has(compKey)) {
-            competencyMap.set(compKey, []);
-          }
-          competencyMap.get(compKey)!.push(p);
-        });
+    // Shuffle or maintain stable slice based on teacher-configured settings
+    const shuffled = [...fetchedQuestions].sort(() => 0.5 - Math.random());
+    const limit = diagnosticSettings?.itemsCount || 10;
+    
+    return shuffled.slice(0, limit).map((q) => ({
+      id: q.id,
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correct,
+      explanation: q.explanation,
+      hint1: q.hint1 || '',
+      hint2: q.hint2 || '',
+      topicId: q.topic.toLowerCase().replace(/\s+/g, '-'),
+      topicTitle: q.topic,
+      competencyLabel: q.competency,
+      competency: q.competency,
+      status: 'Active' as const,
+      hints: [q.hint1 || '', q.hint2 || '']
+    }));
+  }, [fetchedQuestions, diagnosticSettings]);
 
-        // Select up to 2 representative problems per competency / topic
-        competencyMap.forEach((compProblems, compName) => {
-          const shuffledComp = [...compProblems].sort(() => 0.5 - Math.random());
-          const selected = shuffledComp.slice(0, 2);
-          selected.forEach(p => {
-            problems.push({
-              ...p,
-              topicId: topic.id,
-              topicTitle: topic.title,
-              competencyLabel: compName
-            });
-          });
-        });
-      }
-    });
-
-    // If we have problems, sort them logically or shuffle them with consistent representation
-    return problems.sort(() => 0.5 - Math.random());
-  }, [topics]);
+  if (loadingQuestions) {
+    return (
+      <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col items-center justify-center p-6 text-center">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+          className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full mb-4 animate-spin"
+        />
+        <h3 className="text-lg font-bold text-slate-800">Loading Diagnostic Assessment...</h3>
+        <p className="text-slate-500 text-sm mt-1">Preparing baseline questions based on teacher curriculum rules.</p>
+      </div>
+    );
+  }
 
   if (diagnosticProblems.length === 0) {
     return (
@@ -374,6 +445,276 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
       );
     }
 
+    // =========================================================================
+    // SUB-VIEW A: ACTIVE NEXT-LEVEL COMPETENCY BOOSTER CHALLENGE
+    // =========================================================================
+    if (isTakingBooster) {
+      const q = boosterQuestions[boosterStep];
+      const boosterProgress = ((boosterStep + 1) / boosterQuestions.length) * 100;
+      return (
+        <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col">
+          {/* Top Navigation Bar */}
+          <div className="px-4 sm:px-6 py-4 bg-white border-b border-slate-100 shadow-sm z-10 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 font-bold text-slate-900">
+              <button 
+                onClick={() => {
+                  setIsTakingBooster(false);
+                  setBoosterStep(0);
+                  setSelectedBoosterOption(null);
+                  setBoosterAnswers([]);
+                  setBoosterIsSubmitted(false);
+                }} 
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                title="Cancel Assessment"
+              >
+                <Icons.ArrowLeft className="w-5 h-5 text-slate-500" />
+              </button>
+              <div className="flex items-center gap-2">
+                <Icons.Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
+                <span className="text-sm font-black tracking-tight text-slate-900">Next-Level Transition Challenge</span>
+              </div>
+            </div>
+
+            <div className="flex-1 max-w-xs sm:max-w-md mx-2 sm:mx-8">
+              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-indigo-600 transition-all duration-300"
+                  style={{ width: `${boosterProgress}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="text-xs sm:text-sm font-bold text-slate-400 shrink-0">
+              Item {boosterStep + 1} of {boosterQuestions.length}
+            </div>
+          </div>
+
+          {/* Question Content Area */}
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8">
+            <div className="max-w-2xl mx-auto space-y-6">
+              {/* Prerequisite and Prep label */}
+              <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-3xl relative overflow-hidden">
+                <div className="absolute right-0 bottom-0 translate-x-3 translate-y-3 opacity-10">
+                  <Icons.Award className="w-24 h-24 text-indigo-900" />
+                </div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Icons.Award className="w-4 h-4 text-indigo-600" />
+                  <span className="text-[10px] font-black uppercase text-indigo-800 tracking-wider">
+                    Booster Domain: {q.topic}
+                  </span>
+                </div>
+                <p className="text-xs text-indigo-950 font-bold leading-relaxed">
+                  Required Competency for: <span className="underline decoration-indigo-400">{q.prerequisiteFor}</span>
+                </p>
+              </div>
+
+              {/* Question Statement */}
+              <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-100 shadow-sm">
+                <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-snug">
+                  {q.question}
+                </h3>
+              </div>
+
+              {/* Multiple Choice Options */}
+              <div className="grid gap-3">
+                {q.options.map((opt, oIdx) => {
+                  let optStyle = "border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/20";
+                  if (selectedBoosterOption === oIdx) {
+                    optStyle = "border-indigo-600 bg-indigo-50 ring-2 ring-indigo-500/20";
+                  }
+                  if (boosterIsSubmitted) {
+                    if (oIdx === q.correct) {
+                      optStyle = "border-emerald-500 bg-emerald-50 text-emerald-950";
+                    } else if (selectedBoosterOption === oIdx) {
+                      optStyle = "border-rose-300 bg-rose-50/50 text-rose-950 opacity-75";
+                    }
+                  }
+                  return (
+                    <button
+                      key={oIdx}
+                      disabled={boosterIsSubmitted}
+                      onClick={() => setSelectedBoosterOption(oIdx)}
+                      className={`w-full p-4 sm:p-5 rounded-2xl text-left border-2 transition-all flex items-center justify-between ${optStyle}`}
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                          boosterIsSubmitted && oIdx === q.correct ? 'bg-emerald-500 text-white' :
+                          boosterIsSubmitted && selectedBoosterOption === oIdx ? 'bg-rose-400 text-white' :
+                          selectedBoosterOption === oIdx ? 'bg-indigo-600 text-white' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {String.fromCharCode(65 + oIdx)}
+                        </span>
+                        <span className="font-semibold text-slate-800 text-sm sm:text-base">
+                          {opt}
+                        </span>
+                      </div>
+                      {boosterIsSubmitted && oIdx === q.correct && <Icons.CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                      {boosterIsSubmitted && selectedBoosterOption === oIdx && oIdx !== q.correct && <Icons.XCircle className="w-5 h-5 text-rose-600" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Explainer Insight Box */}
+              {boosterIsSubmitted && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-5 rounded-3xl bg-slate-50 border border-slate-200 text-sm"
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Icons.Lightbulb className="w-4 h-4 text-amber-500" />
+                    <span className="font-extrabold text-slate-900 text-xs uppercase tracking-wider">Booster Mathematical Proof</span>
+                  </div>
+                  <p className="text-slate-600 leading-relaxed text-xs">
+                    {q.explanation}
+                  </p>
+                </motion.div>
+              )}
+            </div>
+          </div>
+
+          {/* Action Footer Bar */}
+          <div className="px-4 sm:px-6 py-4 bg-white border-t border-slate-100 flex justify-end gap-3 z-10">
+            {!boosterIsSubmitted ? (
+              <button
+                disabled={selectedBoosterOption === null}
+                onClick={() => {
+                  setBoosterIsSubmitted(true);
+                  if (selectedBoosterOption === q.correct) {
+                    setBoosterScore(prev => prev + 1);
+                  }
+                  setBoosterAnswers(prev => [...prev, selectedBoosterOption!]);
+                }}
+                className="px-8 py-3.5 bg-indigo-600 text-white font-bold rounded-2xl text-xs uppercase tracking-wider disabled:opacity-50 hover:bg-indigo-700 active:scale-95 transition-all shadow-md"
+              >
+                Verify Competency
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setSelectedBoosterOption(null);
+                  setBoosterIsSubmitted(false);
+                  if (boosterStep + 1 < boosterQuestions.length) {
+                    setBoosterStep(prev => prev + 1);
+                  } else {
+                    setBoosterFinished(true);
+                    setIsTakingBooster(false);
+                  }
+                }}
+                className="px-8 py-3.5 bg-slate-900 text-white font-bold rounded-2xl text-xs uppercase tracking-wider hover:bg-slate-800 active:scale-95 transition-all"
+              >
+                {boosterStep + 1 < boosterQuestions.length ? "Proceed to Next Question" : "View Final Report"}
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SUB-VIEW B: BOOSTER CHALLENGE RESULTS REPORT
+    // =========================================================================
+    if (boosterFinished) {
+      const boostPercent = Math.round((boosterScore / boosterQuestions.length) * 100);
+      let rating = "Silver Standard (Developing)";
+      let ratingDesc = "You are building foundational competencies. Review your conceptual breakdowns and work through the custom-guided curriculum pathways to establish competitive speed under exam conditions.";
+      let badgeColor = "bg-rose-100 text-rose-800 border-rose-200";
+      
+      if (boosterScore === 5) {
+        rating = "🏆 Platinum Elite Preparatory (100% Competitive)";
+        ratingDesc = "Sensational score! You possess flawless conceptual agility and analytical mechanics. You are fully prepared to lead group learning activities and tackle university-level calculus modeling!";
+        badgeColor = "bg-indigo-100 text-indigo-800 border-indigo-200";
+      } else if (boosterScore >= 3) {
+        rating = "⭐ Gold Transition Ready (Sufficiently Competitive)";
+        ratingDesc = "Superb job! You possess sufficient mathematical literacy to transition smoothly to Grade 12 advanced pre-calculus, analytic curves, and Euler exponential continuous modeling.";
+        badgeColor = "bg-amber-100 text-amber-800 border-amber-200";
+      }
+
+      return (
+        <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6 space-y-6">
+          <div className="bg-white rounded-[32px] p-6 sm:p-10 shadow-2xl border border-slate-100">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-indigo-100">
+                <Icons.Sparkles className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                Placement Booster Report
+              </h2>
+              <p className="text-slate-500 text-xs max-w-md mx-auto mt-1 leading-relaxed">
+                Evaluating structural competency and readiness for high-tier university algebraic and calculus progressions.
+              </p>
+            </div>
+
+            {/* Score Showcase */}
+            <div className="bg-slate-50 rounded-[24px] p-6 sm:p-8 mb-8 border border-slate-200 text-center">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
+                Booster Placement Score:
+              </span>
+              <div className="text-5xl font-black text-indigo-600 mb-2">
+                {boosterScore} / {boosterQuestions.length}
+              </div>
+              <p className="text-xs text-slate-500 font-bold mb-4">{boostPercent}% Overall Transition Performance</p>
+              
+              <div className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${badgeColor} mb-3`}>
+                <span>{rating}</span>
+              </div>
+              <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+                {ratingDesc}
+              </p>
+            </div>
+
+            {/* Question-by-Question Review */}
+            <div className="space-y-4 mb-8">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-2">
+                Booster Itemized Review
+              </h3>
+              <div className="space-y-3">
+                {boosterQuestions.map((bq, idx) => {
+                  const isCorrect = boosterAnswers[idx] === bq.correct;
+                  return (
+                    <div key={bq.id} className={`p-5 rounded-2xl border ${isCorrect ? 'bg-emerald-50/40 border-emerald-100' : 'bg-rose-50/40 border-rose-100'}`}>
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                            Item {idx + 1} • {bq.topic}
+                          </span>
+                          <p className="text-xs font-bold text-slate-800 mt-0.5 leading-snug">
+                            {bq.question}
+                          </p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                          {isCorrect ? 'Correct' : 'Incorrect'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 italic mb-2 leading-relaxed">
+                        Your submission: <span className="font-semibold text-slate-700">{bq.options[boosterAnswers[idx] ?? 0]}</span> | Correct answer: <span className="font-semibold text-emerald-700">{bq.options[bq.correct]}</span>
+                      </p>
+                      <div className="bg-white/80 p-3.5 rounded-xl border border-slate-100 text-xs text-slate-600 leading-relaxed">
+                        <strong className="text-slate-900 font-bold">Concept Insight:</strong> {bq.explanation}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                const finalBoosterScores = { ...finalScores, boosterScore, boosterPercent: boostPercent };
+                onComplete(estimatedAbility, finalBoosterScores, generatedPathway);
+                setBoosterFinished(false);
+              }}
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg transition-all text-center"
+            >
+              Finish Challenge & Save to Dashboard (+150 XP!)
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
@@ -477,70 +818,100 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
           </div>
 
           {/* ========================================================================= */}
-          {/* SYSTEM RECOMMENDATION: WHAT TO STUDY NEXT                                  */}
+          {/* SYSTEM RECOMMENDATION & PREREQUISITE GAP ANALYSIS                           */}
           {/* ========================================================================= */}
-          <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-violet-900 rounded-3xl p-6 sm:p-8 text-white shadow-lg mb-8">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider">
-                Targeted Remediation Plan
+          <div className="bg-gradient-to-br from-slate-950 via-indigo-950 to-indigo-900 rounded-[32px] p-6 sm:p-8 text-white shadow-xl mb-8 relative overflow-hidden border border-indigo-500/20">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full -mr-20 -mt-20 blur-3xl" />
+            
+            <div className="flex items-center gap-2 mb-4">
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500 text-white text-[9px] font-black uppercase tracking-widest">
+                Prerequisite Gap Analysis
               </span>
-              <span className="text-xs text-indigo-200">Personalized Next Steps</span>
+              <span className="text-xs text-indigo-200 font-bold">Grade 11 → Grade 12 Transition</span>
             </div>
 
-            <h3 className="text-xl sm:text-2xl font-black mb-2 flex items-center gap-2">
-              <Icons.Sparkles className="w-5 h-5 text-amber-300" />
-              <span>Recommended What to Study Next</span>
+            <h3 className="text-xl sm:text-2xl font-black mb-3 flex items-center gap-2 tracking-tight">
+              <Icons.Sparkles className="w-5 h-5 text-amber-400" />
+              <span>Next-Level Mathematics Prerequisites</span>
             </h3>
 
-            <p className="text-xs sm:text-sm text-indigo-100 mb-6 leading-relaxed">
-              Based on your diagnostic profile, your learning sequence has been calibrated to reinforce prerequisite skills and address knowledge gaps:
+            <p className="text-xs sm:text-sm text-indigo-100/90 mb-6 leading-relaxed">
+              To be highly competitive and successful in advanced Grade 12 calculus sequences and engineering/business math, your prerequisite skills require key reinforcements:
             </p>
 
-            <div className="space-y-3 mb-6">
-              {needsInterventionList.length > 0 && (
-                <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
-                  <div className="flex items-center gap-2 text-rose-300 font-bold text-xs uppercase tracking-wider mb-1">
-                    <Icons.AlertCircle className="w-3.5 h-3.5" />
-                    <span>Priority 1: Immediate Intervention Required</span>
+            <div className="space-y-4 mb-8">
+              {needsInterventionList.length > 0 ? (
+                <div className="bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 space-y-2">
+                  <div className="flex items-center gap-2 text-rose-400 font-black text-xs uppercase tracking-wider">
+                    <Icons.AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>Calculus Blocker Warning (Needs Immediate Action)</span>
                   </div>
-                  <div className="font-bold text-white text-sm">
-                    {needsInterventionList.map(c => c.competencyName).join(', ')}
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    You have structural gaps in: <strong className="text-rose-300 font-bold">{needsInterventionList.map(c => c.competencyName).join(', ')}</strong>. 
+                  </p>
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    * Without master level control of this topic, finding the algebraic limits, computing limits of rational functions containing discontinuities, or resolving exponential derivatives will be extremely difficult. Start with foundational pathway worksheets.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 space-y-1.5">
+                  <div className="flex items-center gap-2 text-emerald-400 font-black text-xs uppercase tracking-wider">
+                    <Icons.CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>Prerequisite Solid Base Locked</span>
                   </div>
-                  <p className="text-xs text-indigo-200 mt-1">
-                    Start with foundational concept definitions, formula reviews, and worked examples before attempting timed tests.
+                  <p className="text-xs text-slate-300 leading-normal">
+                    Your baseline domains meet transition-ready standards! Your understanding of core Grade 11 math functions is structurally sound enough to approach composite derivative applications.
                   </p>
                 </div>
               )}
 
               {developingList.length > 0 && (
-                <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
-                  <div className="flex items-center gap-2 text-amber-300 font-bold text-xs uppercase tracking-wider mb-1">
-                    <Icons.Clock className="w-3.5 h-3.5" />
-                    <span>Priority 2: Developing Competencies (Practice with Hints)</span>
+                <div className="bg-white/5 backdrop-blur-md p-5 rounded-2xl border border-white/10 space-y-2">
+                  <div className="flex items-center gap-2 text-amber-400 font-black text-xs uppercase tracking-wider">
+                    <Icons.Clock className="w-4 h-4 shrink-0" />
+                    <span>Calculus Competitiveness Boost Points</span>
                   </div>
-                  <div className="font-bold text-white text-sm">
-                    {developingList.map(c => c.competencyName).join(', ')}
-                  </div>
-                  <p className="text-xs text-indigo-200 mt-1">
-                    Reinforce problem-solving speed and algebraic transformations using guided diagnostic quizzes.
+                  <p className="text-xs text-slate-300 leading-normal">
+                    Review and speed practice on: <strong className="text-amber-300 font-bold">{developingList.map(c => c.competencyName).join(', ')}</strong>.
+                  </p>
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    * Work with the AI Coach on composite function steps to boost speed. Mastery here yields algebraic precision in university-level derivative chain rule applications.
                   </p>
                 </div>
               )}
+            </div>
 
-              {masteredList.length > 0 && (
-                <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
-                  <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs uppercase tracking-wider mb-1">
-                    <Icons.CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Solid Foundations (Mastered)</span>
-                  </div>
-                  <div className="font-bold text-white text-sm">
-                    {masteredList.map(c => c.competencyName).join(', ')}
-                  </div>
-                  <p className="text-xs text-indigo-200 mt-1">
-                    Demonstrated solid competency. Ready for advanced assessment quizzes and next-level progression.
-                  </p>
-                </div>
-              )}
+            {/* HIGH VALUE: AUTOMATIC COMPETENCY PLACEMENT MINI-ASSESSMENT PROMOTION */}
+            <div className="p-6 bg-indigo-500/10 rounded-2xl border border-indigo-400/20 mb-8 text-left space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping" />
+                <span className="text-[11px] font-black uppercase text-indigo-300 tracking-widest">
+                  Auto-Generated Assessment Ready
+                </span>
+              </div>
+              <h4 className="text-sm font-black text-white">
+                Take the Next-Level Transition & Competency Assessment
+              </h4>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Prove you are transition-ready for Grade 12! Solve 5 challenging pre-calculus & business math booster items to earn your official <strong className="text-white font-black">Math Readiness Rating</strong> and claim <strong className="text-indigo-300">+150 bonus XP</strong>!
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  playPopSound();
+                  setIsTakingBooster(true);
+                  setBoosterStep(0);
+                  setSelectedBoosterOption(null);
+                  setBoosterAnswers([]);
+                  setBoosterIsSubmitted(false);
+                  setBoosterFinished(false);
+                  setBoosterScore(0);
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white font-extrabold text-xs rounded-xl transition-all uppercase tracking-wider shadow-md hover:shadow-indigo-500/20 active:scale-95"
+              >
+                <Icons.Sparkles className="w-3.5 h-3.5" />
+                <span>Launch Competency Placement Challenge</span>
+              </button>
             </div>
 
             {/* Action Buttons */}

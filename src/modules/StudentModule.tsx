@@ -17,7 +17,8 @@ import {
   Sparkles,
   Crown,
   Flame,
-  Swords
+  Swords,
+  AlertCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -69,7 +70,8 @@ import {
   playCorrectSound, 
   playPopSound, 
   isAudioMuted, 
-  setAudioMuted 
+  setAudioMuted,
+  playWarningSound
 } from '../utils/audioEffects';
 
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
@@ -138,6 +140,58 @@ export default function StudentModule({
   const equippedAvatar = useMemo(() => {
     return getEquippedAvatar(currentUserId);
   }, [currentUserId, avatarRev]);
+
+  // Tab switching & Alt-Tab detection state
+  const [tabOutCount, setTabOutCount] = useState(0);
+  const [showAltTabWarning, setShowAltTabWarning] = useState(false);
+
+  useEffect(() => {
+    const isTesting = !!(activeQuiz || isTakingDiagnostic || activeSummativeAssessment || isSprintArenaOpen || isDailyChallengeOpen);
+    
+    if (!isTesting) {
+      setTabOutCount(0);
+      setShowAltTabWarning(false);
+      return;
+    }
+
+    let blurTimeout: any;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        playWarningSound();
+        setTabOutCount(prev => prev + 1);
+        setShowAltTabWarning(true);
+      }
+    };
+
+    const handleWindowBlur = () => {
+      blurTimeout = setTimeout(() => {
+        playWarningSound();
+        setTabOutCount(prev => prev + 1);
+        setShowAltTabWarning(true);
+      }, 400); // 400ms buffer to allow normal system delays
+    };
+
+    const handleWindowFocus = () => {
+      if (blurTimeout) {
+        clearTimeout(blurTimeout);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+      if (blurTimeout) {
+        clearTimeout(blurTimeout);
+      }
+    };
+  }, [activeQuiz, isTakingDiagnostic, activeSummativeAssessment, isSprintArenaOpen, isDailyChallengeOpen]);
+
 
   const currentRank = useMemo(() => {
     return getRankByLevel(profile.level);
@@ -928,6 +982,60 @@ export default function StudentModule({
           }}
         />
       )}
+
+      {/* Tab Out & Alt-Tab Warning Overlay */}
+      <AnimatePresence>
+        {showAltTabWarning && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl relative border-t-8 border-rose-500 overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50 rounded-full -mr-12 -mt-12 -z-10 opacity-60" />
+              
+              <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mb-6">
+                <AlertCircle className="w-8 h-8 text-rose-600 animate-pulse" />
+              </div>
+
+              <h2 className="text-2xl font-black text-slate-900 mb-2 tracking-tight">
+                Academic Window Leaving Detected!
+              </h2>
+              
+              <p className="text-slate-500 text-xs leading-relaxed mb-6">
+                You have navigated away from your active mathematical assessment window (by switching tabs, opening another app, or using Alt+Tab). 
+              </p>
+
+              <div className="p-4 bg-rose-50/50 rounded-2xl border border-rose-100 mb-6 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping shrink-0" />
+                  <span className="text-xs font-black uppercase text-rose-800 tracking-wider">
+                    Violation Warning Roster
+                  </span>
+                </div>
+                <p className="text-xs text-rose-700 font-semibold leading-relaxed">
+                  Focus Warning Counter: <strong className="text-rose-900 text-sm font-extrabold">{tabOutCount}</strong>
+                </p>
+                <p className="text-[10px] text-rose-600/90 leading-tight">
+                  Please stay focused on your test questions. Navigating away during formal classroom assessments is strictly logged by your subject teacher.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playPopSound();
+                  setShowAltTabWarning(false);
+                }}
+                className="w-full py-4 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-black rounded-2xl shadow-lg shadow-rose-100 transition-all text-xs tracking-wider uppercase"
+              >
+                I understand, return to exam
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <ConfirmDeleteModal
         isOpen={showLogoutConfirm}

@@ -184,9 +184,43 @@
         "awardedAt": { "type": "string" }
       },
       "required": ["userId", "studentName", "points", "awardedBy", "awardedAt"]
+    },
+    "DiagnosticQuestion": {
+      "title": "Diagnostic Question",
+      "description": "Specific question curated for the diagnostic baseline exam",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "question": { "type": "string" },
+        "options": { "type": "array" },
+        "correct": { "type": "number" },
+        "topic": { "type": "string" },
+        "competency": { "type": "string" },
+        "explanation": { "type": "string" },
+        "hint1": { "type": "string" },
+        "hint2": { "type": "string" }
+      },
+      "required": ["question", "options", "correct", "topic", "competency", "explanation"]
+    },
+    "DiagnosticSettings": {
+      "title": "Diagnostic Assessment Settings",
+      "description": "Global parameters for the student's initial diagnostic assessment",
+      "type": "object",
+      "properties": {
+        "itemsCount": { "type": "number", "description": "The target number of items presented on the diagnostic test" }
+      },
+      "required": ["itemsCount"]
     }
   },
   "firestore": {
+    "/diagnostic_questions/{questionId}": {
+      "schema": "DiagnosticQuestion",
+      "description": "Curated diagnostic question item pool"
+    },
+    "/settings/diagnostic": {
+      "schema": "DiagnosticSettings",
+      "description": "Configurations for student diagnostics"
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User profiles"

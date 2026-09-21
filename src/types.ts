@@ -575,5 +575,23 @@ export interface PresentationViewRecord {
   quizScore?: number;
 }
 
+export interface DiagnosticQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correct: number;
+  topic: string;
+  competency: string;
+  explanation: string;
+  hint1?: string;
+  hint2?: string;
+  createdAt?: string;
+}
+
+export interface DiagnosticSettings {
+  itemsCount: number;
+}
+
+
 
 

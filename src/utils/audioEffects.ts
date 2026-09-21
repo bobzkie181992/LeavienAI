@@ -166,3 +166,35 @@ export function playChestOpenSound(): void {
     });
   } catch (e) {}
 }
+
+/** Buzzy warning sound for cheat/tab-out detection */
+export function playWarningSound(): void {
+  if (isAudioMuted()) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = 'sawtooth';
+    osc1.frequency.setValueAtTime(120, ctx.currentTime);
+
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(123, ctx.currentTime); // Dissonant beat frequency
+
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start();
+    osc2.start();
+    osc1.stop(ctx.currentTime + 0.3);
+    osc2.stop(ctx.currentTime + 0.3);
+  } catch (e) {}
+}
+

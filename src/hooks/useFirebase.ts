@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { auth, db, createStudentAuthAccount, sanitizeForFirestore } from '../lib/firebase';
 import { User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, query, where, getDocs, orderBy, limit, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { UserProfile, QuizResult, Topic, LearningPathway, Problem, ItemStatus, ItemStats, StudyRequest, VideoLecture, Presentation, PresentationViewRecord } from '../types';
+import { UserProfile, QuizResult, Topic, LearningPathway, Problem, ItemStatus, ItemStats, StudyRequest, VideoLecture, Presentation, PresentationViewRecord, DiagnosticQuestion, DiagnosticSettings } from '../types';
 import { topics as initialTopics } from '../data/curriculum';
 import { initialPresentations } from '../data/presentations';
 import { 
@@ -1618,5 +1618,226 @@ export function usePresentationAnalytics() {
 
   return { viewRecords, loading };
 }
+
+// Default curated Grade 11 Mathematics diagnostic questions for auto-seeding
+const defaultDiagnosticQuestions: Omit<DiagnosticQuestion, 'id'>[] = [
+  {
+    topic: "Rational Functions",
+    competency: "Evaluating limits of rational expressions",
+    question: "A company's production cost is C(x) = (200x + 5000) / x, where x is the number of units. What value does the average cost per unit approach as production x grows indefinitely?",
+    options: ["$5000", "$200", "$0", "$250"],
+    correct: 1,
+    explanation: "As x approaches infinity, the limit of (200x + 5000)/x is the ratio of leading coefficients, which is 200/1 = 200. Thus, average cost approaches $200.",
+    hint1: "Look at the leading coefficients as x approaches infinity.",
+    hint2: "Divide numerator and denominator by x and simplify."
+  },
+  {
+    topic: "Composite Functions",
+    competency: "Composition of algebraic functions",
+    question: "If f(x) = 2x + 3 and g(x) = x^2 - 1, evaluate the composite function (f ∘ g)(3).",
+    options: ["19", "25", "15", "11"],
+    correct: 0,
+    explanation: "First find g(3) = 3^2 - 1 = 8. Then evaluate f(8) = 2(8) + 3 = 19.",
+    hint1: "Work from the inside out: find g(3) first.",
+    hint2: "Substitute the result of g(3) into f(x)."
+  },
+  {
+    topic: "Logarithmic Functions",
+    competency: "Solving logarithmic equations",
+    question: "Solve the logarithmic equation: log_2(x) + log_2(x - 2) = 3.",
+    options: ["x = 4", "x = -2", "x = 4 and x = -2", "x = 3"],
+    correct: 0,
+    explanation: "Combine terms: log_2(x(x - 2)) = 3 => x^2 - 2x = 2^3 => x^2 - 2x - 8 = 0 => (x - 4)(x + 2) = 0. Since log is only defined for positive values, x must be 4.",
+    hint1: "Use the product rule: log(A) + log(B) = log(A * B).",
+    hint2: "Convert to exponential form (2^3 = 8) and solve the quadratic, discarding any values that make logarithms negative."
+  },
+  {
+    topic: "Exponential Modeling",
+    competency: "Exponential growth & doubling time",
+    question: "The population of a bacterial colony is modeled by P(t) = 150 * e^(0.04t). How many hours will it take for the population to double? (Round to nearest hour)",
+    options: ["17 hours", "25 hours", "8 hours", "12 hours"],
+    correct: 0,
+    explanation: "Doubling means P(t) = 300. So 300 = 150 * e^(0.04t) => 2 = e^(0.04t) => ln(2) = 0.04t => t = ln(2)/0.04 ≈ 0.693 / 0.04 ≈ 17.3 hours.",
+    hint1: "Set P(t) to 300 and divide both sides by 150.",
+    hint2: "Take the natural logarithm (ln) of both sides to isolate the variable t."
+  },
+  {
+    topic: "Business Mathematics",
+    competency: "Simple annual interest formulas",
+    question: "A high school graduate secures a P50,000 loan at 6% simple annual interest. What is the total repayment amount after exactly 3 years?",
+    options: ["P59,000", "P50,900", "P53,000", "P62,500"],
+    correct: 0,
+    explanation: "Simple Interest I = P * r * t = 50000 * 0.06 * 3 = 9000. Total repayment is P + I = 50000 + 9000 = P59,000.",
+    hint1: "Use the formula I = P * r * t to compute interest.",
+    hint2: "Add the interest earned to the principal of P50,000 to get total repayment."
+  },
+  {
+    topic: "Mathematical Logic",
+    competency: "Converse conditional logic structures",
+    question: "Identify the converse of the conditional statement: 'If a polygon is a square, then it has four equal sides.'",
+    options: [
+      "If a polygon does not have four equal sides, then it is not a square.",
+      "If a polygon has four equal sides, then it is a square.",
+      "If a polygon is not a square, then it does not have four equal sides.",
+      "A polygon has four equal sides if and only if it is a square."
+    ],
+    correct: 1,
+    explanation: "The converse of 'If P then Q' is 'If Q then P'. Thus, we swap the hypothesis and conclusion: 'If a polygon has four equal sides, then it is a square.'",
+    hint1: "Recall that converse swaps the 'if' and 'then' clauses.",
+    hint2: "Do not negate the statements, just switch their positions."
+  },
+  {
+    topic: "Rational Equations",
+    competency: "Solving rational equations",
+    question: "Solve the rational equation: (x + 3) / (x - 1) = 2.",
+    options: ["x = 5", "x = -5", "x = 1", "x = 2"],
+    correct: 0,
+    explanation: "Multiply both sides by (x - 1): x + 3 = 2(x - 1) => x + 3 = 2x - 2 => x = 5.",
+    hint1: "Eliminate the denominator by multiplying both sides by (x - 1).",
+    hint2: "Distribute the 2 and gather like terms to solve for x."
+  },
+  {
+    topic: "Trigonometric Equations",
+    competency: "Solving basic trigonometric ratios",
+    question: "Find the values of x in the interval [0, 2π) that satisfy the equation: 2 sin(x) - 1 = 0.",
+    options: ["π/6 and 5π/6", "π/3 and 2π/3", "π/6 and 7π/6", "π/4 and 3π/4"],
+    correct: 0,
+    explanation: "2 sin(x) - 1 = 0 => sin(x) = 1/2. In the interval [0, 2π), sin(x) is 1/2 at x = π/6 (Quadrant I) and x = 5π/6 (Quadrant II).",
+    hint1: "Isolate sin(x) first.",
+    hint2: "Identify the angles where sine is positive 1/2 in Quadrant I and Quadrant II."
+  },
+  {
+    topic: "Compound Interest",
+    competency: "Quarterly compounding modeling",
+    question: "If P10,000 is invested at a nominal interest rate of 4% compounded quarterly, which formula models the future value after t years?",
+    options: [
+      "A = 10000(1.04)^t",
+      "A = 10000(1.01)^(4t)",
+      "A = 10000 * e^(0.04t)",
+      "A = 10000(1.04)^(4t)"
+    ],
+    correct: 1,
+    explanation: "Compounded quarterly means n = 4. Rate per period is 4% / 4 = 1% = 0.01. Number of compounding periods is 4t. Thus, A = 10000(1 + 0.01)^(4t) = 10000(1.01)^(4t).",
+    hint1: "Divide the annual rate (0.04) by the number of compounding periods in a year (4).",
+    hint2: "Multiply the exponent t by the number of compounding periods (4)."
+  },
+  {
+    topic: "Propositional Logic",
+    competency: "Conjunction truth value rules",
+    question: "In mathematical logic, if proposition P is True and proposition Q is False, what is the truth value of the conjunction P ∧ Q?",
+    options: ["True", "False", "Undetermined", "Null"],
+    correct: 1,
+    explanation: "A conjunction P ∧ Q (P and Q) is True if and only if both P and Q are True. Since Q is False, P ∧ Q is False.",
+    hint1: "Conjunction stands for 'AND'.",
+    hint2: "An AND statement is only True when both inputs are True."
+  }
+];
+
+export function useDiagnosticExam() {
+  const [questions, setQuestions] = useState<DiagnosticQuestion[]>([]);
+  const [settings, setSettings] = useState<DiagnosticSettings>({ itemsCount: 10 });
+  const [loading, setLoading] = useState(true);
+
+  // 1. Listen to diagnostic questions pool
+  useEffect(() => {
+    const qCol = collection(db, 'diagnostic_questions');
+    const unsubscribeQuestions = onSnapshot(qCol, async (snapshot) => {
+      const qList: DiagnosticQuestion[] = [];
+      snapshot.forEach((docSnap) => {
+        qList.push({ id: docSnap.id, ...docSnap.data() } as DiagnosticQuestion);
+      });
+
+      // If the pool is completely empty, auto-seed with the curated baseline set
+      if (qList.length === 0 && snapshot.metadata.fromCache === false) {
+        setLoading(true);
+        try {
+          for (const dq of defaultDiagnosticQuestions) {
+            const docRef = doc(collection(db, 'diagnostic_questions'));
+            await setDoc(docRef, sanitizeForFirestore({ ...dq, id: docRef.id }));
+          }
+        } catch (err) {
+          console.error("Error auto-seeding diagnostic questions:", err);
+        }
+      } else {
+        setQuestions(qList);
+        setLoading(false);
+      }
+    }, (err) => {
+      console.error("Error loading diagnostic questions:", err);
+      setQuestions([]);
+      setLoading(false);
+    });
+
+    return () => unsubscribeQuestions();
+  }, []);
+
+  // 2. Listen to diagnostic settings
+  useEffect(() => {
+    const settingsRef = doc(db, 'settings', 'diagnostic');
+    const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setSettings(docSnap.data() as DiagnosticSettings);
+      } else {
+        // Seed default settings if missing
+        setDoc(settingsRef, { itemsCount: 10 }).catch(err => {
+          console.error("Error seeding default settings:", err);
+        });
+      }
+    }, (err) => {
+      console.error("Error loading diagnostic settings:", err);
+    });
+
+    return () => unsubscribeSettings();
+  }, []);
+
+  // 3. Save / Add or Update Question
+  const saveQuestion = async (questionData: Omit<DiagnosticQuestion, 'id'> & { id?: string }) => {
+    try {
+      const isNew = !questionData.id;
+      const docRef = isNew 
+        ? doc(collection(db, 'diagnostic_questions'))
+        : doc(db, 'diagnostic_questions', questionData.id!);
+
+      const payload = {
+        ...questionData,
+        id: docRef.id,
+        createdAt: isNew ? new Date().toISOString() : undefined
+      };
+
+      await setDoc(docRef, sanitizeForFirestore(payload), { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'diagnostic_questions');
+    }
+  };
+
+  // 4. Delete Question
+  const deleteQuestion = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'diagnostic_questions', id));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `diagnostic_questions/${id}`);
+    }
+  };
+
+  // 5. Save settings
+  const saveSettings = async (itemsCount: number) => {
+    try {
+      const settingsRef = doc(db, 'settings', 'diagnostic');
+      await setDoc(settingsRef, { itemsCount });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'settings/diagnostic');
+    }
+  };
+
+  return {
+    questions,
+    settings,
+    loading,
+    saveQuestion,
+    deleteQuestion,
+    saveSettings
+  };
+}
+
 
 

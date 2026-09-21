@@ -61,5 +61,15 @@ service cloud.firestore {
     match /summative_transcripts/{transcriptId} {
       allow read, write: if true;
     }
+
+    // Diagnostic question item pool
+    match /diagnostic_questions/{questionId} {
+      allow read, write: if true;
+    }
+
+    // Global configurations and settings
+    match /settings/{settingsId} {
+      allow read, write: if true;
+    }
   }
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, Users, LogOut, Zap, Database, Video, Layers } from 'lucide-react';
+import { BookOpen, Users, LogOut, Zap, Database, Video, Layers, HelpCircle } from 'lucide-react';
 import { UserProfile } from '../types';
 
 import FacultyDashboard from '../components/FacultyDashboard';
@@ -8,6 +8,7 @@ import CurriculumManager from '../components/CurriculumManager';
 import ItemBankManager from '../components/ItemBankManager';
 import FacultyVideoManager from '../components/FacultyVideoManager';
 import FacultyPresentationManager from '../components/FacultyPresentationManager';
+import DiagnosticManager from '../components/DiagnosticManager';
 import { topics } from '../data/curriculum';
 
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
@@ -18,7 +19,7 @@ interface FacultyModuleProps {
 }
 
 export default function FacultyModule({ profile, onLogout }: FacultyModuleProps) {
-  const [activeTab, setActiveTab] = useState<'faculty' | 'presentations' | 'videos' | 'curriculum' | 'items'>('faculty');
+  const [activeTab, setActiveTab] = useState<'faculty' | 'presentations' | 'videos' | 'curriculum' | 'items' | 'diagnostic'>('faculty');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   return (
@@ -92,6 +93,17 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
               <Database className="w-4 h-4" />
               Item Bank
             </button>
+            <button
+              onClick={() => setActiveTab('diagnostic')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'diagnostic'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <HelpCircle className="w-4 h-4 text-indigo-500" />
+              Diagnostic Exam
+            </button>
           </div>
 
           <div className="flex items-center gap-4">
@@ -123,6 +135,10 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
           ) : activeTab === 'videos' ? (
             <motion.div key="videos" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
               <FacultyVideoManager topics={topics} />
+            </motion.div>
+          ) : activeTab === 'diagnostic' ? (
+            <motion.div key="diagnostic" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
+              <DiagnosticManager />
             </motion.div>
           ) : (
             <motion.div key="faculty" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
@@ -162,6 +178,12 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
           onClick={() => setActiveTab('items')}
           icon={<Database className="w-5 h-5" />}
           label="Items"
+        />
+        <NavButton 
+          active={activeTab === 'diagnostic'} 
+          onClick={() => setActiveTab('diagnostic')}
+          icon={<HelpCircle className="w-5 h-5 text-indigo-500" />}
+          label="Diagnostic"
         />
       </nav>
 
