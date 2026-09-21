@@ -1,279 +1,1010 @@
-import React, { useState, useMemo } from 'react';
-import { motion } from 'motion/react';
-import { Topic, Problem, LearningPathway, isValidatedOrActive } from '../types';
+import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Topic, Problem, LearningPathway, isValidatedOrActive, AIMistakeGuidance } from '../types';
 import * as Icons from 'lucide-react';
+import { generateLearningPathway } from '../utils/pathwayGenerator';
+import { generateAIMistakeGuidance, fetchAIMistakeDiagnosis } from '../utils/aiTutorCoach';
 
 interface DiagnosticAssessmentProps {
   topics: Topic[];
   onComplete: (ability: string, scores: Record<string, number>, pathway?: LearningPathway) => void;
+  onCancel?: () => void;
 }
 
-export default function DiagnosticAssessment({ topics, onComplete }: DiagnosticAssessmentProps) {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, boolean>>({});
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [showSummary, setShowSummary] = useState(false);
+interface CompetencyDiagnosticItem {
+  competencyIndex: number;
+  competencyName: string;
+  topicId: string;
+  topicTitle: string;
+  score: number;
+  total: number;
+  percentage: number;
+  status: 'Mastered' | 'Developing' | 'Needs Intervention';
+}
 
-  // Generate diagnostic quiz on mount (ONLY VALIDATED or ACTIVE problems)
+export default function DiagnosticAssessment({ topics, onComplete, onCancel }: DiagnosticAssessmentProps) {
+  const [assessmentPhase, setAssessmentPhase] = useState<'intro' | 'testing' | 'summary'>('intro');
+  const [currentStep, setCurrentStep] = useState(0);
+  const [firstAttemptCorrect, setFirstAttemptCorrect] = useState<Record<string, boolean>>({});
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [isAnswered, setIsAnswered] = useState(false);
+  const [isLastAnswerCorrect, setIsLastAnswerCorrect] = useState<boolean | null>(null);
+  const [attemptsOnCurrent, setAttemptsOnCurrent] = useState<number>(0);
+  const [hintLevel, setHintLevel] = useState<0 | 1 | 2>(0);
+  const [feedbackNotice, setFeedbackNotice] = useState<{ isCorrect: boolean; text: string } | null>(null);
+  const [aiMistakeGuidance, setAiMistakeGuidance] = useState<AIMistakeGuidance | null>(null);
+  const [isSolutionRevealed, setIsSolutionRevealed] = useState<boolean>(false);
+  const [revealedHintTier, setRevealedHintTier] = useState<number>(0);
+
+  // Generate diagnostic problem set covering key Grade 11 General Mathematics competencies
   const diagnosticProblems = useMemo(() => {
-    const problems: (Problem & { topicId: string; topicTitle: string })[] = [];
-    topics.forEach(topic => {
-      // Get all VALIDATED or ACTIVE problems for this topic
+    const problems: (Problem & { topicId: string; topicTitle: string; competencyLabel: string })[] = [];
+    
+    topics.forEach((topic) => {
+      // Gather active or validated problems for this topic
       const activeProblems = topic.quizzes
         .flatMap(q => q.problems)
         .filter(isValidatedOrActive);
-      // Randomly select up to 2 problems per topic
-      const shuffled = [...activeProblems].sort(() => 0.5 - Math.random());
-      const selected = shuffled.slice(0, 2);
-      selected.forEach(p => {
-        problems.push({ ...p, topicId: topic.id, topicTitle: topic.title });
-      });
+      
+      if (activeProblems.length > 0) {
+        // Group problems by competency if available
+        const competencyMap = new Map<string, Problem[]>();
+        activeProblems.forEach(p => {
+          const compKey = p.competency?.trim() || topic.title;
+          if (!competencyMap.has(compKey)) {
+            competencyMap.set(compKey, []);
+          }
+          competencyMap.get(compKey)!.push(p);
+        });
+
+        // Select up to 2 representative problems per competency / topic
+        competencyMap.forEach((compProblems, compName) => {
+          const shuffledComp = [...compProblems].sort(() => 0.5 - Math.random());
+          const selected = shuffledComp.slice(0, 2);
+          selected.forEach(p => {
+            problems.push({
+              ...p,
+              topicId: topic.id,
+              topicTitle: topic.title,
+              competencyLabel: compName
+            });
+          });
+        });
+      }
     });
+
+    // If we have problems, sort them logically or shuffle them with consistent representation
     return problems.sort(() => 0.5 - Math.random());
   }, [topics]);
 
   if (diagnosticProblems.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center">
-        <Icons.AlertCircle className="w-12 h-12 text-slate-400 mb-4" />
-        <h2 className="text-xl font-bold text-slate-900 mb-2">No Curriculum Found</h2>
-        <p className="text-slate-500">The diagnostic assessment requires faculty to add curriculum topics and quizzes first.</p>
+      <div className="flex flex-col items-center justify-center p-12 text-center max-w-lg mx-auto bg-white rounded-3xl border border-slate-100 shadow-sm my-12">
+        <Icons.AlertCircle className="w-12 h-12 text-amber-500 mb-4" />
+        <h2 className="text-xl font-bold text-slate-900 mb-2">No Curriculum Items Available</h2>
+        <p className="text-slate-500 text-sm mb-6">
+          The diagnostic assessment requires validated Grade 11 Mathematics items. Please check topic quizzes or consult faculty.
+        </p>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        )}
       </div>
     );
   }
 
   const problem = diagnosticProblems[currentStep];
 
-  const handleNext = () => {
-    if (selectedOption === null) return;
-    
-    const isCorrect = selectedOption === problem.correctAnswer;
-    setAnswers(prev => ({
-      ...prev,
-      [problem.id]: isCorrect
-    }));
+  const getHint1 = (p: Problem) => {
+    if (p.hint1 && p.hint1.trim()) return p.hint1;
+    if (p.hints && p.hints[0]) return p.hints[0];
+    return `Analyze the problem statement: identify given variables and recall core formulas for ${p.competency || p.topic}. Rule out choices that violate mathematical constraints.`;
+  };
 
-    if (currentStep < diagnosticProblems.length - 1) {
-      setCurrentStep(s => s + 1);
-      setSelectedOption(null);
-    } else {
-      setShowSummary(true);
+  const getHint2 = (p: Problem) => {
+    if (p.hint2 && p.hint2.trim()) return p.hint2;
+    if (p.hints && p.hints[1]) return p.hints[1];
+    return `Substitute the values step-by-step into the algebraic equation and verify signs and domain restrictions carefully.`;
+  };
+
+  const getHint3 = (p: Problem) => {
+    if (p.hint3 && p.hint3.trim()) return p.hint3;
+    if (p.hints && p.hints[2]) return p.hints[2];
+    return `First step: Set up the initial equation or relation, carefully check your signs, and isolate the primary variable.`;
+  };
+
+  const handleOptionSelect = (index: number) => {
+    if (isSolutionRevealed || (isAnswered && isLastAnswerCorrect)) return;
+    setSelectedOption(index);
+    if (isAnswered && !isLastAnswerCorrect) {
+      setIsAnswered(false);
+      setIsLastAnswerCorrect(null);
+      setFeedbackNotice(null);
     }
   };
 
-  if (showSummary) {
-    // Calculate mastery per topic
-    const topicScores: Record<string, { correct: number, total: number }> = {};
-    diagnosticProblems.forEach(p => {
-      if (!topicScores[p.topicId]) {
-        topicScores[p.topicId] = { correct: 0, total: 0 };
-      }
-      topicScores[p.topicId].total += 1;
-      if (answers[p.id]) {
-        topicScores[p.topicId].correct += 1;
-      }
-    });
+  const handleCheckAnswer = () => {
+    if (selectedOption === null || !problem) return;
 
-    const finalScores: Record<string, number> = {};
-    let totalCorrect = 0;
-    let totalQuestions = 0;
+    const attemptsSoFar = attemptsOnCurrent + 1;
+    setAttemptsOnCurrent(attemptsSoFar);
 
-    Object.keys(topicScores).forEach(topicId => {
-      const stats = topicScores[topicId];
-      finalScores[topicId] = Math.round((stats.correct / stats.total) * 100);
-      totalCorrect += stats.correct;
-      totalQuestions += stats.total;
-    });
-
-    const overallPercentage = Math.round((totalCorrect / totalQuestions) * 100);
+    const isCorrect = selectedOption === problem.correctAnswer;
     
-    let ability = 'Novice';
-    if (overallPercentage >= 90) ability = 'Expert';
-    else if (overallPercentage >= 75) ability = 'Advanced';
-    else if (overallPercentage >= 55) ability = 'Proficient';
-    else if (overallPercentage >= 35) ability = 'Developing';
+    // Record first attempt for baseline ability and competency diagnostic
+    if (firstAttemptCorrect[problem.id] === undefined) {
+      setFirstAttemptCorrect(prev => ({
+        ...prev,
+        [problem.id]: isCorrect && attemptsSoFar === 1
+      }));
+    }
 
-    // Identify weakest topic for pathway generation
-    let weakestTopicId = '';
-    let lowestScore = 101;
+    if (isCorrect) {
+      setIsAnswered(true);
+      setIsLastAnswerCorrect(true);
+      setIsSolutionRevealed(true);
+      setFeedbackNotice({
+        isCorrect: true,
+        text: attemptsSoFar === 1 
+          ? "🎉 Correct! Outstanding mathematical reasoning on your first attempt." 
+          : `🎉 Correct on attempt #${attemptsSoFar}! Great job using the progressive hints to work through the solution.`
+      });
+      setAiMistakeGuidance(null);
+    } else {
+      // Diagnostic mode: progressive hints and AI guidance, do NOT reveal complete answer!
+      setIsLastAnswerCorrect(false);
+      setIsAnswered(true);
+      setIsSolutionRevealed(false);
 
-    Object.entries(finalScores).forEach(([tId, score]) => {
-      if (score < lowestScore) {
-        lowestScore = score;
-        weakestTopicId = tId;
+      const guidance = generateAIMistakeGuidance(problem, selectedOption);
+      setAiMistakeGuidance(guidance);
+      setRevealedHintTier(1);
+
+      // Async fetch enhanced diagnosis
+      fetchAIMistakeDiagnosis(problem, selectedOption).then(asyncG => {
+        if (asyncG) setAiMistakeGuidance(asyncG);
+      });
+
+      setFeedbackNotice(null);
+    }
+  };
+
+  const handleNext = () => {
+    setAttemptsOnCurrent(0);
+    setHintLevel(0);
+    setRevealedHintTier(0);
+    setFeedbackNotice(null);
+    setAiMistakeGuidance(null);
+    setIsSolutionRevealed(false);
+    setIsAnswered(false);
+    setIsLastAnswerCorrect(null);
+    setSelectedOption(null);
+
+    if (currentStep < diagnosticProblems.length - 1) {
+      setCurrentStep(s => s + 1);
+    } else {
+      setAssessmentPhase('summary');
+    }
+  };
+
+  // =========================================================================
+  // 1. INTRODUCTORY SCREEN
+  // =========================================================================
+  if (assessmentPhase === 'intro') {
+    return (
+      <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-100"
+        >
+          {/* Header Badge */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+            <div className="flex items-center gap-2">
+              <span className="px-3.5 py-1 bg-amber-100 text-amber-900 font-black text-xs rounded-full uppercase tracking-wider flex items-center gap-1.5">
+                <Icons.Target className="w-4 h-4 text-amber-600" />
+                <span>Initial Diagnostic Assessment</span>
+              </span>
+              <span className="px-2.5 py-1 bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold text-[10px] rounded-full uppercase tracking-wider flex items-center gap-1">
+                <Icons.ShieldCheck className="w-3 h-3 text-indigo-600" />
+                <span>Validated Content + 2PL IRT</span>
+              </span>
+            </div>
+            {onCancel && (
+              <button 
+                onClick={onCancel}
+                className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                Skip for Now
+              </button>
+            )}
+          </div>
+
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-3">
+            Diagnostic Mathematics Assessment
+          </h1>
+          
+          <div className="bg-amber-50/70 border border-amber-200/70 rounded-2xl p-4 sm:p-5 mb-6 text-amber-950">
+            <p className="text-sm sm:text-base font-semibold leading-relaxed">
+              The purpose of this diagnostic test is <span className="underline decoration-amber-500 font-black">NOT simply to calculate a raw score</span>.
+            </p>
+            <p className="text-xs sm:text-sm text-amber-900 mt-1.5 leading-relaxed">
+              It determines your <strong className="font-bold">estimated mathematics ability</strong> and identifies specific <strong className="font-bold">competencies where you need support</strong> to generate a customized learning pathway.
+            </p>
+          </div>
+
+          {/* Assessment Methodology Explanation Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold mb-2.5">
+                <Icons.Brain className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-sm mb-1">Ability Estimation</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Determines your mathematical level: <em className="font-medium text-slate-700">Novice, Developing, Proficient, Advanced, or Expert</em>.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold mb-2.5">
+                <Icons.Layers className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-sm mb-1">3-Tier Status</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Categorizes each competency as <span className="text-emerald-700 font-bold">Mastered (≥80%)</span>, <span className="text-amber-700 font-bold">Developing (50-79%)</span>, or <span className="text-rose-700 font-bold">Needs Intervention (&lt;50%)</span>.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+              <div className="w-8 h-8 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center font-bold mb-2.5">
+                <Icons.Compass className="w-4 h-4" />
+              </div>
+              <h3 className="font-bold text-slate-900 text-sm mb-1">Study Roadmap</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Recommends exactly what you should study next with targeted mini-lessons and guided practice.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <button
+              id="start-diagnostic-assessment-btn"
+              onClick={() => setAssessmentPhase('testing')}
+              className="w-full sm:flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-base rounded-2xl transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
+            >
+              <Icons.Play className="w-5 h-5 fill-current" />
+              <span>Begin Diagnostic Assessment ({diagnosticProblems.length} Items)</span>
+            </button>
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                className="w-full sm:w-auto px-6 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-2xl transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // 2. DIAGNOSTIC RESULTS & SUMMARY SCREEN
+  // =========================================================================
+  if (assessmentPhase === 'summary') {
+    // 1. Group problem results by competency
+    const competencyStatsMap = new Map<string, { topicId: string; topicTitle: string; correct: number; total: number }>();
+    
+    diagnosticProblems.forEach(p => {
+      const compName = p.competencyLabel || p.competency || p.topicTitle;
+      if (!competencyStatsMap.has(compName)) {
+        competencyStatsMap.set(compName, {
+          topicId: p.topicId,
+          topicTitle: p.topicTitle,
+          correct: 0,
+          total: 0
+        });
+      }
+      const entry = competencyStatsMap.get(compName)!;
+      entry.total += 1;
+      if (firstAttemptCorrect[p.id]) {
+        entry.correct += 1;
       }
     });
 
-    let generatedPathway: LearningPathway | undefined;
-    if (weakestTopicId && lowestScore < 80) {
-      const weakTopic = topics.find(t => t.id === weakestTopicId);
-      if (weakTopic) {
-        generatedPathway = {
-          topicId: weakTopic.id,
-          topicTitle: weakTopic.title,
-          currentStepIndex: 0,
-          steps: [
-            { id: 's1', type: 'concept', title: 'Review Concept', isCompleted: false },
-            { id: 's2', type: 'lesson', title: 'Mini Lesson', isCompleted: false },
-            { id: 's3', type: 'example', title: 'Worked Example', isCompleted: false },
-            { id: 's4', type: 'practice_easy', title: 'Easy Practice', isCompleted: false },
-            { id: 's5', type: 'practice_moderate', title: 'Moderate Practice', isCompleted: false },
-            { id: 's6', type: 'practice_difficult', title: 'Difficult Practice', isCompleted: false },
-            { id: 's7', type: 'mastery', title: 'Mastery Assessment', isCompleted: false },
-          ]
-        };
+    const competencyReportItems: CompetencyDiagnosticItem[] = [];
+    const finalScores: Record<string, number> = {};
+    let totalFirstAttemptCorrect = 0;
+    let totalQuestionsCount = diagnosticProblems.length;
+
+    let compIdx = 1;
+    competencyStatsMap.forEach((stats, compName) => {
+      const percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+      finalScores[compName] = percentage;
+      finalScores[stats.topicId] = percentage;
+      totalFirstAttemptCorrect += stats.correct;
+
+      let status: 'Mastered' | 'Developing' | 'Needs Intervention' = 'Developing';
+      if (percentage >= 80) {
+        status = 'Mastered';
+      } else if (percentage < 50) {
+        status = 'Needs Intervention';
       }
+
+      competencyReportItems.push({
+        competencyIndex: compIdx++,
+        competencyName: compName,
+        topicId: stats.topicId,
+        topicTitle: stats.topicTitle,
+        score: stats.correct,
+        total: stats.total,
+        percentage,
+        status
+      });
+    });
+
+    // Overall Ability Estimation
+    const overallPercentage = totalQuestionsCount > 0 ? Math.round((totalFirstAttemptCorrect / totalQuestionsCount) * 100) : 0;
+    
+    let estimatedAbility = 'Novice';
+    if (overallPercentage >= 85) estimatedAbility = 'Expert';
+    else if (overallPercentage >= 70) estimatedAbility = 'Advanced';
+    else if (overallPercentage >= 55) estimatedAbility = 'Proficient';
+    else if (overallPercentage >= 35) estimatedAbility = 'Developing';
+
+    // Group competencies by status for recommendations
+    const needsInterventionList = competencyReportItems.filter(c => c.status === 'Needs Intervention');
+    const developingList = competencyReportItems.filter(c => c.status === 'Developing');
+    const masteredList = competencyReportItems.filter(c => c.status === 'Mastered');
+
+    // Generate Targeted Learning Pathway starting with the lowest-scoring competency
+    const weakestCompetency = [...competencyReportItems].sort((a, b) => a.percentage - b.percentage)[0];
+    
+    let generatedPathway: LearningPathway | undefined;
+    if (weakestCompetency) {
+      generatedPathway = generateLearningPathway(
+        weakestCompetency.competencyName,
+        topics,
+        weakestCompetency.percentage
+      );
     }
 
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="max-w-3xl mx-auto py-12 px-6"
+        className="max-w-3xl mx-auto py-8 px-4 sm:px-6 space-y-6"
       >
-        <div className="bg-white rounded-[30px] p-8 md:p-12 shadow-xl border border-slate-100">
-          <div className="text-center mb-10">
-            <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Icons.LineChart className="w-10 h-10" />
+        <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-100">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <Icons.Target className="w-8 h-8" />
             </div>
-            <h2 className="text-3xl font-bold text-slate-900 mb-2">Diagnostic Complete</h2>
-            <p className="text-slate-500">We've analyzed your responses to build your personalized learning path.</p>
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-1">
+              Diagnostic Assessment Results
+            </h2>
+            <p className="text-slate-500 text-sm max-w-lg mx-auto">
+              Evaluation of mathematical proficiency and identification of competencies requiring targeted learning support.
+            </p>
           </div>
 
-          <div className="bg-slate-50 rounded-3xl p-8 mb-8 text-center border border-slate-100">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">Estimated Mathematics Ability</h3>
-            <div className={`text-4xl font-black ${
-              ability === 'Expert' ? 'text-violet-600' :
-              ability === 'Advanced' ? 'text-emerald-500' :
-              ability === 'Proficient' ? 'text-blue-500' :
-              ability === 'Developing' ? 'text-amber-500' : 'text-rose-500'
+          {/* ========================================================================= */}
+          {/* MATHEMATICS ABILITY ESTIMATE BOX                                          */}
+          {/* ========================================================================= */}
+          <div className="bg-slate-50 rounded-3xl p-6 sm:p-8 mb-8 border border-slate-200/80 text-center">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
+              Mathematics Ability:
+            </span>
+            <div className={`text-4xl sm:text-5xl font-black tracking-tight ${
+              estimatedAbility === 'Expert' ? 'text-violet-600' :
+              estimatedAbility === 'Advanced' ? 'text-emerald-600' :
+              estimatedAbility === 'Proficient' ? 'text-blue-600' :
+              estimatedAbility === 'Developing' ? 'text-amber-600' : 'text-rose-600'
             }`}>
-              {ability}
+              {estimatedAbility}
             </div>
-            <div className="text-slate-500 mt-2 font-medium">Overall Score: {overallPercentage}%</div>
+            <p className="text-xs sm:text-sm text-slate-500 mt-2 font-medium">
+              Overall Diagnostic First-Attempt Baseline: {overallPercentage}% accuracy across Grade 11 domains
+            </p>
           </div>
 
-          <div className="space-y-4 mb-10">
-            <h3 className="text-xl font-bold text-slate-900 mb-4">Competency Breakdown</h3>
-            {topics.map(topic => {
-              if (finalScores[topic.id] === undefined) return null;
-              const percentage = finalScores[topic.id];
-              let status = 'Novice';
-              let color = 'bg-rose-500';
-              
-              if (percentage >= 90) { status = 'Expert'; color = 'bg-violet-600'; }
-              else if (percentage >= 75) { status = 'Advanced'; color = 'bg-emerald-500'; }
-              else if (percentage >= 55) { status = 'Proficient'; color = 'bg-blue-500'; }
-              else if (percentage >= 35) { status = 'Developing'; color = 'bg-amber-500'; }
+          {/* ========================================================================= */}
+          {/* COMPETENCY BREAKDOWN (EXACT 3-TIER STATUS)                                */}
+          {/* ========================================================================= */}
+          <div className="space-y-4 mb-8">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg sm:text-xl font-bold text-slate-900">
+                Competency Breakdown
+              </h3>
+              <span className="text-xs text-slate-400 font-medium">
+                {competencyReportItems.length} Evaluated
+              </span>
+            </div>
 
-              return (
-                <div key={topic.id} className="bg-white p-4 rounded-2xl border border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
-                  <div className="flex-1">
-                    <div className="font-bold text-slate-900">{topic.title}</div>
-                  </div>
-                  <div className="w-full md:w-64 flex items-center gap-4">
-                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className={`h-full ${color}`} style={{ width: `${percentage}%` }} />
+            <div className="grid gap-3">
+              {competencyReportItems.map((comp) => {
+                const isMastered = comp.status === 'Mastered';
+                const isDeveloping = comp.status === 'Developing';
+                const isIntervention = comp.status === 'Needs Intervention';
+
+                return (
+                  <div 
+                    key={comp.competencyIndex} 
+                    className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      isMastered ? 'bg-emerald-50/40 border-emerald-200/70' :
+                      isDeveloping ? 'bg-amber-50/40 border-amber-200/70' :
+                      'bg-rose-50/40 border-rose-200/70'
+                    }`}
+                  >
+                    <div className="flex-1">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
+                        Competency {comp.competencyIndex}:
+                      </span>
+                      <div className="font-bold text-slate-900 text-sm sm:text-base leading-snug">
+                        {comp.competencyName}
+                      </div>
+                      <span className="text-xs text-slate-500 font-medium">
+                        Domain: {comp.topicTitle}
+                      </span>
                     </div>
-                    <div className="w-32 text-right">
-                      <span className="font-bold text-slate-900">{percentage}%</span>
-                      <span className="text-xs text-slate-500 ml-2">— {status}</span>
+
+                    <div className="flex items-center gap-3 self-start sm:self-center">
+                      <span className="text-lg font-black text-slate-900">
+                        {comp.percentage}%
+                      </span>
+                      <span className="text-slate-300 font-bold">—</span>
+                      <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1 ${
+                        isMastered ? 'bg-emerald-100 text-emerald-800' :
+                        isDeveloping ? 'bg-amber-100 text-amber-800' :
+                        'bg-rose-100 text-rose-800'
+                      }`}>
+                        {isMastered && <Icons.CheckCircle2 className="w-3.5 h-3.5" />}
+                        {isDeveloping && <Icons.Clock className="w-3.5 h-3.5" />}
+                        {isIntervention && <Icons.AlertTriangle className="w-3.5 h-3.5" />}
+                        <span>{comp.status}</span>
+                      </span>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* SYSTEM RECOMMENDATION: WHAT TO STUDY NEXT                                  */}
+          {/* ========================================================================= */}
+          <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-violet-900 rounded-3xl p-6 sm:p-8 text-white shadow-lg mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider">
+                Targeted Remediation Plan
+              </span>
+              <span className="text-xs text-indigo-200">Personalized Next Steps</span>
+            </div>
+
+            <h3 className="text-xl sm:text-2xl font-black mb-2 flex items-center gap-2">
+              <Icons.Sparkles className="w-5 h-5 text-amber-300" />
+              <span>Recommended What to Study Next</span>
+            </h3>
+
+            <p className="text-xs sm:text-sm text-indigo-100 mb-6 leading-relaxed">
+              Based on your diagnostic profile, your learning sequence has been calibrated to reinforce prerequisite skills and address knowledge gaps:
+            </p>
+
+            <div className="space-y-3 mb-6">
+              {needsInterventionList.length > 0 && (
+                <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
+                  <div className="flex items-center gap-2 text-rose-300 font-bold text-xs uppercase tracking-wider mb-1">
+                    <Icons.AlertCircle className="w-3.5 h-3.5" />
+                    <span>Priority 1: Immediate Intervention Required</span>
+                  </div>
+                  <div className="font-bold text-white text-sm">
+                    {needsInterventionList.map(c => c.competencyName).join(', ')}
+                  </div>
+                  <p className="text-xs text-indigo-200 mt-1">
+                    Start with foundational concept definitions, formula reviews, and worked examples before attempting timed tests.
+                  </p>
                 </div>
-              );
-            })}
-          </div>
+              )}
 
-          <button
-            onClick={() => onComplete(ability, finalScores, generatedPathway)}
-            className="w-full py-4 bg-indigo-600 text-white font-bold text-lg rounded-2xl hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-200"
-          >
-            Start Learning
-          </button>
+              {developingList.length > 0 && (
+                <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
+                  <div className="flex items-center gap-2 text-amber-300 font-bold text-xs uppercase tracking-wider mb-1">
+                    <Icons.Clock className="w-3.5 h-3.5" />
+                    <span>Priority 2: Developing Competencies (Practice with Hints)</span>
+                  </div>
+                  <div className="font-bold text-white text-sm">
+                    {developingList.map(c => c.competencyName).join(', ')}
+                  </div>
+                  <p className="text-xs text-indigo-200 mt-1">
+                    Reinforce problem-solving speed and algebraic transformations using guided diagnostic quizzes.
+                  </p>
+                </div>
+              )}
+
+              {masteredList.length > 0 && (
+                <div className="bg-white/10 backdrop-blur-sm p-4 rounded-2xl border border-white/10">
+                  <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs uppercase tracking-wider mb-1">
+                    <Icons.CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Solid Foundations (Mastered)</span>
+                  </div>
+                  <div className="font-bold text-white text-sm">
+                    {masteredList.map(c => c.competencyName).join(', ')}
+                  </div>
+                  <p className="text-xs text-indigo-200 mt-1">
+                    Demonstrated solid competency. Ready for advanced assessment quizzes and next-level progression.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {generatedPathway && (
+                <button
+                  id="start-recommended-pathway-btn"
+                  onClick={() => onComplete(estimatedAbility, finalScores, generatedPathway)}
+                  className="flex-1 py-3.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <Icons.Route className="w-4 h-4" />
+                  <span>Start Recommended Learning Pathway ({weakestCompetency?.topicTitle || 'Math'})</span>
+                </button>
+              )}
+              <button
+                id="complete-diagnostic-save-btn"
+                onClick={() => onComplete(estimatedAbility, finalScores, undefined)}
+                className="px-6 py-3.5 bg-white/20 hover:bg-white/30 text-white font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <span>Go to Student Dashboard</span>
+                <Icons.ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </motion.div>
     );
   }
 
-  const progress = (currentStep / diagnosticProblems.length) * 100;
+  // =========================================================================
+  // 3. ACTIVE DIAGNOSTIC TEST (PROBLEM SOLVING & PROGRESSIVE GUIDANCE)
+  // =========================================================================
+  const progress = ((currentStep + 1) / diagnosticProblems.length) * 100;
 
   return (
     <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col">
-      <div className="px-6 py-4 bg-white border-b border-slate-100 shadow-sm z-10 flex items-center justify-between">
-        <div className="font-bold text-slate-900 flex items-center gap-2">
-          <button onClick={() => window.location.reload()} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+      {/* Top Navigation Bar */}
+      <div className="px-4 sm:px-6 py-4 bg-white border-b border-slate-100 shadow-sm z-10 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 font-bold text-slate-900">
+          <button 
+            onClick={() => {
+              if (onCancel) {
+                onCancel();
+              } else {
+                setAssessmentPhase('intro');
+              }
+            }} 
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+            title="Exit Diagnostic Test"
+          >
             <Icons.ArrowLeft className="w-5 h-5 text-slate-500" />
           </button>
-          <Icons.Target className="w-5 h-5 text-indigo-600" />
-          Diagnostic Assessment
+          <div className="flex items-center gap-2">
+            <Icons.Target className="w-5 h-5 text-amber-600" />
+            <span className="hidden sm:inline">Diagnostic Assessment</span>
+            <span className="text-xs bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-bold">
+              Guided
+            </span>
+          </div>
         </div>
-        <div className="flex-1 max-w-md mx-8">
+
+        <div className="flex-1 max-w-xs sm:max-w-md mx-2 sm:mx-8">
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <motion.div 
-              className="h-full bg-indigo-600"
+              className="h-full bg-amber-500"
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.3 }}
             />
           </div>
         </div>
-        <div className="text-sm font-bold text-slate-400">
-          {currentStep + 1} / {diagnosticProblems.length}
+
+        <div className="text-xs sm:text-sm font-bold text-slate-400 shrink-0">
+          Item {currentStep + 1} of {diagnosticProblems.length}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-12">
-        <div className="max-w-2xl mx-auto">
+      {/* Question Content Area */}
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="max-w-2xl mx-auto space-y-6">
           <motion.div
             key={currentStep}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="space-y-8"
+            className="space-y-6"
           >
-            <div>
-              <h2 className="text-2xl md:text-3xl font-bold text-slate-900 leading-snug">
+            {/* Topic & Competency Badge */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-xl">
+                Competency: {problem.competencyLabel || problem.competency || problem.topicTitle}
+              </span>
+              <span className="text-xs font-medium text-slate-500">
+                {attemptsOnCurrent > 0 ? `Attempt #${attemptsOnCurrent + 1}` : 'Diagnostic Evaluation'}
+              </span>
+            </div>
+
+            {/* Problem Statement */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 leading-snug">
                 {problem.question}
               </h2>
             </div>
 
-            <div className="grid gap-4">
-              {problem.options.map((option, index) => (
-                <button
-                  key={index}
-                  onClick={() => setSelectedOption(index)}
-                  className={`
-                    w-full p-5 rounded-2xl text-left border-2 transition-all flex items-center justify-between
-                    ${selectedOption === index 
-                      ? 'border-indigo-600 bg-indigo-50 ring-4 ring-indigo-50' 
-                      : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30'
-                    }
-                  `}
-                >
-                  <span className="font-semibold text-lg">{option}</span>
-                  {selectedOption === index && <Icons.CheckCircle2 className="w-6 h-6 text-indigo-600" />}
-                </button>
-              ))}
+            {/* Options */}
+            <div className="grid gap-3">
+              {problem.options.map((option, index) => {
+                let status = 'default';
+                if (isSolutionRevealed || (isAnswered && isLastAnswerCorrect)) {
+                  if (index === problem.correctAnswer) status = 'correct';
+                  else if (index === selectedOption) status = 'wrong';
+                } else if (isAnswered && !isLastAnswerCorrect) {
+                  if (index === selectedOption) status = 'attempt_incorrect';
+                  else status = 'default';
+                } else if (selectedOption === index) {
+                  status = 'selected';
+                }
+
+                return (
+                  <button
+                    key={index}
+                    id={`diagnostic-option-${index}`}
+                    onClick={() => handleOptionSelect(index)}
+                    disabled={isSolutionRevealed || (isAnswered && isLastAnswerCorrect)}
+                    className={`
+                      w-full p-4 sm:p-5 rounded-2xl text-left border-2 transition-all flex items-center justify-between
+                      ${status === 'default' && 'border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/20'}
+                      ${status === 'selected' && 'border-amber-600 bg-amber-50 ring-2 ring-amber-500/20'}
+                      ${status === 'correct' && 'border-emerald-500 bg-emerald-50 text-emerald-950'}
+                      ${status === 'wrong' && 'border-rose-300 bg-rose-50/50 text-rose-950 opacity-75'}
+                      ${status === 'attempt_incorrect' && 'border-amber-400 bg-amber-50/60 text-slate-900 ring-2 ring-amber-400/20'}
+                    `}
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                        status === 'correct' ? 'bg-emerald-500 text-white' :
+                        status === 'wrong' ? 'bg-rose-400 text-white' :
+                        status === 'selected' ? 'bg-amber-600 text-white' :
+                        status === 'attempt_incorrect' ? 'bg-amber-500 text-white' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        {String.fromCharCode(65 + index)}
+                      </span>
+                      <span className="font-semibold text-slate-800 text-sm sm:text-base leading-relaxed">
+                        {option}
+                      </span>
+                    </div>
+
+                    {status === 'correct' && <Icons.CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />}
+                    {status === 'wrong' && <Icons.XCircle className="w-5 h-5 text-rose-600 shrink-0" />}
+                    {status === 'attempt_incorrect' && (
+                      <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-lg">
+                        Your Choice
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+
+            {/* Supportive Feedback Box (Correct Answer) */}
+            <AnimatePresence>
+              {feedbackNotice && feedbackNotice.isCorrect && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="p-4 rounded-2xl border text-sm font-medium bg-emerald-50 border-emerald-200 text-emerald-900"
+                >
+                  <p className="leading-relaxed">{feedbackNotice.text}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Pre-Answer Clue (if requested) */}
+            {!isAnswered && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                    <Icons.Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Diagnostic Learning Guidance</span>
+                  </span>
+                  {hintLevel === 0 && (
+                    <button
+                      onClick={() => setHintLevel(1)}
+                      className="text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200"
+                    >
+                      Need a Hint?
+                    </button>
+                  )}
+                </div>
+
+                {hintLevel >= 1 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 text-xs sm:text-sm text-amber-950"
+                  >
+                    <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-900">
+                      <Icons.HelpCircle className="w-4 h-4 text-amber-600" />
+                      <span>Hint 1: Conceptual Strategy</span>
+                    </div>
+                    <p className="leading-relaxed">{getHint1(problem)}</p>
+                    {hintLevel === 1 && (
+                      <button
+                        onClick={() => setHintLevel(2)}
+                        className="mt-2 text-xs font-bold text-amber-800 hover:text-amber-900 underline"
+                      >
+                        Show Step-by-Step Guidance (Hint 2)
+                      </button>
+                    )}
+                  </motion.div>
+                )}
+
+                {hintLevel >= 2 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-4 text-xs sm:text-sm text-indigo-950"
+                  >
+                    <div className="font-bold flex items-center gap-1.5 mb-1 text-indigo-900">
+                      <Icons.Compass className="w-4 h-4 text-indigo-600" />
+                      <span>Hint 2: Step-by-Step Calculation</span>
+                    </div>
+                    <p className="leading-relaxed">{getHint2(problem)}</p>
+                  </motion.div>
+                )}
+              </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* PROGRESSIVE AI COACHING FOR INCORRECT ATTEMPT */}
+            {/* ========================================================================= */}
+            <AnimatePresence>
+              {isAnswered && !isLastAnswerCorrect && !isSolutionRevealed && aiMistakeGuidance && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="p-5 sm:p-6 rounded-3xl bg-gradient-to-b from-amber-50/80 to-white border border-amber-200/90 shadow-sm space-y-4 text-left"
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-amber-200/60">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-sm">
+                        <Icons.Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm sm:text-base text-slate-900">
+                          AI Math Coach • Step-by-Step Guidance
+                        </h4>
+                        <p className="text-[11px] text-amber-900/80 font-medium">
+                          Let's investigate this mistake together
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-200/80 text-amber-950 px-2.5 py-1 rounded-full border border-amber-300">
+                      {aiMistakeGuidance.category}
+                    </span>
+                  </div>
+
+                  {/* Diagnostic Explanation */}
+                  <div className="p-4 rounded-2xl bg-amber-100/70 border border-amber-200/80 text-amber-950 text-sm leading-relaxed flex items-start gap-3">
+                    <Icons.Lightbulb className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-amber-900 block mb-0.5 text-xs uppercase tracking-wider">
+                        Diagnostic Observation:
+                      </span>
+                      <p className="text-amber-950 font-medium">{aiMistakeGuidance.coachingMessage}</p>
+                    </div>
+                  </div>
+
+                  {/* Progressive Hints */}
+                  <div className="space-y-2.5 pt-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <Icons.Layers className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Progressive Scaffolding:</span>
+                    </span>
+
+                    {/* Hint 1: Conceptual */}
+                    <div className="p-3.5 bg-white rounded-xl border border-amber-200/90 shadow-2xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-black flex items-center justify-center">1</span>
+                          <span>Hint 1: Conceptual Principle</span>
+                        </span>
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md">
+                          Core Concept
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-700 leading-relaxed pl-6.5">
+                        {aiMistakeGuidance.hint1Conceptual}
+                      </p>
+                    </div>
+
+                    {/* Hint 2: Procedural */}
+                    {revealedHintTier >= 2 ? (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 6 }} 
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-3.5 bg-white rounded-xl border border-blue-200 shadow-2xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-black flex items-center justify-center">2</span>
+                            <span>Hint 2: Procedural Strategy</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                            Method
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-700 leading-relaxed pl-6.5">
+                          {aiMistakeGuidance.hint2Procedural}
+                        </p>
+                      </motion.div>
+                    ) : (
+                      <button
+                        onClick={() => setRevealedHintTier(2)}
+                        className="w-full py-2.5 px-4 bg-slate-50 hover:bg-amber-50 text-slate-700 hover:text-amber-900 border border-slate-200 hover:border-amber-300 rounded-xl text-xs font-bold transition-all flex items-center justify-between"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Icons.HelpCircle className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Unlock Hint 2 → Procedural Strategy</span>
+                        </span>
+                        <Icons.ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+                    )}
+
+                    {/* Hint 3: First Step */}
+                    {revealedHintTier >= 3 ? (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 6 }} 
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-3.5 bg-white rounded-xl border border-indigo-200 shadow-2xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-800 text-[11px] font-black flex items-center justify-center">3</span>
+                            <span>Hint 3: First Step</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md font-mono">
+                            Step 1
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-800 leading-relaxed pl-6.5 font-medium">
+                          {aiMistakeGuidance.hint3FirstStep}
+                        </p>
+                      </motion.div>
+                    ) : revealedHintTier >= 2 ? (
+                      <button
+                        onClick={() => setRevealedHintTier(3)}
+                        className="w-full py-2.5 px-4 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-900 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs font-bold transition-all flex items-center justify-between"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Icons.HelpCircle className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Unlock Hint 3 → First Step</span>
+                        </span>
+                        <Icons.ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="pt-3 border-t border-amber-200/60 flex flex-col sm:flex-row gap-2.5">
+                    <button
+                      onClick={() => {
+                        setIsAnswered(false);
+                        setIsLastAnswerCorrect(null);
+                      }}
+                      className="flex-1 py-3 px-4 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
+                    >
+                      <Icons.RotateCcw className="w-3.5 h-3.5" />
+                      <span>Try Another Option</span>
+                    </button>
+
+                    <button
+                      onClick={() => setIsSolutionRevealed(true)}
+                      className="py-3 px-4 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Icons.BookOpen className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Reveal Complete Solution</span>
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Worked Solution (Revealed on Correct Answer or User Request) */}
+            <AnimatePresence>
+              {(isSolutionRevealed || (isAnswered && isLastAnswerCorrect)) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3 text-xs sm:text-sm text-left"
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Icons.BookOpen className="w-4 h-4 text-indigo-600" />
+                      <span>Full Mathematical Solution & Derivation:</span>
+                    </div>
+                    <span className="text-xs font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg">
+                      Correct Answer: Option {String.fromCharCode(65 + problem.correctAnswer)} ({problem.options[problem.correctAnswer]})
+                    </span>
+                  </div>
+                  <p className="text-slate-700 leading-relaxed whitespace-pre-line font-mono bg-white p-3 rounded-xl border border-slate-200/70">
+                    {problem.solution || problem.explanation || "Review the step-by-step substitution and algebraic properties applied above."}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </div>
       </div>
 
-      <div className="p-6 bg-white border-t border-slate-100 z-10">
-        <div className="max-w-2xl mx-auto">
-          <button
-            onClick={handleNext}
-            disabled={selectedOption === null}
-            className={`w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-2 ${
-              selectedOption === null 
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-                : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 active:scale-95'
-            }`}
-          >
-            {currentStep < diagnosticProblems.length - 1 ? 'Next Question' : 'Submit Assessment'}
-            <Icons.ChevronRight className="w-6 h-6" />
-          </button>
+      {/* Bottom Action Footer */}
+      <div className="px-4 sm:px-6 py-4 bg-white border-t border-slate-100 shadow-sm z-10 flex items-center justify-between gap-4">
+        <div className="text-xs text-slate-400">
+          {isAnswered && !isLastAnswerCorrect && !isSolutionRevealed
+            ? 'Review the AI feedback or select another choice.'
+            : isAnswered 
+            ? 'Item evaluated. Click next to proceed.' 
+            : 'Select an answer to evaluate.'}
+        </div>
+
+        <div>
+          {!isAnswered ? (
+            <button
+              id="check-diagnostic-answer-btn"
+              onClick={handleCheckAnswer}
+              disabled={selectedOption === null}
+              className="px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-amber-200 active:scale-95 flex items-center gap-2"
+            >
+              <span>{attemptsOnCurrent > 0 ? 'Check Answer Again' : 'Check Answer'}</span>
+              <Icons.ArrowRight className="w-4 h-4" />
+            </button>
+          ) : !isLastAnswerCorrect && !isSolutionRevealed ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setIsAnswered(false);
+                  setIsLastAnswerCorrect(null);
+                }}
+                className="px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-amber-200 active:scale-95 flex items-center gap-2"
+              >
+                <Icons.RotateCcw className="w-4 h-4" />
+                <span>Try Another Answer</span>
+              </button>
+              <button
+                onClick={handleNext}
+                className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors flex items-center gap-1.5"
+              >
+                <span>Skip</span>
+                <Icons.ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              id="next-diagnostic-problem-btn"
+              onClick={handleNext}
+              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-indigo-200 active:scale-95 flex items-center gap-2"
+            >
+              <span>{currentStep === diagnosticProblems.length - 1 ? 'View Diagnostic Report' : 'Next Item'}</span>
+              <Icons.ArrowRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>

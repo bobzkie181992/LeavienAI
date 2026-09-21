@@ -1,10 +1,20 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Topic, UserProfile, QuizResult, Quiz, StudyRequest, isValidatedOrActive } from '../types';
+import { Topic, UserProfile, QuizResult, Quiz, isValidatedOrActive, MathErrorCategory, SummativeAssessment } from '../types';
 import * as Icons from 'lucide-react';
 import { createAdaptiveQuiz } from '../utils/adaptiveEngine';
 import { buildKnowledgeGraph } from '../utils/knowledgeMapUtils';
 import MasteryChart from './MasteryChart';
+import ResearchValidityModal from './ResearchValidityModal';
+import ErrorDiagnosisHub from './ErrorDiagnosisHub';
+import ErrorRemediationModal from './ErrorRemediationModal';
+import { 
+  getRankByLevel, 
+  getEquippedAvatar, 
+  getDailyQuestsState, 
+  getSprintHighScore,
+  getDailyCheckInStatus 
+} from '../utils/gamification';
 
 interface DashboardProps {
   topics: Topic[];
@@ -17,11 +27,6 @@ interface DashboardProps {
   onStartAdaptivePractice?: (competencyName?: string) => void;
   onRetakeQuiz?: (quizId: string) => void;
   onRetakeDiagnostic?: () => void;
-  onOpenStudyRequests?: () => void;
-  onSendStudyRequest?: (topicId?: string, quizId?: string) => void;
-  incomingStudyRequests?: StudyRequest[];
-  outgoingStudyRequests?: StudyRequest[];
-  onStartCollaborativePractice?: (request: StudyRequest) => void;
   onOpenPeerChat?: (peerId?: string, topicId?: string) => void;
   unreadChatCount?: number;
   onOpenAIQuizModal?: () => void;
@@ -30,6 +35,12 @@ interface DashboardProps {
   onOpenDailyChallenge?: () => void;
   onOpenExplainerLibrary?: () => void;
   onOpenReports?: () => void;
+  onOpenPresentations?: () => void;
+  onOpenDailyQuests?: () => void;
+  onOpenSprintArena?: () => void;
+  onOpenLevelProgression?: () => void;
+  onOpenAvatarCustomizer?: () => void;
+  onStartSummativeAssessment?: (assessment: SummativeAssessment) => void;
 }
 
 export default function Dashboard({ 
@@ -43,11 +54,6 @@ export default function Dashboard({
   onStartAdaptivePractice,
   onRetakeQuiz,
   onRetakeDiagnostic,
-  onOpenStudyRequests,
-  onSendStudyRequest,
-  incomingStudyRequests = [],
-  outgoingStudyRequests = [],
-  onStartCollaborativePractice,
   onOpenPeerChat,
   unreadChatCount = 0,
   onOpenAIQuizModal,
@@ -55,18 +61,28 @@ export default function Dashboard({
   onOpenFormulaHub,
   onOpenDailyChallenge,
   onOpenExplainerLibrary,
-  onOpenReports
+  onOpenReports,
+  onOpenPresentations,
+  onOpenDailyQuests,
+  onOpenSprintArena,
+  onOpenLevelProgression,
+  onOpenAvatarCustomizer,
+  onStartSummativeAssessment
 }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'competencies' | 'completed'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'competencies' | 'error_diagnosis' | 'completed'>('overview');
   const [completedFilter, setCompletedFilter] = useState<'all' | 'mastered' | 'needs_work'>('all');
+  const [isResearchModalOpen, setIsResearchModalOpen] = useState(false);
+  const [activeRemediationCategory, setActiveRemediationCategory] = useState<MathErrorCategory | null>(null);
 
-  const pendingIncomingRequests = useMemo(() => {
-    return incomingStudyRequests.filter(r => r.status === 'pending');
-  }, [incomingStudyRequests]);
+  // Gamification Metrics
+  const currentRank = useMemo(() => getRankByLevel(profile.level), [profile.level]);
+  const equippedAvatar = useMemo(() => getEquippedAvatar(profile.uid), [profile.uid]);
+  const dailyQuestsState = useMemo(() => getDailyQuestsState(profile.uid), [profile.uid]);
+  const sprintHighScore = useMemo(() => getSprintHighScore(profile.uid), [profile.uid]);
+  const dailyCheckInState = useMemo(() => getDailyCheckInStatus(profile.uid), [profile.uid]);
 
-  const acceptedOutgoingRequests = useMemo(() => {
-    return outgoingStudyRequests.filter(r => r.status === 'accepted');
-  }, [outgoingStudyRequests]);
+  const completedQuestsCount = dailyQuestsState.quests.filter(q => q.isCompleted).length;
+  const pendingQuestsToClaim = dailyQuestsState.quests.filter(q => q.isCompleted && !q.isClaimed).length;
 
   // Build the Knowledge Graph for competency-level mastery
   const graphData = useMemo(() => {
@@ -270,6 +286,197 @@ export default function Dashboard({
       className="space-y-8"
     >
       {/* ========================================================================= */}
+      {/* 0. RESEARCH-VALID ASSESSMENT ARCHITECTURE BANNER                         */}
+      {/* ========================================================================= */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white border border-indigo-500/20 shadow-lg relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0 shadow-inner">
+            <Icons.ShieldCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
+                Psychometrically Validated Architecture
+              </span>
+              <span className="text-xs text-slate-400 font-medium hidden sm:inline">Grade 11 Mathematics</span>
+            </div>
+            <h3 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-2">
+              <span>Validated Content</span>
+              <span className="text-indigo-400 font-normal">+</span>
+              <span>IRT Adaptive Assessment</span>
+              <span className="text-indigo-400 font-normal">+</span>
+              <span className="text-amber-300">AI Personalized Support</span>
+            </h3>
+            <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+              Diagnostic and adaptive tests draw strictly from an expert-reviewed, calibrated item bank with 2PL IRT ability estimation (&theta;). AI delivers Socratic scaffolding and targeted struggle remediation—never uncalibrated random questions.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setIsResearchModalOpen(true)}
+          className="px-4 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold text-xs rounded-xl border border-white/20 transition-all flex items-center justify-center gap-2 shrink-0 self-start md:self-center"
+        >
+          <Icons.Info className="w-4 h-4 text-indigo-300" />
+          <span>Research Framework</span>
+        </button>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 0.5. GAMIFIED HERO & QUEST EXPEDITION HUB                                */}
+      {/* ========================================================================= */}
+      <section className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl shadow-indigo-950/20 border border-indigo-400/20 relative overflow-hidden">
+        {/* Background decorative elements */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 w-60 h-60 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-6">
+          {/* Student Persona & Level Crest */}
+          <div className="flex items-start sm:items-center gap-4.5">
+            <div className="relative shrink-0">
+              <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br ${equippedAvatar.bgGradient} flex items-center justify-center shadow-lg border-2 border-white/40 ring-4 ring-white/15`}>
+                <Icons.Crown className="w-8 h-8 sm:w-10 sm:h-10 text-amber-300" />
+              </div>
+              <div className="absolute -bottom-2 -right-1 bg-amber-400 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-full shadow-md border border-amber-300">
+                Lvl {profile.level}
+              </div>
+            </div>
+
+            <div className="space-y-1.5 flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-white/20">
+                  {currentRank.tierName} • {currentRank.title}
+                </span>
+                {profile.streak > 0 && (
+                  <span className="text-[10px] font-black text-orange-300 bg-orange-500/20 border border-orange-400/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Icons.Flame className="w-3 h-3 fill-orange-400 text-orange-400" />
+                    <span>{profile.streak} Day Streak</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white truncate">
+                  {profile.displayName || 'Math Adventurer'}
+                </h2>
+                <span className="text-xs text-indigo-200 font-semibold italic hidden sm:inline">
+                  "{equippedAvatar.title}"
+                </span>
+              </div>
+
+              {/* Level XP Progress Bar */}
+              <div className="max-w-md space-y-1 pt-1">
+                <div className="flex items-center justify-between text-[11px] font-bold text-indigo-200">
+                  <span>Level {profile.level} Progress</span>
+                  <span>{profile.xp} / {xpForNextLevel} XP ({levelProgress}%)</span>
+                </div>
+                <div className="w-full bg-black/30 h-2 rounded-full overflow-hidden p-0.5 border border-white/10">
+                  <div 
+                    className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 rounded-full transition-all duration-500"
+                    style={{ width: `${levelProgress}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Action Pills */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {onOpenLevelProgression && (
+                  <button
+                    id="dashboard-rank-tree-trigger"
+                    onClick={onOpenLevelProgression}
+                    className="text-[11px] font-bold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-lg border border-white/15 transition-all flex items-center gap-1.5 active:scale-95"
+                  >
+                    <Icons.Trophy className="w-3 h-3 text-amber-300" />
+                    <span>Progression Tree</span>
+                  </button>
+                )}
+                {onOpenAvatarCustomizer && (
+                  <button
+                    id="dashboard-avatar-picker-trigger"
+                    onClick={onOpenAvatarCustomizer}
+                    className="text-[11px] font-bold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-lg border border-white/15 transition-all flex items-center gap-1.5 active:scale-95"
+                  >
+                    <Icons.Sparkles className="w-3 h-3 text-purple-300" />
+                    <span>Equip Persona</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Gamified Action Cards (Quests & Sprint Arena) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0 lg:w-96">
+            {/* Daily Quests Card */}
+            {onOpenDailyQuests && (
+              <button
+                id="dashboard-quests-hub-btn"
+                onClick={onOpenDailyQuests}
+                className="bg-white/10 hover:bg-white/15 active:scale-95 border border-white/20 rounded-2xl p-3.5 text-left transition-all flex flex-col justify-between group shadow-sm hover:border-amber-300/50 relative overflow-hidden"
+              >
+                {(pendingQuestsToClaim > 0 || dailyCheckInState.canClaim) && (
+                  <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+                )}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                      <Icons.Gift className="w-3 h-3" />
+                      <span>Daily Quests</span>
+                    </span>
+                    <span className="text-[10px] font-black bg-white/20 px-2 py-0.5 rounded-full text-white">
+                      {completedQuestsCount}/3
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-black text-white group-hover:text-amber-200 transition-colors">
+                    Expeditions & Vault
+                  </h4>
+                  <p className="text-[10px] text-indigo-200 mt-0.5">
+                    {pendingQuestsToClaim > 0 ? `${pendingQuestsToClaim} rewards ready!` : 'Claim daily XP bounty'}
+                  </p>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-amber-300 pt-2 border-t border-white/10">
+                  <span>Open Quests</span>
+                  <Icons.ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </button>
+            )}
+
+            {/* Sprint Arena Card */}
+            {onOpenSprintArena && (
+              <button
+                id="dashboard-sprint-hub-btn"
+                onClick={onOpenSprintArena}
+                className="bg-gradient-to-br from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 active:scale-95 border border-amber-400/40 rounded-2xl p-3.5 text-left transition-all flex flex-col justify-between group shadow-sm relative overflow-hidden"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                      <Icons.Zap className="w-3 h-3 fill-amber-300" />
+                      <span>60s Blitz</span>
+                    </span>
+                    {sprintHighScore > 0 && (
+                      <span className="text-[10px] font-black bg-amber-400/30 text-amber-200 px-1.5 py-0.5 rounded-md">
+                        Best: {sprintHighScore}
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="text-xs font-black text-white group-hover:text-amber-200 transition-colors">
+                    Rapid Math Arena
+                  </h4>
+                  <p className="text-[10px] text-amber-100/80 mt-0.5">
+                    Speed challenge with combo fever!
+                  </p>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-[11px] font-bold text-amber-300 pt-2 border-t border-white/10">
+                  <span>Play Blitz ⚡</span>
+                  <Icons.ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ========================================================================= */}
       {/* 1. OVERVIEW STATS & PROGRESS BANNER                                       */}
       {/* ========================================================================= */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -425,7 +632,7 @@ export default function Dashboard({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 shrink-0">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 shrink-0">
             {onOpenAIQuizModal && (
               <button
                 onClick={onOpenAIQuizModal}
@@ -451,6 +658,20 @@ export default function Dashboard({
                 <span className="text-[10px] text-indigo-200">Step-by-step</span>
               </button>
             )}
+
+            {/* Error Classification & Remediation Engine Button */}
+            <button
+              onClick={() => setActiveTab('error_diagnosis')}
+              className="p-3 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/40 rounded-2xl flex flex-col items-center text-center transition-all active:scale-95 group"
+            >
+              <div className="w-8 h-8 rounded-xl bg-rose-400 text-slate-950 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform shadow">
+                <Icons.AlertTriangle className="w-4 h-4" />
+              </div>
+              <span className="text-xs font-bold text-white">Error Diagnosis</span>
+              <span className="text-[10px] text-rose-200">
+                {Object.values(profile.errorFrequencies || {}).reduce((a, b) => a + b, 0)} Logged
+              </span>
+            </button>
 
             {onOpenFormulaHub && (
               <button
@@ -495,6 +716,181 @@ export default function Dashboard({
       </section>
 
       {/* ========================================================================= */}
+      {/* 1.6. DIAGNOSTIC ASSESSMENT & COMPETENCY EVALUATION REPORT                 */}
+      {/* ========================================================================= */}
+      {!profile.diagnosticCompleted ? (
+        <section className="bg-gradient-to-br from-amber-500 via-amber-600 to-indigo-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                  <Icons.Target className="w-3.5 h-3.5" />
+                  <span>Initial Calibration Required</span>
+                </span>
+                <span className="text-xs text-amber-100 font-medium">Grade 11 Diagnostic Test</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight mb-2">
+                Take Your Diagnostic Assessment
+              </h2>
+              <p className="text-xs sm:text-sm text-amber-100 leading-relaxed font-medium">
+                The purpose is <strong className="underline font-black text-white">NOT simply to calculate a raw score</strong>. It determines your <strong className="text-white">estimated mathematics ability</strong> and identifies <strong className="text-white">areas where you need support</strong>.
+              </p>
+            </div>
+
+            {onRetakeDiagnostic && (
+              <button
+                id="dashboard-start-initial-diagnostic-btn"
+                onClick={onRetakeDiagnostic}
+                className="px-6 py-4 bg-white hover:bg-amber-50 active:scale-95 text-slate-900 font-black text-sm rounded-2xl transition-all shadow-lg shrink-0 flex items-center justify-center gap-2"
+              >
+                <Icons.Play className="w-4 h-4 fill-current text-amber-600" />
+                <span>Begin Diagnostic Assessment</span>
+              </button>
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                  <Icons.Target className="w-3 h-3 text-amber-600" />
+                  <span>Diagnostic Assessment Summary</span>
+                </span>
+                <span className="text-xs text-slate-400">Baseline Calibrated</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                Mathematics Ability & Competency Calibration
+              </h2>
+            </div>
+
+            {onRetakeDiagnostic && (
+              <button
+                onClick={onRetakeDiagnostic}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+              >
+                <Icons.RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span>Retake Diagnostic Assessment</span>
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Ability Classification Box */}
+            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200/80 flex flex-col justify-between text-center">
+              <div>
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">
+                  Mathematics Ability:
+                </span>
+                <div className="text-3xl sm:text-4xl font-black text-indigo-700 tracking-tight my-2">
+                  {profile.mathAbility || profile.diagnosticAbility || 'Developing'}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Calibrated across Grade 11 General Mathematics core competencies
+                </p>
+              </div>
+
+              {topWeakCompetency && (
+                <div className="mt-4 pt-4 border-t border-slate-200/60 text-left">
+                  <span className="text-[10px] font-black uppercase text-rose-600 block mb-1 flex items-center gap-1">
+                    <Icons.AlertCircle className="w-3 h-3" />
+                    <span>Top Support Area</span>
+                  </span>
+                  <div className="text-xs font-bold text-slate-900 truncate">
+                    {topWeakCompetency.name}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Competency 3-Tier Status List */}
+            <div className="lg:col-span-2 space-y-3">
+              <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
+                Competency Evaluation Breakdown:
+              </span>
+
+              <div className="grid gap-2.5 max-h-64 overflow-y-auto pr-1">
+                {allCompetencyNodes.slice(0, 6).map((node, index) => {
+                  const score = node.masteryPercentage;
+                  let status: 'Mastered' | 'Developing' | 'Needs Intervention' = 'Developing';
+                  if (score >= 80) status = 'Mastered';
+                  else if (score < 50) status = 'Needs Intervention';
+
+                  return (
+                    <div 
+                      key={node.id}
+                      className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                        status === 'Mastered' ? 'bg-emerald-50/40 border-emerald-200/60' :
+                        status === 'Developing' ? 'bg-amber-50/40 border-amber-200/60' :
+                        'bg-rose-50/40 border-rose-200/60'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] font-bold text-slate-400 block uppercase">
+                          Competency {index + 1}:
+                        </span>
+                        <div className="font-bold text-slate-900 truncate" title={node.name}>
+                          {node.name}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span className="font-black text-slate-800 text-sm">
+                          {score}%
+                        </span>
+                        <span className="text-slate-300 font-bold">—</span>
+                        <span className={`px-2.5 py-0.5 rounded-lg font-black text-[10px] uppercase tracking-wider ${
+                          status === 'Mastered' ? 'bg-emerald-100 text-emerald-800' :
+                          status === 'Developing' ? 'bg-amber-100 text-amber-800' :
+                          'bg-rose-100 text-rose-800'
+                        }`}>
+                          {status}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Recommended What to Study Next Banner */}
+          <div className="bg-indigo-900 text-white rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Icons.Sparkles className="w-4 h-4 text-amber-300" />
+                <span className="font-bold text-sm text-white">Recommended What to Study Next</span>
+              </div>
+              <p className="text-xs text-indigo-200">
+                {topWeakCompetency 
+                  ? `Focus on "${topWeakCompetency.name}" (${topWeakCompetency.topicTitle}) with guided hints before taking assessment tests.` 
+                  : `Continue advancing through core Grade 11 modules and standard assessment quizzes.`}
+              </p>
+            </div>
+
+            {topWeakCompetency ? (
+              <button
+                onClick={() => handleLaunchAdaptivePractice(topWeakCompetency.name)}
+                className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black text-xs rounded-xl transition-all shadow shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Icons.Zap className="w-3.5 h-3.5" />
+                <span>Start Recommended Study</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleLaunchAdaptivePractice()}
+                className="px-5 py-2.5 bg-white hover:bg-indigo-50 active:scale-95 text-indigo-900 font-black text-xs rounded-xl transition-all shadow shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Icons.Play className="w-3.5 h-3.5 fill-current" />
+                <span>Continue Practice</span>
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
       {/* 2. RECOMMENDED ACTIVITIES HUB                                             */}
       {/* ========================================================================= */}
       <section className="space-y-4">
@@ -509,15 +905,27 @@ export default function Dashboard({
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {onOpenPresentations && (
+              <button
+                id="dashboard-open-presentations-btn"
+                onClick={onOpenPresentations}
+                className="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-2xl flex items-center gap-2 text-xs font-bold transition-all shadow-sm active:scale-95"
+                title="Faculty presentations, slide decks, and learning modules"
+              >
+                <Icons.Layers className="w-4 h-4" />
+                <span>Learning Slides</span>
+              </button>
+            )}
+
             {onOpenPeerChat && (
               <button
                 id="dashboard-open-peer-chat-btn"
                 onClick={() => onOpenPeerChat()}
-                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-2xl flex items-center gap-2 text-xs font-bold transition-all shadow-sm active:scale-95"
+                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl flex items-center gap-2 text-xs font-bold transition-all shadow-sm active:scale-95"
                 title="Direct messaging & collaborative study chat with classmates"
               >
-                <Icons.MessageSquare className="w-4 h-4" />
+                <Icons.MessageSquare className="w-4 h-4 text-indigo-600" />
                 <span>Classmate Chat</span>
                 {unreadChatCount > 0 && (
                   <span className="w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-pulse">
@@ -527,123 +935,8 @@ export default function Dashboard({
               </button>
             )}
 
-            {onOpenStudyRequests && (
-              <button
-                id="dashboard-open-study-requests-btn"
-                onClick={onOpenStudyRequests}
-                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl flex items-center gap-2 text-xs font-bold transition-all shadow-sm active:scale-95"
-                title="Collaborative peer study requests"
-              >
-                <Icons.Users className="w-4 h-4 text-indigo-600" />
-                <span>Study Requests</span>
-                {pendingIncomingRequests.length > 0 && (
-                  <span className="w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-pulse">
-                    {pendingIncomingRequests.length}
-                  </span>
-                )}
-              </button>
-            )}
           </div>
         </div>
-
-        {/* Incoming Study Request Interactive Notification Banner */}
-        {pendingIncomingRequests.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-700 rounded-3xl p-5 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shrink-0">
-                <Icons.Users className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-900 px-2 py-0.5 rounded-full">
-                    Study Invitation
-                  </span>
-                  <span className="text-xs text-indigo-200">
-                    {pendingIncomingRequests.length} request{pendingIncomingRequests.length > 1 ? 's' : ''} awaiting response
-                  </span>
-                </div>
-                <h3 className="font-black text-base">
-                  {pendingIncomingRequests[0].fromUserName} invited you to study "{pendingIncomingRequests[0].topicTitle}"!
-                </h3>
-                {pendingIncomingRequests[0].message && (
-                  <p className="text-xs text-indigo-100 italic mt-0.5 line-clamp-1">
-                    "{pendingIncomingRequests[0].message}"
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {onStartCollaborativePractice && (
-                <button
-                  id="banner-accept-study-practice-btn"
-                  onClick={() => onStartCollaborativePractice(pendingIncomingRequests[0])}
-                  className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center gap-1.5"
-                >
-                  <Icons.Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Accept & Practice</span>
-                </button>
-              )}
-              {onOpenStudyRequests && (
-                <button
-                  onClick={onOpenStudyRequests}
-                  className="px-4 py-2.5 bg-white text-indigo-700 hover:bg-indigo-50 font-bold text-xs rounded-xl transition-colors shadow-sm"
-                >
-                  View All ({pendingIncomingRequests.length})
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Accepted Outgoing Request Notification Banner */}
-        {acceptedOutgoingRequests.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-emerald-50 border border-emerald-200 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center shrink-0">
-                <Icons.CheckCircle2 className="w-6 h-6" />
-              </div>
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full">
-                  Partner Accepted
-                </span>
-                <h3 className="font-bold text-slate-900 text-base mt-1">
-                  {acceptedOutgoingRequests[0].toUserName} accepted your request to study {acceptedOutgoingRequests[0].topicTitle}!
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Ready for collaborative practice. Both students earn a +50 XP peer bonus!
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {onStartCollaborativePractice && (
-                <button
-                  id="banner-launch-collab-btn"
-                  onClick={() => onStartCollaborativePractice(acceptedOutgoingRequests[0])}
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow flex items-center gap-1.5"
-                >
-                  <Icons.Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Launch Practice</span>
-                </button>
-              )}
-              {onOpenStudyRequests && (
-                <button
-                  onClick={onOpenStudyRequests}
-                  className="px-3.5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs rounded-xl transition-colors"
-                >
-                  Manage Requests
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Card 1: Adaptive Mathematics Practice */}
@@ -732,20 +1025,22 @@ export default function Dashboard({
                   <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2.5 py-1 rounded-full flex items-center gap-1">
                     <Icons.Route className="w-3 h-3" /> Step {profile.activePathway.currentStepIndex + 1} of {profile.activePathway.steps.length}
                   </span>
-                  <span className="text-xs text-violet-200 font-bold">In Progress</span>
+                  <span className="text-xs text-violet-200 font-bold">7-Step Pathway</span>
                 </div>
-                <h3 className="text-lg font-black mb-1">{profile.activePathway.topicTitle}</h3>
+                <h3 className="text-lg font-black mb-1">
+                  {profile.activePathway.competencyName || profile.activePathway.topicTitle}
+                </h3>
                 <p className="text-xs text-violet-100 leading-relaxed mb-4 line-clamp-2">
-                  {profile.activePathway.steps[profile.activePathway.currentStepIndex]?.title || 'Continue your diagnostic learning sequence.'}
+                  {profile.activePathway.steps[profile.activePathway.currentStepIndex]?.title || 'Continue your competency mastery sequence.'}
                 </p>
               </div>
 
               <button
                 onClick={onStartPathway}
-                className="w-full py-3 bg-white text-violet-900 font-bold rounded-xl text-sm hover:bg-violet-50 transition-all flex items-center justify-center gap-2"
+                className="w-full py-3 bg-white text-violet-900 font-black rounded-xl text-sm hover:bg-violet-50 transition-all flex items-center justify-center gap-2 shadow"
               >
                 <Icons.Play className="w-4 h-4 fill-current" />
-                <span>Resume Pathway</span>
+                <span>Resume 7-Step Pathway</span>
               </button>
             </div>
           ) : (
@@ -1037,7 +1332,7 @@ export default function Dashboard({
                     <Icons.RotateCcw className="w-3.5 h-3.5" />
                     <span>Practice</span>
                   </button>
-                  {onOpenPeerChat ? (
+                  {onOpenPeerChat && (
                     <button
                       onClick={() => onOpenPeerChat(undefined, node.topicId)}
                       className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1 border border-indigo-200"
@@ -1046,16 +1341,7 @@ export default function Dashboard({
                       <Icons.MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
                       <span>Chat & Study</span>
                     </button>
-                  ) : onSendStudyRequest ? (
-                    <button
-                      onClick={() => onSendStudyRequest(node.topicId)}
-                      className="px-3 py-2 bg-white hover:bg-indigo-50 text-indigo-700 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1 border border-slate-200"
-                      title="Invite a classmate to study this topic together"
-                    >
-                      <Icons.Users className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Study Partner</span>
-                    </button>
-                  ) : null}
+                  )}
                 </div>
               </div>
             ))}
@@ -1064,9 +1350,81 @@ export default function Dashboard({
       )}
 
       {/* ========================================================================= */}
-      {/* 4. VISUAL KNOWLEDGE MAP (COMPETENCY MASTERY NETWORK)                      */}
+      {/* 4.5. MAIN DASHBOARD VIEW SELECTOR TABS                                    */}
       {/* ========================================================================= */}
-      {/* Knowledge Map removed */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-slate-200/80">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 shrink-0 ${
+            activeTab === 'overview'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/60'
+          }`}
+        >
+          <Icons.LayoutDashboard className="w-4 h-4" />
+          <span>Curriculum Units & Lessons</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('competencies')}
+          className={`px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 shrink-0 ${
+            activeTab === 'competencies'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/60'
+          }`}
+        >
+          <Icons.Layers className="w-4 h-4" />
+          <span>Competency Matrix</span>
+          <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-black ${
+            activeTab === 'competencies' ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-700'
+          }`}>
+            {masteredCompetencies.length}/{allCompetencyNodes.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('error_diagnosis')}
+          className={`px-4 py-2.5 rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 shrink-0 ${
+            activeTab === 'error_diagnosis'
+              ? 'bg-rose-600 text-white shadow-md shadow-rose-200'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/60'
+          }`}
+        >
+          <Icons.AlertTriangle className="w-4 h-4 text-rose-500" />
+          <span>Error Diagnosis & Remediation</span>
+          {Object.values(profile.errorFrequencies || {}).reduce((a, b) => a + b, 0) > 0 && (
+            <span className={`px-1.5 py-0.5 text-[10px] rounded-full font-black ${
+              activeTab === 'error_diagnosis' ? 'bg-rose-800 text-white' : 'bg-rose-100 text-rose-800'
+            }`}>
+              {Object.values(profile.errorFrequencies || {}).reduce((a, b) => a + b, 0)}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4.6. ERROR DIAGNOSIS & REMEDIATION HUB TAB VIEW                           */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {activeTab === 'error_diagnosis' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <ErrorDiagnosisHub
+              profile={profile}
+              onLaunchRemediation={(category) => {
+                setActiveRemediationCategory(category);
+              }}
+              onOpenTopic={(topicId) => {
+                const found = topics.find(t => t.id === topicId);
+                if (found) onSelectTopic(found);
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ========================================================================= */}
       {/* 5. COMPETENCY MASTERY BREAKDOWN (IF TOGGLED OR EXPANDED)                  */}
@@ -1199,6 +1557,22 @@ export default function Dashboard({
                       <Icons.ChevronRight className="w-4 h-4" />
                     </div>
                   </div>
+
+                  {topic.summativeAssessment && onStartSummativeAssessment && (
+                    <div className="mt-4 pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onStartSummativeAssessment(topic.summativeAssessment!);
+                        }}
+                        className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors border border-indigo-100/80 cursor-pointer"
+                      >
+                        <Icons.GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Summative Exam (TOS Aligned)</span>
+                      </button>
+                    </div>
+                  )}
                 </motion.button>
               );
             })}
@@ -1311,6 +1685,27 @@ export default function Dashboard({
           </section>
         </div>
       </div>
+
+      {/* Research Validity & Assessment Architecture Modal */}
+      <ResearchValidityModal
+        isOpen={isResearchModalOpen}
+        onClose={() => setIsResearchModalOpen(false)}
+      />
+
+      {/* Mathematics Error 5-Stage Remediation Modal */}
+      <AnimatePresence>
+        {activeRemediationCategory && (
+          <ErrorRemediationModal
+            isOpen={!!activeRemediationCategory}
+            category={activeRemediationCategory}
+            profile={profile}
+            onClose={() => setActiveRemediationCategory(null)}
+            onCompleteRemediation={(cat, scorePct) => {
+              setActiveRemediationCategory(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

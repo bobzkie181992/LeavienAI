@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, Users, LogOut, Zap, Database, Video } from 'lucide-react';
+import { BookOpen, Users, LogOut, Zap, Database, Video, Layers } from 'lucide-react';
 import { UserProfile } from '../types';
 
 import FacultyDashboard from '../components/FacultyDashboard';
 import CurriculumManager from '../components/CurriculumManager';
 import ItemBankManager from '../components/ItemBankManager';
 import FacultyVideoManager from '../components/FacultyVideoManager';
+import FacultyPresentationManager from '../components/FacultyPresentationManager';
 import { topics } from '../data/curriculum';
 
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
@@ -17,7 +18,7 @@ interface FacultyModuleProps {
 }
 
 export default function FacultyModule({ profile, onLogout }: FacultyModuleProps) {
-  const [activeTab, setActiveTab] = useState<'faculty' | 'curriculum' | 'items' | 'videos'>('faculty');
+  const [activeTab, setActiveTab] = useState<'faculty' | 'presentations' | 'videos' | 'curriculum' | 'items'>('faculty');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   return (
@@ -38,7 +39,7 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
           <div className="hidden md:flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
             <button
               onClick={() => setActiveTab('faculty')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === 'faculty'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -48,8 +49,19 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
               Students & Research
             </button>
             <button
+              onClick={() => setActiveTab('presentations')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === 'presentations'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              Presentations
+            </button>
+            <button
               onClick={() => setActiveTab('videos')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === 'videos'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -60,7 +72,7 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
             </button>
             <button
               onClick={() => setActiveTab('curriculum')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === 'curriculum'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -71,7 +83,7 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
             </button>
             <button
               onClick={() => setActiveTab('items')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
                 activeTab === 'items'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-slate-600 hover:text-slate-900'
@@ -96,7 +108,11 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
 
       <main className="max-w-6xl mx-auto p-6 pb-24">
         <AnimatePresence mode="wait">
-          {activeTab === 'curriculum' ? (
+          {activeTab === 'presentations' ? (
+            <motion.div key="presentations" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
+              <FacultyPresentationManager topics={topics} facultyName={profile.displayName} facultyUid={profile.uid} />
+            </motion.div>
+          ) : activeTab === 'curriculum' ? (
             <motion.div key="curriculum" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
               <CurriculumManager />
             </motion.div>
@@ -110,18 +126,24 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
             </motion.div>
           ) : (
             <motion.div key="faculty" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
-              <FacultyDashboard />
+              <FacultyDashboard facultyProfile={profile} />
             </motion.div>
           )}
         </AnimatePresence>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 flex justify-around items-center z-10 shadow-lg md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 flex justify-around items-center z-10 shadow-lg md:hidden">
         <NavButton 
           active={activeTab === 'faculty'} 
           onClick={() => setActiveTab('faculty')}
           icon={<Users className="w-5 h-5" />}
           label="Students"
+        />
+        <NavButton 
+          active={activeTab === 'presentations'} 
+          onClick={() => setActiveTab('presentations')}
+          icon={<Layers className="w-5 h-5" />}
+          label="Slides"
         />
         <NavButton 
           active={activeTab === 'videos'} 
@@ -139,7 +161,7 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
           active={activeTab === 'items'} 
           onClick={() => setActiveTab('items')}
           icon={<Database className="w-5 h-5" />}
-          label="Item Bank"
+          label="Items"
         />
       </nav>
 

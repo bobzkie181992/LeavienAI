@@ -178,10 +178,28 @@ export default function CurriculumManager() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">{topic.title}</h3>
-                  <p className="text-sm text-slate-500">{topic.quizzes.length} Quizzes • {topic.description}</p>
+                  <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                    <p className="text-sm text-slate-500">{topic.quizzes.length} Quizzes • {topic.description}</p>
+                    {topic.summativeAssessment && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold rounded-md text-[10px] border border-emerald-200/60">
+                        <Target className="w-3 h-3" />
+                        TOS Aligned ({topic.summativeAssessment.tableOfSpecifications.reduce((a, b) => a + b.totalItems, 0)} Items)
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                {topic.summativeAssessment && (
+                  <button 
+                    onClick={() => setViewingLessonPlanFor(topic)}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-700 font-bold hover:bg-emerald-100 rounded-xl transition-all text-xs"
+                    title="View Outcome-Aligned Summative Assessment & Table of Specifications"
+                  >
+                    <Target className="w-4 h-4 text-emerald-600" />
+                    <span>Summative & TOS</span>
+                  </button>
+                )}
                 <button 
                   onClick={() => setViewingLessonPlanFor(topic)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100 rounded-xl transition-all text-xs"

@@ -673,14 +673,39 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
 
                       <div className="space-y-3 pt-2 text-xs text-emerald-950">
                         <div className="bg-white/80 p-3.5 rounded-2xl border border-emerald-200/60">
-                          <span className="font-extrabold text-emerald-900 block mb-1">Formative & Summative Check:</span>
+                          <span className="font-extrabold text-emerald-900 block mb-1">Formative & Classroom Check:</span>
                           <p className="text-slate-700 font-medium">{plan.assessmentPlan}</p>
                         </div>
+
+                        {topic.summativeAssessment && (
+                          <div className="bg-white/90 p-4 rounded-2xl border border-emerald-300 shadow-sm space-y-2.5">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <span className="font-extrabold text-emerald-950 flex items-center gap-1.5 text-xs">
+                                <GraduationCap className="w-4 h-4 text-emerald-600" />
+                                Summative Assessment: {topic.summativeAssessment.title}
+                              </span>
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-lg">
+                                {topic.summativeAssessment.tableOfSpecifications.reduce((acc, item) => acc + (item.totalItems ?? item.itemNumbers.length), 0)} Items • {topic.summativeAssessment.passingScorePercentage ?? 75}% Pass
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600">
+                              Systematic evaluation aligned to DepEd Order No. 8, s. 2015 and Bloom's Cognitive Taxonomy.
+                            </p>
+                            <div className="space-y-1.5 pt-1">
+                              {topic.summativeAssessment.intendedOutcomes.map((ilo) => (
+                                <div key={ilo.id} className="text-[11px] bg-emerald-50/70 p-2 rounded-xl border border-emerald-100/70 flex items-start gap-2">
+                                  <span className="font-black text-emerald-800 shrink-0">{ilo.code}:</span>
+                                  <span className="text-emerald-950">{ilo.statement || ilo.description || ilo.title}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="bg-white/80 p-3.5 rounded-2xl border border-emerald-200/60 flex items-center justify-between">
                           <div>
                             <span className="font-extrabold text-emerald-900 block">Assessment Target:</span>
-                            <span className="text-slate-600 text-[11px]">5-Item Diagnostic Quiz & Step Verification</span>
+                            <span className="text-slate-600 text-[11px]">Diagnostic, Formative & Outcome-Aligned Summative Exam</span>
                           </div>
                           <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-lg text-[10px]">
                             80% Mastery Benchmark

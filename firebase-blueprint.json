@@ -14,22 +14,49 @@
         "level": { "type": "number" },
         "streak": { "type": "number" },
         "lastActive": { "type": "string" },
-        "badges": { "type": "array" }
+        "badges": { "type": "array" },
+        "oralRecitationPoints": { "type": "number", "description": "Total cumulative oral recitation plus points" }
       },
       "required": ["uid", "xp", "level"]
     },
     "QuizResult": {
       "title": "Quiz Result",
-      "description": "Stores individual quiz performance",
+      "description": "Stores individual quiz performance including diagnostic, assessment, adaptive, and summative transcripts",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
         "quizId": { "type": "string" },
         "score": { "type": "number" },
         "total": { "type": "number" },
-        "timestamp": { "type": "string" }
+        "timestamp": { "type": "string" },
+        "quizMode": { "type": "string" },
+        "summativeTranscript": { "type": "object" }
       },
       "required": ["userId", "quizId", "score", "total"]
+    },
+    "SummativeTranscript": {
+      "title": "Summative Assessment Performance Transcript",
+      "description": "DepEd Table of Specifications and Intended Learning Outcomes assessment transcripts for Grade 11 Mathematics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "assessmentId": { "type": "string" },
+        "assessmentTitle": { "type": "string" },
+        "topicId": { "type": "string" },
+        "topicTitle": { "type": "string" },
+        "score": { "type": "number" },
+        "total": { "type": "number" },
+        "percentage": { "type": "number" },
+        "passed": { "type": "boolean" },
+        "depEdDescriptor": { "type": "string" },
+        "outcomeMastery": { "type": "array" },
+        "timeSpentSeconds": { "type": "number" },
+        "completedAt": { "type": "string" },
+        "xpEarned": { "type": "number" }
+      },
+      "required": ["userId", "studentName", "assessmentId", "score", "total", "percentage", "passed", "depEdDescriptor", "outcomeMastery", "completedAt"]
     },
     "StudyRequest": {
       "title": "Study Request",
@@ -71,6 +98,92 @@
         "studyRequestData": { "type": "object" }
       },
       "required": ["conversationId", "participants", "senderId", "senderName", "recipientId", "recipientName", "text", "createdAt"]
+    },
+    "Presentation": {
+      "title": "Learning Presentation",
+      "description": "Educational slide presentations uploaded or created by faculty for student modules with assessment integration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "topicId": { "type": "string" },
+        "topicTitle": { "type": "string" },
+        "grade": { "type": "string" },
+        "section": { "type": "string" },
+        "authorFacultyId": { "type": "string" },
+        "authorFacultyName": { "type": "string" },
+        "originalFileName": { "type": "string" },
+        "format": { "type": "string" },
+        "slides": { "type": "array" },
+        "totalSlides": { "type": "number" },
+        "connectedQuizId": { "type": "string" },
+        "connectedQuizTitle": { "type": "string" },
+        "suggestedAssessmentType": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "viewsCount": { "type": "number" },
+        "completionsCount": { "type": "number" }
+      },
+      "required": ["id", "title", "topicId", "topicTitle", "grade", "section", "slides", "totalSlides", "createdAt"]
+    },
+    "PresentationViewRecord": {
+      "title": "Presentation View Analytics",
+      "description": "Tracks student slide viewing progress and subsequent assessment engagement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "presentationId": { "type": "string" },
+        "presentationTitle": { "type": "string" },
+        "topicId": { "type": "string" },
+        "topicTitle": { "type": "string" },
+        "studentUid": { "type": "string" },
+        "studentName": { "type": "string" },
+        "grade": { "type": "string" },
+        "section": { "type": "string" },
+        "startedAt": { "type": "string" },
+        "completedAt": { "type": "string" },
+        "slidesViewed": { "type": "number" },
+        "totalSlides": { "type": "number" },
+        "isCompleted": { "type": "boolean" },
+        "proceededToQuiz": { "type": "boolean" },
+        "quizScore": { "type": "number" }
+      },
+      "required": ["presentationId", "studentUid", "studentName", "startedAt", "slidesViewed", "totalSlides", "isCompleted"]
+    },
+    "VideoLecture": {
+      "title": "Video Lecture",
+      "description": "Faculty video lectures and multimedia resources",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "youtubeId": { "type": "string" },
+        "topicId": { "type": "string" },
+        "topicTitle": { "type": "string" },
+        "grade": { "type": "string" },
+        "section": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "youtubeId", "topicId", "topicTitle", "grade", "section"]
+    },
+    "OralRecitation": {
+      "title": "Oral Recitation Plus Points",
+      "description": "Stores details of oral recitation plus points awarded to student by faculty",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "topicId": { "type": "string" },
+        "topicTitle": { "type": "string" },
+        "points": { "type": "number" },
+        "notes": { "type": "string" },
+        "awardedBy": { "type": "string" },
+        "awardedAt": { "type": "string" }
+      },
+      "required": ["userId", "studentName", "points", "awardedBy", "awardedAt"]
     }
   },
   "firestore": {
@@ -82,6 +195,10 @@
       "schema": "QuizResult",
       "description": "User quiz history"
     },
+    "/curriculum/{topicId}": {
+      "schema": "object",
+      "description": "Grade 11 curriculum topics, quizzes, and problems"
+    },
     "/study_requests/{requestId}": {
       "schema": "StudyRequest",
       "description": "Collaborative study requests between students"
@@ -89,6 +206,22 @@
     "/chat_messages/{messageId}": {
       "schema": "ChatMessage",
       "description": "Direct chat messages between students"
+    },
+    "/videoLectures/{lectureId}": {
+      "schema": "VideoLecture",
+      "description": "Video lectures published by faculty"
+    },
+    "/presentations/{presentationId}": {
+      "schema": "Presentation",
+      "description": "Learning presentations published by faculty"
+    },
+    "/presentation_views/{viewId}": {
+      "schema": "PresentationViewRecord",
+      "description": "Student presentation views and assessment completions"
+    },
+    "/oral_recitations/{recitationId}": {
+      "schema": "OralRecitation",
+      "description": "Oral recitation plus points awarded to students by faculty"
     }
   }
 }

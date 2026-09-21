@@ -182,6 +182,64 @@ Return only valid JSON without markdown wrapping if possible, or clean JSON.`;
   }
 });
 
+// API Route: AI Math Tutor Mistake Guidance & Progressive Scaffolding Hints
+app.post('/api/ai/diagnose-mistake', async (req, res) => {
+  try {
+    const { question, studentAnswer, correctAnswer, topic, competency, options } = req.body;
+    if (!question || !studentAnswer) {
+      return res.status(400).json({ success: false, error: 'Question and student answer are required' });
+    }
+
+    let guidanceData: any = null;
+    try {
+      const ai = getGeminiClient();
+      const prompt = `You are an expert, encouraging Grade 11 Mathematics AI Tutor.
+A student just submitted an incorrect answer on a math quiz item:
+- Question: "${question}"
+- All Options: ${JSON.stringify(options || [])}
+- Student's Answer: "${studentAnswer}"
+- Verified Correct Answer: "${correctAnswer}"
+- Topic/Competency: "${topic || ''} - ${competency || ''}"
+
+PEDAGOGICAL DIRECTIVES:
+1. DO NOT simply say "Wrong" or reveal the complete answer or option.
+2. Provide a targeted, encouraging coachingMessage that pinpoints where the misunderstanding or miscalculation occurred (e.g. "Check the value that makes the denominator equal to zero. Set x − 3 = 0 and solve for x.").
+3. Provide 3 progressive hints:
+   - Hint 1: Conceptual hint (explaining the mathematical concept/definition).
+   - Hint 2: Procedural hint (explaining the method/algorithm to solve it).
+   - Hint 3: First step (the first concrete equation or operation to write down).
+4. Classify the mistake into one of: "Sign error", "Formula error", "Computational error", "Conceptual misunderstanding", "Incorrect procedure", "Misreading the problem", "Algebraic manipulation error".
+
+Return ONLY a JSON object with this exact structure (no markdown fences):
+{
+  "coachingMessage": "Check the value that makes the denominator equal to zero. Set x − 3 = 0 and solve for x.",
+  "hint1Conceptual": "A rational expression is undefined when the denominator is zero...",
+  "hint2Procedural": "Isolate the denominator, set it equal to 0...",
+  "hint3FirstStep": "Write x - 3 = 0 and add 3 to both sides...",
+  "category": "Sign error",
+  "remediationTip": "Always verify signs when transposing terms across an equals sign."
+}`;
+
+      const textResponse = await generateWithFallback(ai, prompt);
+      const jsonString = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+      guidanceData = JSON.parse(jsonString);
+    } catch (apiErr: any) {
+      guidanceData = {
+        coachingMessage: `Check the intermediate algebraic steps. Examine why "${studentAnswer}" does not satisfy all conditions of the problem.`,
+        hint1Conceptual: `Review the foundational definitions and rules for ${topic || 'this topic'}.`,
+        hint2Procedural: `Isolate variables systematically and test intermediate calculations.`,
+        hint3FirstStep: `Set up the fundamental equation and write down the first simplification step.`,
+        category: "Algebraic manipulation error",
+        remediationTip: "Review standard properties and check each step with inverse operations."
+      };
+    }
+
+    res.json({ success: true, guidance: guidanceData });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // API Route: AI Math Diagnostic Report Generator
 app.post('/api/ai/diagnose', async (req, res) => {
   try {
@@ -605,6 +663,277 @@ ${documentText || 'Binary / Multimodal Document Attached'}`;
   } catch (error: any) {
     console.error('Error in AI document parsing:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to parse document' });
+  }
+});
+
+// API Route: AI Presentation Slide Deck Generator / Parser
+app.post('/api/ai/generate-presentation', async (req, res) => {
+  try {
+    const { topicTitle, topicId, grade = 'Grade 11', section = 'STEM-A', rawText, fileName, slideCount = 6 } = req.body;
+
+    let presentationData: any = null;
+
+    try {
+      const ai = getGeminiClient();
+      const prompt = `You are an expert Grade 11 Mathematics professor and instructional slide designer for MathAdapt AI.
+Create a structured, highly engaging educational presentation slide deck for the student learning module based on:
+- Topic: ${topicTitle || 'Grade 11 Mathematics'}
+- Target Grade: ${grade}
+- Section: ${section}
+- Source Content / Notes: ${rawText ? rawText.slice(0, 3000) : 'Standard DepEd Grade 11 STEM Curriculum on ' + (topicTitle || 'Calculus')}
+- Target Number of Slides: ${slideCount}
+
+Requirements for slides:
+1. Slide 1: Title slide introducing the core concept, Grade 11 STEM focus, and learning goals.
+2. Slide 2-3: Conceptual foundations, definitions, core theorems, and key formulas.
+3. Slide 4: Worked example with step-by-step mathematical problem solving and final answer.
+4. Slide 5: Interactive quick knowledge check with multiple-choice question, options, correct answer index, and thorough explanation.
+5. Final Slide: Lesson summary, key takeaways, and prompt to take the connected Diagnostic or Topic Assessment.
+
+Return ONLY a valid JSON object matching this exact structure (no markdown, pure JSON):
+{
+  "title": "${topicTitle || 'Grade 11 Mathematics'}: Interactive Learning Module",
+  "description": "Comprehensive presentation deck with conceptual foundations, worked examples, and formative checks.",
+  "topicId": "${topicId || 'general'}",
+  "topicTitle": "${topicTitle || 'Grade 11 Mathematics'}",
+  "grade": "${grade}",
+  "section": "${section}",
+  "format": "${fileName ? (fileName.endsWith('.docx') ? 'DOCX' : fileName.endsWith('.pdf') ? 'PDF' : 'PPTX') : 'INTERACTIVE_DECK'}",
+  "originalFileName": "${fileName || 'Presentation_Module.pptx'}",
+  "totalSlides": ${slideCount},
+  "connectedQuizTitle": "${topicTitle || 'Mathematics'} Mastery Assessment",
+  "suggestedAssessmentType": "both",
+  "slides": [
+    {
+      "id": "slide-1",
+      "slideNumber": 1,
+      "title": "Title of Slide",
+      "subtitle": "Subtitle or Category",
+      "layout": "title",
+      "content": ["Key bullet point 1", "Key bullet point 2", "Key bullet point 3"],
+      "keyFormula": "Mathematical formula if applicable (e.g. \\\\lim_{x \\\\to c} f(x) = L)",
+      "formulaExplanation": "Short explanation of formula",
+      "speakerNotes": "Teacher lecture notes / audio script explaining this slide",
+      "iconName": "Zap"
+    },
+    {
+      "id": "slide-2",
+      "slideNumber": 2,
+      "title": "Concept & Core Principles",
+      "subtitle": "Theoretical framework",
+      "layout": "concept",
+      "content": ["Principle 1", "Principle 2", "Principle 3"],
+      "keyFormula": "Formula",
+      "formulaExplanation": "Explanation",
+      "speakerNotes": "Speaker explanation",
+      "iconName": "TrendingUp"
+    },
+    {
+      "id": "slide-3",
+      "slideNumber": 3,
+      "title": "Formulas & Rules",
+      "subtitle": "Computational guidelines",
+      "layout": "formula_breakdown",
+      "content": ["Rule 1", "Rule 2", "Rule 3"],
+      "keyFormula": "Key equation",
+      "formulaExplanation": "Detailed formula meaning",
+      "speakerNotes": "Speaker notes",
+      "iconName": "BookOpen"
+    },
+    {
+      "id": "slide-4",
+      "slideNumber": 4,
+      "title": "Worked Example: Step-by-Step",
+      "subtitle": "Problem walkthrough",
+      "layout": "worked_example",
+      "content": ["Problem statement and initial conditions"],
+      "exampleProblem": {
+        "problemStatement": "Evaluate or solve specific mathematical question",
+        "steps": [
+          "Step 1: Identify given parameters",
+          "Step 2: Apply theorem or algebraic simplification",
+          "Step 3: Evaluate and compute final value"
+        ],
+        "finalAnswer": "Final calculated result"
+      },
+      "speakerNotes": "Step-by-step guidance notes",
+      "iconName": "Award"
+    },
+    {
+      "id": "slide-5",
+      "slideNumber": 5,
+      "title": "Quick Knowledge Check",
+      "subtitle": "Formative comprehension check",
+      "layout": "interactive_check",
+      "content": ["Test your understanding before the formal assessment"],
+      "quickCheck": {
+        "question": "Multiple choice math question testing core concept",
+        "options": ["Option A", "Option B", "Option C", "Option D"],
+        "correctAnswer": 0,
+        "explanation": "Explanation of why Option A is correct"
+      },
+      "speakerNotes": "Explain common pitfalls and correct reasoning",
+      "iconName": "HelpCircle"
+    },
+    {
+      "id": "slide-6",
+      "slideNumber": 6,
+      "title": "Summary & Assessment Next Steps",
+      "subtitle": "Key takeaways & quiz invitation",
+      "layout": "summary",
+      "content": [
+        "Review of core principles mastered in this module",
+        "Key formula recall for the upcoming assessment",
+        "Next Action: Proceed to the Topic Quiz or Diagnostic Assessment to earn XP and level up"
+      ],
+      "keyFormula": "\\\\text{Mastery Goal} \\\\ge 80\\\\%",
+      "formulaExplanation": "Score 80%+ on the connected quiz to unlock achievement badges",
+      "speakerNotes": "Encourage the student to attempt the quiz immediately while concepts are fresh.",
+      "iconName": "Trophy"
+    }
+  ]
+}`;
+
+      const textResponse = await generateWithFallback(ai, prompt);
+      const jsonString = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+      presentationData = JSON.parse(jsonString);
+    } catch (apiErr: any) {
+      console.warn('Gemini API presentation fallback triggered.', apiErr);
+
+      const title = topicTitle || (fileName ? fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'Grade 11 Mathematics');
+
+      presentationData = {
+        title: `${title}: Learning Module & Presentation`,
+        description: `Interactive slide presentation for ${title} covering theoretical principles, worked examples, and formative checks.`,
+        topicId: topicId || 'general',
+        topicTitle: title,
+        grade: grade || 'Grade 11',
+        section: section || 'STEM-A',
+        format: fileName ? (fileName.endsWith('.docx') ? 'DOCX' : fileName.endsWith('.pdf') ? 'PDF' : 'PPTX') : 'INTERACTIVE_DECK',
+        originalFileName: fileName || `${title.replace(/\s+/g, '_')}_Module.pptx`,
+        totalSlides: 6,
+        connectedQuizTitle: `${title} Mastery Quiz`,
+        suggestedAssessmentType: 'both',
+        slides: [
+          {
+            id: 'slide-1',
+            slideNumber: 1,
+            title: `${title}`,
+            subtitle: `${grade} • ${section} • Student Learning Module`,
+            layout: 'title',
+            content: [
+              `Comprehensive overview of ${title} competencies`,
+              'Conceptual foundations and mathematical definitions',
+              'Algebraic derivations and worked sample problems',
+              'Preparation for Diagnostic Assessment and Topic Quizzes'
+            ],
+            keyFormula: 'f(x) \\rightarrow L',
+            formulaExplanation: 'Core mathematical relationship for this learning module.',
+            speakerNotes: `Welcome to this learning presentation on ${title}. Review each slide carefully and take notes before attempting the mastery quiz.`,
+            iconName: 'Zap'
+          },
+          {
+            id: 'slide-2',
+            slideNumber: 2,
+            title: 'Foundational Principles & Definitions',
+            subtitle: 'Core theoretical framework',
+            layout: 'concept',
+            content: [
+              'Understand the fundamental laws and domain assumptions for this topic.',
+              'Identify the relationship between algebraic symbols and graphical representations.',
+              'Observe boundary conditions and critical values in the coordinate plane.'
+            ],
+            keyFormula: 'y = f(x)',
+            formulaExplanation: 'Essential mathematical mapping and function notation.',
+            speakerNotes: 'Pay close attention to domain restrictions and algebraic identities.',
+            iconName: 'TrendingUp'
+          },
+          {
+            id: 'slide-3',
+            slideNumber: 3,
+            title: 'Essential Formulas & Methodologies',
+            subtitle: 'Computational guidelines and rules',
+            layout: 'formula_breakdown',
+            content: [
+              'Step 1: Simplify all given algebraic terms and factor where possible.',
+              'Step 2: Apply standard Grade 11 formulas and theorems.',
+              'Step 3: Check for extraneous solutions or undefined points.'
+            ],
+            keyFormula: 'a^2 - b^2 = (a-b)(a+b)',
+            formulaExplanation: 'Key algebraic factoring identity for resolving mathematical expressions.',
+            speakerNotes: 'Always simplify before substituting numbers to avoid arithmetic errors.',
+            iconName: 'BookOpen'
+          },
+          {
+            id: 'slide-4',
+            slideNumber: 4,
+            title: 'Worked Example: Step-by-Step Breakdown',
+            subtitle: 'Guided problem solving walkthrough',
+            layout: 'worked_example',
+            content: [
+              `Guided problem solving application for ${title}.`
+            ],
+            exampleProblem: {
+              problemStatement: `Solve and evaluate the core mathematical expression for ${title}.`,
+              steps: [
+                '1. Identify given values and write the governing equation.',
+                '2. Substitute known quantities and isolate the unknown variable.',
+                '3. Perform step-by-step arithmetic verification.',
+                '4. State the final evaluated result with correct units.'
+              ],
+              finalAnswer: 'x = 4 (Verified Solution)'
+            },
+            speakerNotes: 'Notice how each step logically follows from the previous step without skipping calculations.',
+            iconName: 'Award'
+          },
+          {
+            id: 'slide-5',
+            slideNumber: 5,
+            title: 'Quick Comprehension Check',
+            subtitle: 'Test your understanding before the formal quiz',
+            layout: 'interactive_check',
+            content: [
+              'Answer the following question to verify your conceptual retention.'
+            ],
+            quickCheck: {
+              question: `Which statement is correct regarding ${title}?`,
+              options: [
+                'Direct algebraic verification confirms the mathematical validity',
+                'The formula is invalid for all real numbers',
+                'Variables cannot be evaluated analytically',
+                'The mathematical model has no practical applications'
+              ],
+              correctAnswer: 0,
+              explanation: 'Direct algebraic analysis and domain verification ensure accurate solutions.'
+            },
+            speakerNotes: 'Double-check the question details before selecting your final answer.',
+            iconName: 'HelpCircle'
+          },
+          {
+            id: 'slide-6',
+            slideNumber: 6,
+            title: 'Module Summary & Assessment Call',
+            subtitle: 'Ready to earn XP and test your mastery',
+            layout: 'summary',
+            content: [
+              '✓ Core definitions and mathematical theorems reviewed.',
+              '✓ Step-by-step problem solving technique demonstrated.',
+              '✓ Formative knowledge check successfully completed.',
+              '★ Next Step: Take the connected Topic Quiz or Diagnostic Assessment now!'
+            ],
+            keyFormula: '\\text{Target Score: } 80\\%+',
+            formulaExplanation: 'Complete the quiz to unlock +100 XP and achievement badges.',
+            speakerNotes: 'Great job completing this presentation! Proceed directly to the assessment to solidify your learning.',
+            iconName: 'Trophy'
+          }
+        ]
+      };
+    }
+
+    res.json({ success: true, presentation: presentationData });
+  } catch (error: any) {
+    console.error('Error generating presentation:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to generate presentation' });
   }
 });
 

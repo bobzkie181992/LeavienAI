@@ -1,6 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BookOpen, Trophy, User, LogOut, Zap, Play, Users, MessageSquare, Video, Layers, TrendingUp } from 'lucide-react';
+import { 
+  BookOpen, 
+  Trophy, 
+  User, 
+  LogOut, 
+  Zap, 
+  Play, 
+  MessageSquare, 
+  Video, 
+  Layers, 
+  TrendingUp,
+  Volume2,
+  VolumeX,
+  Gift,
+  Sparkles,
+  Crown,
+  Flame,
+  Swords
+} from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { 
   UserProfile, 
   Quiz, 
@@ -8,8 +27,8 @@ import {
   QuizResult, 
   LearningPathway, 
   Problem,
-  StudyRequest,
-  isValidatedOrActive 
+  isValidatedOrActive,
+  SummativeAssessment 
 } from '../types';
 
 import Dashboard from '../components/Dashboard';
@@ -19,7 +38,6 @@ import ProfileView from '../components/ProfileView';
 import Leaderboard from '../components/Leaderboard';
 import DiagnosticAssessment from '../components/DiagnosticAssessment';
 import PathwayEngine from '../components/PathwayEngine';
-import StudyRequestsModal from '../components/StudyRequestsModal';
 import PeerChatModal from '../components/PeerChatModal';
 import SmartAIQuizModal from '../components/SmartAIQuizModal';
 import AIMathSolverModal from '../components/AIMathSolverModal';
@@ -29,10 +47,30 @@ import ExplainerLibrary from '../components/ExplainerLibrary';
 import CumulativePerformanceModal from '../components/CumulativePerformanceModal';
 import InteractiveFlashcards from '../components/InteractiveFlashcards';
 import LearningReports from '../components/LearningReports';
+import StudentPresentationHub from '../components/StudentPresentationHub';
+import DailyQuestsModal from '../components/DailyQuestsModal';
+import MathSprintArena from '../components/MathSprintArena';
+import LevelProgressionModal from '../components/LevelProgressionModal';
+import AvatarCustomizerModal from '../components/AvatarCustomizerModal';
+import LevelUpCelebrationModal from '../components/LevelUpCelebrationModal';
+import SummativeAssessmentModal from '../components/SummativeAssessmentModal';
 import { PWAInstallButton } from '../components/PWAInstallButton';
-import { useStudyRequests, usePeers } from '../hooks/useFirebase';
+import { usePeers } from '../hooks/useFirebase';
 import { usePeerChat } from '../hooks/usePeerChat';
 import { createAdaptiveQuiz } from '../utils/adaptiveEngine';
+import { 
+  getRankByLevel, 
+  getEquippedAvatar, 
+  getDailyQuestsState, 
+  trackQuestProgress 
+} from '../utils/gamification';
+import { 
+  playLevelUpFanfare, 
+  playCorrectSound, 
+  playPopSound, 
+  isAudioMuted, 
+  setAudioMuted 
+} from '../utils/audioEffects';
 
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
@@ -65,102 +103,77 @@ export default function StudentModule({
   checkAchievements, 
   onLogout 
 }: StudentModuleProps) {
-  const [activeTab, setActiveTab] = useState<'learn' | 'explainers' | 'flashcards' | 'reports' | 'profile' | 'leaderboard'>('learn');
+  const [activeTab, setActiveTab] = useState<'learn' | 'presentations' | 'explainers' | 'flashcards' | 'reports' | 'profile' | 'leaderboard'>('learn');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<TopicType | null>(null);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
-  const [quizInitialMode, setQuizInitialMode] = useState<'adaptive' | 'standard' | 'timed' | undefined>(undefined);
+  const [quizInitialMode, setQuizInitialMode] = useState<'diagnostic' | 'assessment' | 'adaptive' | 'standard' | 'timed' | undefined>(undefined);
   const [isViewingPathway, setIsViewingPathway] = useState(false);
   const [isTakingDiagnostic, setIsTakingDiagnostic] = useState(false);
+  const [activeSummativeAssessment, setActiveSummativeAssessment] = useState<SummativeAssessment | null>(null);
 
-  // Collaborative Study Requests State & Hooks
   const currentUserId = userUid || profile.uid;
-  const {
-    incomingRequests,
-    outgoingRequests,
-    pendingIncomingCount,
-    sendStudyRequest,
-    respondToStudyRequest,
-    cancelStudyRequest,
-    completeStudyRequest
-  } = useStudyRequests(currentUserId);
-
   const { peers } = usePeers(currentUserId);
-  const [isStudyModalOpen, setIsStudyModalOpen] = useState(false);
   const [isAIQuizModalOpen, setIsAIQuizModalOpen] = useState(false);
   const [isAISolverModalOpen, setIsAISolverModalOpen] = useState(false);
   const [solverInitialQuery, setSolverInitialQuery] = useState('');
   const [isFormulaHubOpen, setIsFormulaHubOpen] = useState(false);
   const [isDailyChallengeOpen, setIsDailyChallengeOpen] = useState(false);
-  const [preselectedTopicId, setPreselectedTopicId] = useState<string | undefined>(undefined);
-  const [preselectedQuizId, setPreselectedQuizId] = useState<string | undefined>(undefined);
-  const [activeCollaborativeSession, setActiveCollaborativeSession] = useState<{
-    partnerName: string;
-    topicTitle: string;
-    requestId: string;
-  } | null>(null);
 
   const [isPerformanceModalOpen, setIsPerformanceModalOpen] = useState(false);
   const [latestQuizDetails, setLatestQuizDetails] = useState<{ xp: number; score: number; total: number } | null>(null);
+
+  // Gamification Modals & State
+  const [isDailyQuestsOpen, setIsDailyQuestsOpen] = useState(false);
+  const [isSprintArenaOpen, setIsSprintArenaOpen] = useState(false);
+  const [isLevelProgressionOpen, setIsLevelProgressionOpen] = useState(false);
+  const [isAvatarCustomizerOpen, setIsAvatarCustomizerOpen] = useState(false);
+  const [levelUpCelebration, setLevelUpCelebration] = useState<{ isOpen: boolean; newLevel: number } | null>(null);
+  const [floatingXPToast, setFloatingXPToast] = useState<{ show: boolean; amount: number; message?: string } | null>(null);
+  const [isMuted, setIsMuted] = useState(() => isAudioMuted());
+  const [avatarRev, setAvatarRev] = useState(0);
+
+  const prevLevelRef = useRef<number>(profile.level);
+
+  const equippedAvatar = useMemo(() => {
+    return getEquippedAvatar(currentUserId);
+  }, [currentUserId, avatarRev]);
+
+  const currentRank = useMemo(() => {
+    return getRankByLevel(profile.level);
+  }, [profile.level]);
+
+  const dailyQuestsState = useMemo(() => {
+    return getDailyQuestsState(currentUserId);
+  }, [currentUserId, profile.xp]);
+
+  const pendingQuestsToClaim = dailyQuestsState.quests.filter(q => q.isCompleted && !q.isClaimed).length;
+
+  // Level Up Detection & Celebration
+  useEffect(() => {
+    if (prevLevelRef.current && profile.level > prevLevelRef.current) {
+      setLevelUpCelebration({ isOpen: true, newLevel: profile.level });
+      playLevelUpFanfare();
+    }
+    prevLevelRef.current = profile.level;
+  }, [profile.level]);
+
+  const handleGamifiedRewardXP = (amount: number, message?: string) => {
+    addXP(amount);
+    setFloatingXPToast({ show: true, amount, message });
+    setTimeout(() => setFloatingXPToast(null), 3000);
+  };
+
+  const toggleSound = () => {
+    const next = !isMuted;
+    setIsMuted(next);
+    setAudioMuted(next);
+  };
 
   // Pool of all active problems across curriculum
   const allProblemsPool: Problem[] = topics
     .flatMap(topic => topic.quizzes.flatMap(quiz => quiz.problems))
     .filter(isValidatedOrActive);
-
-  // Handler to launch collaborative practice from an accepted or pending request
-  const handleStartCollaborativePractice = (request: StudyRequest) => {
-    const topic = topics.find(t => t.id === request.topicId);
-    let quizToRun: Quiz | null = null;
-    
-    if (request.quizId && topic) {
-      quizToRun = topic.quizzes.find(q => q.id === request.quizId) || null;
-    }
-    
-    if (!quizToRun && topic) {
-      quizToRun = topic.quizzes.find(q => q.problems.some(isValidatedOrActive)) || null;
-    }
-
-    if (!quizToRun) {
-      const { quiz } = createAdaptiveQuiz(topics, {
-        topicId: request.topicId,
-        targetProblemsCount: 5
-      });
-      quizToRun = quiz;
-    }
-
-    const activeProblems = quizToRun.problems.filter(isValidatedOrActive);
-    if (activeProblems.length === 0) {
-      const fallbackProblems = (topic?.quizzes.flatMap(q => q.problems) || allProblemsPool)
-        .filter(isValidatedOrActive)
-        .slice(0, 5);
-      quizToRun = {
-        ...quizToRun,
-        problems: fallbackProblems.length > 0 ? fallbackProblems : allProblemsPool.slice(0, 5)
-      };
-    } else {
-      quizToRun = { ...quizToRun, problems: activeProblems };
-    }
-
-    const isIncoming = request.toUserId === currentUserId;
-    const partnerName = isIncoming ? request.fromUserName : request.toUserName;
-
-    // If incoming request is still pending, automatically accept it
-    if (request.status === 'pending' && isIncoming) {
-      respondToStudyRequest(request.id, 'accepted').catch(console.error);
-    }
-
-    setActiveCollaborativeSession({
-      partnerName,
-      topicTitle: request.topicTitle,
-      requestId: request.id
-    });
-
-    setIsStudyModalOpen(false);
-    setSelectedTopic(null);
-    setQuizInitialMode('standard');
-    setActiveQuiz(quizToRun);
-  };
 
   // Handler for Daily Challenge
   const handleStartChallenge = () => {
@@ -246,6 +259,86 @@ export default function StudentModule({
     setIsTakingDiagnostic(true);
   };
 
+  // Handler for Starting Quiz from Presentation
+  const handleStartQuizFromPresentation = (topicId: string, quizId?: string) => {
+    setSelectedTopic(null);
+    setIsViewingPathway(false);
+    setIsTakingDiagnostic(false);
+
+    const topic = topics.find(t => t.id === topicId);
+    let quizToRun: Quiz | null = null;
+
+    if (quizId && topic) {
+      quizToRun = topic.quizzes.find(q => q.id === quizId) || null;
+    }
+
+    if (!quizToRun && topic) {
+      quizToRun = topic.quizzes.find(q => q.problems.some(isValidatedOrActive)) || null;
+    }
+
+    if (!quizToRun) {
+      const { quiz } = createAdaptiveQuiz(topics, {
+        topicId: topicId,
+        targetProblemsCount: 5
+      });
+      quizToRun = quiz;
+    }
+
+    const activeProblems = quizToRun.problems.filter(isValidatedOrActive);
+    let problemsToRun = [...activeProblems];
+    if (problemsToRun.length < 5) {
+      const supplement = (topic?.quizzes.flatMap(q => q.problems) || allProblemsPool)
+        .filter(p => p.topic === topicId && !problemsToRun.some(ap => ap.id === p.id))
+        .slice(0, 5 - problemsToRun.length);
+      problemsToRun = [...problemsToRun, ...supplement];
+    }
+
+    setQuizInitialMode('adaptive');
+    setActiveQuiz({
+      ...quizToRun,
+      problems: problemsToRun.length > 0 ? problemsToRun : allProblemsPool.slice(0, 5)
+    });
+  };
+
+  // Helper to determine the next level quiz in sequence for competency progression
+  const getNextLevelQuiz = (currentQuiz: Quiz | null): Quiz | null => {
+    if (!currentQuiz) return null;
+    const currentTopic = topics.find(t => t.id === currentQuiz.topicId || t.quizzes.some(q => q.id === currentQuiz.id));
+    if (!currentTopic) return null;
+
+    const currentQuizIndex = currentTopic.quizzes.findIndex(q => q.id === currentQuiz.id);
+    if (currentQuizIndex !== -1 && currentQuizIndex < currentTopic.quizzes.length - 1) {
+      const candidate = currentTopic.quizzes[currentQuizIndex + 1];
+      let activeProblems = candidate.problems.filter(isValidatedOrActive);
+      if (activeProblems.length < 5) {
+        const supplement = allProblemsPool
+          .filter(p => p.topic === candidate.topicId && !activeProblems.some(ap => ap.id === p.id))
+          .slice(0, 5 - activeProblems.length);
+        activeProblems = [...activeProblems, ...supplement];
+      }
+      return { ...candidate, problems: activeProblems };
+    }
+
+    // If last quiz in current topic, check first quiz of next topic
+    const currentTopicIndex = topics.findIndex(t => t.id === currentTopic.id);
+    if (currentTopicIndex !== -1 && currentTopicIndex < topics.length - 1) {
+      const nextTopic = topics[currentTopicIndex + 1];
+      if (nextTopic.quizzes && nextTopic.quizzes.length > 0) {
+        const candidate = nextTopic.quizzes[0];
+        let activeProblems = candidate.problems.filter(isValidatedOrActive);
+        if (activeProblems.length < 5) {
+          const supplement = allProblemsPool
+            .filter(p => p.topic === candidate.topicId && !activeProblems.some(ap => ap.id === p.id))
+            .slice(0, 5 - activeProblems.length);
+          activeProblems = [...activeProblems, ...supplement];
+        }
+        return { ...candidate, problems: activeProblems };
+      }
+    }
+
+    return null;
+  };
+
   return (
     <>
       {/* Top Header */}
@@ -267,40 +360,84 @@ export default function StudentModule({
             {/* PWA Install Button */}
             <PWAInstallButton />
 
-            {/* Peer Study Requests Trigger */}
+            {/* Daily Quests Trigger Button */}
             <button
-              id="study-requests-header-trigger"
+              id="header-daily-quests-trigger"
               onClick={() => {
-                setPreselectedTopicId(undefined);
-                setPreselectedQuizId(undefined);
-                setIsStudyModalOpen(true);
+                playPopSound();
+                setIsDailyQuestsOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100/90 text-indigo-700 transition-all font-bold text-xs relative active:scale-95 shadow-sm"
-              title="Collaborative Study Requests"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-200 bg-amber-50 hover:bg-amber-100/90 text-amber-900 transition-all font-bold text-xs relative active:scale-95 shadow-sm"
+              title="Daily Quests & Check-In Bounty"
             >
-              <Users className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden sm:inline">Study Requests</span>
-              {pendingIncomingCount > 0 && (
-                <span className="w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-pulse">
-                  {pendingIncomingCount}
+              <Gift className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden sm:inline">Quests</span>
+              {pendingQuestsToClaim > 0 && (
+                <span className="w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-bounce">
+                  {pendingQuestsToClaim}
                 </span>
               )}
             </button>
 
-            <div className="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100">
-              <Zap className="w-3.5 h-3.5 text-orange-600 fill-current" />
+            {/* Rapid Math Blitz Trigger */}
+            <button
+              id="header-sprint-arena-trigger"
+              onClick={() => {
+                playPopSound();
+                setIsSprintArenaOpen(true);
+              }}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-orange-900 transition-all font-bold text-xs active:scale-95 shadow-sm"
+              title="60-Second Math Blitz Arena"
+            >
+              <Zap className="w-3.5 h-3.5 text-orange-600 fill-orange-500" />
+              <span>Blitz</span>
+            </button>
+
+            {/* Streak Counter */}
+            <div 
+              className="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 cursor-pointer hover:bg-orange-100 transition-colors"
+              onClick={() => setIsDailyQuestsOpen(true)}
+              title={`${profile.streak} day streak! Click to view daily bonuses`}
+            >
+              <Flame className="w-3.5 h-3.5 text-orange-600 fill-orange-500" />
               <span className="text-xs font-bold text-orange-700">{profile.streak}d</span>
             </div>
+
+            {/* Total XP */}
             <div className="flex items-center gap-1.5 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100">
               <Trophy className="w-3.5 h-3.5 text-indigo-600" />
               <span className="text-xs font-bold text-indigo-700">{profile.xp} XP</span>
             </div>
-            <div className="hidden sm:flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100">
-              <span className="text-xs font-bold text-amber-800">Lvl {profile.level}</span>
-            </div>
+
+            {/* Level Crest Trigger */}
+            <button
+              id="header-level-crest-trigger"
+              onClick={() => {
+                playPopSound();
+                setIsLevelProgressionOpen(true);
+              }}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 px-3 py-1.5 rounded-full border border-indigo-200 text-indigo-900 font-bold text-xs transition-all active:scale-95 shadow-sm"
+              title="View Level Progression & Unlocked Perks"
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-500" />
+              <span>Lvl {profile.level}</span>
+              <span className="hidden lg:inline text-[10px] text-indigo-600 font-black uppercase">
+                {currentRank.tierName}
+              </span>
+            </button>
+
+            {/* Audio Mute Toggle */}
+            <button
+              onClick={toggleSound}
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+              title={isMuted ? "Unmute Game Audio" : "Mute Game Audio"}
+            >
+              {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-500" />}
+            </button>
+
             <button
               onClick={() => setShowLogoutConfirm(true)}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors ml-1"
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors ml-0.5"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4" />
@@ -321,7 +458,9 @@ export default function StudentModule({
             >
               <PathwayEngine
                 pathway={profile.activePathway}
-                topic={topics.find(t => t.id === profile.activePathway!.topicId)!}
+                topic={topics.find(t => t.id === profile.activePathway!.topicId) || topics[0]}
+                allTopics={topics}
+                profile={profile}
                 onUpdatePathway={savePathwayProgress}
                 onClose={() => setIsViewingPathway(false)}
                 addXP={addXP}
@@ -339,7 +478,11 @@ export default function StudentModule({
                 quiz={activeQuiz} 
                 availablePool={allProblemsPool}
                 initialMode={quizInitialMode}
-                collaborativeSession={activeCollaborativeSession || undefined}
+                nextQuiz={getNextLevelQuiz(activeQuiz)}
+                onProceedNextLevel={(nextQuiz) => {
+                  setActiveQuiz(nextQuiz);
+                  setQuizInitialMode('assessment');
+                }}
                 onSuggestAIQuiz={() => {
                   setActiveQuiz(null);
                   setIsAIQuizModalOpen(true);
@@ -347,9 +490,8 @@ export default function StudentModule({
                 onClose={() => {
                   setActiveQuiz(null);
                   setQuizInitialMode(undefined);
-                  setActiveCollaborativeSession(null);
                 }}
-                onComplete={(xp, score, total, itemResponses, abilityEstimate, mathAbilityDiagnosis, violations) => {
+                onComplete={(xp, score, total, itemResponses, abilityEstimate, mathAbilityDiagnosis, violations, isCompetent, modeUsed) => {
                   addXP(xp);
                   saveResult({
                     userId: userUid,
@@ -359,15 +501,30 @@ export default function StudentModule({
                     itemResponses,
                     abilityEstimate,
                     mathAbilityDiagnosis,
-                    violations
+                    violations,
+                    isCompetent,
+                    quizMode: (modeUsed as any) || quizInitialMode
                   });
                   checkAchievements(xp, score, total, activeQuiz.topicId);
 
-                  // If this was an active collaborative session, complete the request in Firestore
-                  if (activeCollaborativeSession) {
-                    completeStudyRequest(activeCollaborativeSession.requestId).catch(console.error);
-                    setActiveCollaborativeSession(null);
+                  // Gamification: Trigger confetti celebration on victory
+                  if (score > 0) {
+                    try {
+                      confetti({
+                        particleCount: 90,
+                        spread: 70,
+                        origin: { y: 0.6 }
+                      });
+                    } catch (e) {
+                      // ignore in iframe if canvas blocked
+                    }
+                    playCorrectSound();
                   }
+
+                  // Gamification: Update daily quest metrics
+                  trackQuestProgress(currentUserId, 'answer_problems', score);
+                  trackQuestProgress(currentUserId, 'complete_quiz', 1);
+                  handleGamifiedRewardXP(xp, `Quiz Complete! +${xp} XP`);
 
                   setLatestQuizDetails({ xp, score, total });
                   setIsPerformanceModalOpen(true);
@@ -386,7 +543,11 @@ export default function StudentModule({
               <TopicDetail 
                 topic={selectedTopic} 
                 onBack={() => setSelectedTopic(null)}
-                onStartQuiz={(quiz) => {
+                isSummativeCompleted={results.some(r => r.quizId === selectedTopic.summativeAssessment?.id)}
+                onStartSummativeAssessment={(summative) => {
+                  setActiveSummativeAssessment(summative);
+                }}
+                onStartQuiz={(quiz, preferredMode) => {
                   let activeProblems = quiz.problems.filter(isValidatedOrActive);
                   
                   // Supplement with item bank if fewer than 5 active problems
@@ -401,17 +562,12 @@ export default function StudentModule({
                     alert("No active items are currently available in this quiz.");
                     return;
                   }
-                  setQuizInitialMode('standard');
+                  setQuizInitialMode(preferredMode || 'diagnostic');
                   setActiveQuiz({ ...quiz, problems: activeProblems });
-                }}
-                onInviteStudy={(quiz) => {
-                  setPreselectedTopicId(selectedTopic.id);
-                  setPreselectedQuizId(quiz?.id);
-                  setIsStudyModalOpen(true);
                 }}
               />
             </motion.div>
-          ) : (!profile.diagnosticCompleted || isTakingDiagnostic) && topics.some(t => t.quizzes.some(q => q.problems.some(isValidatedOrActive))) ? (
+          ) : isTakingDiagnostic && topics.some(t => t.quizzes.some(q => q.problems.some(isValidatedOrActive))) ? (
             <motion.div
               key="diagnostic"
               initial={{ opacity: 0, y: 10 }}
@@ -427,6 +583,7 @@ export default function StudentModule({
                     setIsViewingPathway(true);
                   }
                 }}
+                onCancel={() => setIsTakingDiagnostic(false)}
               />
             </motion.div>
           ) : activeTab === 'learn' ? (
@@ -451,19 +608,6 @@ export default function StudentModule({
                 onStartAdaptivePractice={handleStartAdaptivePractice}
                 onRetakeQuiz={handleRetakeQuiz}
                 onRetakeDiagnostic={handleRetakeDiagnostic}
-                onOpenStudyRequests={() => {
-                  setPreselectedTopicId(undefined);
-                  setPreselectedQuizId(undefined);
-                  setIsStudyModalOpen(true);
-                }}
-                onSendStudyRequest={(topicId, quizId) => {
-                  setPreselectedTopicId(topicId);
-                  setPreselectedQuizId(quizId);
-                  setIsStudyModalOpen(true);
-                }}
-                incomingStudyRequests={incomingRequests}
-                outgoingStudyRequests={outgoingRequests}
-                onStartCollaborativePractice={handleStartCollaborativePractice}
                 onOpenAIQuizModal={() => setIsAIQuizModalOpen(true)}
                 onOpenAIMathSolver={(query) => {
                   setSolverInitialQuery(query || '');
@@ -473,6 +617,41 @@ export default function StudentModule({
                 onOpenDailyChallenge={() => setIsDailyChallengeOpen(true)}
                 onOpenExplainerLibrary={() => setActiveTab('explainers')}
                 onOpenReports={() => setActiveTab('reports')}
+                onOpenPresentations={() => setActiveTab('presentations')}
+                onOpenDailyQuests={() => {
+                  playPopSound();
+                  setIsDailyQuestsOpen(true);
+                }}
+                onOpenSprintArena={() => {
+                  playPopSound();
+                  setIsSprintArenaOpen(true);
+                }}
+                onOpenLevelProgression={() => {
+                  playPopSound();
+                  setIsLevelProgressionOpen(true);
+                }}
+                onOpenAvatarCustomizer={() => {
+                  playPopSound();
+                  setIsAvatarCustomizerOpen(true);
+                }}
+                onStartSummativeAssessment={(summative) => {
+                  setActiveSummativeAssessment(summative);
+                }}
+              />
+            </motion.div>
+          ) : activeTab === 'presentations' ? (
+            <motion.div
+              key="presentations"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <StudentPresentationHub
+                topics={topics}
+                profile={profile}
+                addXP={addXP}
+                onStartQuiz={handleStartQuizFromPresentation}
+                onStartDiagnostic={handleRetakeDiagnostic}
               />
             </motion.div>
           ) : activeTab === 'explainers' ? (
@@ -510,6 +689,7 @@ export default function StudentModule({
               <LearningReports
                 profile={profile}
                 results={results}
+                onTakeDiagnostic={() => setIsTakingDiagnostic(true)}
               />
             </motion.div>
           ) : activeTab === 'leaderboard' ? (
@@ -540,23 +720,6 @@ export default function StudentModule({
           )}
         </AnimatePresence>
       </main>
-
-      {/* Collaborative Study Requests Modal */}
-      <StudyRequestsModal
-        isOpen={isStudyModalOpen}
-        onClose={() => setIsStudyModalOpen(false)}
-        currentUser={profile}
-        peers={peers}
-        topics={topics}
-        incomingRequests={incomingRequests}
-        outgoingRequests={outgoingRequests}
-        onSendRequest={sendStudyRequest}
-        onRespondRequest={respondToStudyRequest}
-        onCancelRequest={cancelStudyRequest}
-        onStartCollaborativePractice={handleStartCollaborativePractice}
-        initialTopicId={preselectedTopicId}
-        initialQuizId={preselectedQuizId}
-      />
 
       {/* Smart AI Quiz Generator Modal */}
       <SmartAIQuizModal
@@ -611,14 +774,96 @@ export default function StudentModule({
         latestTotal={latestQuizDetails?.total}
       />
 
+      {/* Gamification: Daily Quests & Check-In Modal */}
+      <DailyQuestsModal
+        isOpen={isDailyQuestsOpen}
+        onClose={() => setIsDailyQuestsOpen(false)}
+        userId={currentUserId}
+        userXP={profile.xp}
+        userStreak={profile.streak}
+        onRewardXP={(amount) => handleGamifiedRewardXP(amount, 'Daily Quest Reward!')}
+      />
+
+      {/* Gamification: 60s Math Sprint Blitz Arena */}
+      <MathSprintArena
+        isOpen={isSprintArenaOpen}
+        onClose={() => setIsSprintArenaOpen(false)}
+        userId={currentUserId}
+        onRewardXP={(amount) => handleGamifiedRewardXP(amount, 'Sprint Blitz Victory!')}
+      />
+
+      {/* Gamification: RPG Level Progression & Perks Roadmap */}
+      <LevelProgressionModal
+        isOpen={isLevelProgressionOpen}
+        onClose={() => setIsLevelProgressionOpen(false)}
+        currentLevel={profile.level}
+        currentXP={profile.xp}
+        onOpenAvatars={() => {
+          setIsLevelProgressionOpen(false);
+          setIsAvatarCustomizerOpen(true);
+        }}
+      />
+
+      {/* Gamification: Avatar Archetype Customizer */}
+      <AvatarCustomizerModal
+        isOpen={isAvatarCustomizerOpen}
+        onClose={() => setIsAvatarCustomizerOpen(false)}
+        userId={currentUserId}
+        currentLevel={profile.level}
+        onAvatarSelected={() => {
+          setAvatarRev(r => r + 1);
+        }}
+      />
+
+      {/* Gamification: Level-Up Celebration Fanfare Modal */}
+      {levelUpCelebration && (
+        <LevelUpCelebrationModal
+          isOpen={levelUpCelebration.isOpen}
+          newLevel={levelUpCelebration.newLevel}
+          onClose={() => setLevelUpCelebration(null)}
+          onOpenPerks={() => {
+            setLevelUpCelebration(null);
+            setIsLevelProgressionOpen(true);
+          }}
+        />
+      )}
+
+      {/* Floating Gamified XP Toast */}
+      <AnimatePresence>
+        {floatingXPToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-18 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
+          >
+            <div className="bg-slate-900/90 text-white backdrop-blur-md px-4 py-2 rounded-full shadow-2xl border border-amber-400/40 flex items-center gap-2 text-xs font-black">
+              <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
+              <span className="text-amber-300">+{floatingXPToast.amount} XP</span>
+              {floatingXPToast.message && (
+                <span className="text-slate-300 font-medium border-l border-white/20 pl-2">
+                  {floatingXPToast.message}
+                </span>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Bottom Floating Navigation Bar */}
       {!activeQuiz && !isTakingDiagnostic && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-2.5 flex justify-around items-center z-20 shadow-lg sm:max-w-md sm:mx-auto sm:mb-6 sm:rounded-2xl sm:border">
+        <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2 flex justify-around items-center z-20 shadow-lg sm:max-w-lg sm:mx-auto sm:mb-6 sm:rounded-2xl sm:border">
           <NavButton 
             active={activeTab === 'learn'} 
             onClick={() => { setActiveTab('learn'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
             icon={<BookOpen className="w-5 h-5" />}
             label="Dashboard"
+          />
+          <NavButton 
+            active={activeTab === 'presentations'} 
+            onClick={() => { setActiveTab('presentations'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
+            icon={<Layers className="w-5 h-5" />}
+            label="Slides"
           />
           <NavButton 
             active={activeTab === 'explainers'} 
@@ -629,8 +874,8 @@ export default function StudentModule({
           <NavButton 
             active={activeTab === 'flashcards'} 
             onClick={() => { setActiveTab('flashcards'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
-            icon={<Layers className="w-5 h-5" />}
-            label="Flashcards"
+            icon={<Zap className="w-5 h-5" />}
+            label="Cards"
           />
           <NavButton 
             active={activeTab === 'reports'} 
@@ -651,6 +896,37 @@ export default function StudentModule({
             label="Profile"
           />
         </nav>
+      )}
+
+      {activeSummativeAssessment && (
+        <SummativeAssessmentModal
+          isOpen={!!activeSummativeAssessment}
+          assessment={activeSummativeAssessment}
+          profile={profile}
+          onClose={() => setActiveSummativeAssessment(null)}
+          onSaveResult={(res) => {
+            saveResult({
+              ...res,
+              userId: userUid
+            });
+            trackQuestProgress(currentUserId, 'answer_problems', res.score);
+            trackQuestProgress(currentUserId, 'complete_quiz', 1);
+            checkAchievements(
+              profile.xp + res.summativeTranscript.xpEarned,
+              res.score,
+              res.total,
+              activeSummativeAssessment.topicId
+            );
+            handleGamifiedRewardXP(
+              res.summativeTranscript.xpEarned,
+              `Summative Exam Complete! +${res.summativeTranscript.xpEarned} XP`
+            );
+          }}
+          onAddXP={async (amount) => {
+            addXP(amount);
+            return amount;
+          }}
+        />
       )}
 
       <ConfirmDeleteModal

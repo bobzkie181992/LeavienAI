@@ -20,10 +20,20 @@ export interface Problem {
   misconceptionCategory: string;
   hint1: string;
   hint2: string;
+  hint3?: string;
   hints?: string[];
   explanation: string;
   remediation: string;
   status?: ItemStatus;
+}
+
+export interface AIMistakeGuidance {
+  coachingMessage: string;
+  hint1Conceptual: string;
+  hint2Procedural: string;
+  hint3FirstStep: string;
+  category: MathErrorCategory;
+  remediationTip?: string;
 }
 
 export interface Quiz {
@@ -33,16 +43,73 @@ export interface Quiz {
   topicId: string;
   problems: Problem[];
   xpReward: number;
+  quizType?: 'diagnostic' | 'assessment';
+  level?: number;
+}
+
+export type MathErrorCategory = 
+  | 'Sign error'
+  | 'Formula error'
+  | 'Computational error'
+  | 'Conceptual misunderstanding'
+  | 'Incorrect procedure'
+  | 'Misreading the problem'
+  | 'Algebraic manipulation error';
+
+export interface ErrorPatternOccurrence {
+  id?: string;
+  category: MathErrorCategory;
+  problemId: string;
+  questionText: string;
+  competency: string;
+  selectedOptionText: string;
+  correctOptionText: string;
+  timestamp: string;
+  explanation?: string;
+  specificDiagnosis?: string;
+}
+
+export interface ErrorRemediationModule {
+  category: MathErrorCategory;
+  triggerReason: string;
+  misconceptionAnalysis: string;
+  shortExplanation: {
+    title: string;
+    rules: string[];
+    keyTakeaways: string;
+  };
+  workedExample: {
+    title: string;
+    problemText: string;
+    commonMistake: string;
+    correctMethod: string;
+    stepByStep: string[];
+  };
+  practiceQuestions: Problem[];
+  reassessmentQuestions: Problem[];
 }
 
 export interface ItemResponse {
   problemId: string;
+  topic?: string;
+  questionText?: string;
   competency: string;
   selectedOption: number;
+  selectedOptionText?: string;
   isCorrect: boolean;
-  difficultyParameter: number;
-  discriminationParameter: number;
+  difficultyParameter: number; // IRT b parameter
+  difficultyLevel?: 'easy' | 'medium' | 'hard';
+  discriminationParameter: number; // IRT a parameter
   responseTimeMs: number;
+  abilityEstimateBefore?: number; // theta before this item
+  abilityBandBefore?: string; // ability band before item
+  abilityEstimateAfter?: number; // theta after this item
+  abilityBandAfter?: string; // ability band after item
+  attemptsCount?: number;
+  hintsUsed?: number;
+  remediationProvided?: boolean;
+  errorCategory?: MathErrorCategory;
+  errorFeedback?: string;
 }
 
 export interface ItemStats {
@@ -67,6 +134,87 @@ export interface QuizResult {
   abilityEstimate?: string;
   mathAbilityDiagnosis?: string;
   violations?: number;
+  quizMode?: 'diagnostic' | 'assessment' | 'adaptive' | 'timed' | 'standard' | 'summative';
+  isCompetent?: boolean;
+  summativeTranscript?: SummativeTranscript;
+}
+
+export type CognitiveDomain = 
+  | 'Remembering / Understanding' 
+  | 'Applying' 
+  | 'Analyzing / Evaluating' 
+  | 'Evaluating / Proving'
+  | 'Creating / Problem Solving';
+
+export interface IntendedOutcome {
+  id: string;
+  code: string; // e.g., 'M11GM-Ia-1'
+  title: string;
+  description: string;
+  statement?: string; // Optional alias for description
+  cognitiveDomain: CognitiveDomain;
+  weightPercentage: number;
+  targetItemsCount: number;
+}
+
+export interface TableOfSpecificationItem {
+  outcomeId: string;
+  outcomeCode: string;
+  competencyTitle: string;
+  cognitiveDomain: string;
+  itemNumbers: number[];
+  percentageWeight: number;
+  totalItems?: number; // Optional alias or helper for itemNumbers.length
+}
+
+export interface SummativeAssessment {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  topicId: string;
+  topicTitle: string;
+  gradeLevel: string;
+  term: string;
+  durationMinutes: number;
+  passingScorePercentage: number;
+  passingScore?: number; // Optional alias for passingScorePercentage
+  totalPoints: number;
+  xpReward: number;
+  intendedOutcomes: IntendedOutcome[];
+  tableOfSpecifications: TableOfSpecificationItem[];
+  problems: (Problem & { intendedOutcomeId: string; outcomeCode: string })[];
+}
+
+export interface OutcomeMasteryResult {
+  outcomeId: string;
+  code: string;
+  title: string;
+  cognitiveDomain: string;
+  score: number;
+  total: number;
+  percentage: number;
+  status: 'Mastered' | 'Proficient' | 'Developing' | 'Needs Remediation';
+  remediationRecommendation?: string;
+}
+
+export interface SummativeTranscript {
+  id: string;
+  userId: string;
+  studentName: string;
+  assessmentId: string;
+  assessmentTitle: string;
+  topicId: string;
+  topicTitle: string;
+  score: number;
+  total: number;
+  percentage: number;
+  passed: boolean;
+  depEdDescriptor: 'Outstanding (90-100%)' | 'Very Satisfactory (85-89%)' | 'Satisfactory (80-84%)' | 'Fairly Satisfactory (75-79%)' | 'Did Not Meet Expectations (<75%)';
+  outcomeMastery: OutcomeMasteryResult[];
+  timeSpentSeconds: number;
+  completedAt: string;
+  xpEarned: number;
 }
 
 export interface LessonProcedureStep {
@@ -93,6 +241,7 @@ export interface ILAWFramework {
     formativeAssessment: string;
     diagnosticQuizPlan: string;
     successThreshold: string;
+    summativeAssessmentPlan?: string;
   };
   waysForward: {
     nextSteps: string;
@@ -159,6 +308,7 @@ export interface Topic {
   color: string;
   quizzes: Quiz[];
   lessonPlan?: LessonPlan;
+  summativeAssessment?: SummativeAssessment;
 }
 
 export type PathwayStepType = 'concept' | 'lesson' | 'example' | 'practice_easy' | 'practice_moderate' | 'practice_difficult' | 'mastery';
@@ -168,13 +318,19 @@ export interface PathwayStep {
   type: PathwayStepType;
   title: string;
   isCompleted: boolean;
+  description?: string;
+  score?: number;
 }
 
 export interface LearningPathway {
   topicId: string;
   topicTitle: string;
+  competencyId?: string;
+  competencyName?: string;
   currentStepIndex: number;
   steps: PathwayStep[];
+  weaknessReason?: string;
+  masteryDemonstrated?: boolean;
 }
 
 export interface UserProfile {
@@ -182,6 +338,8 @@ export interface UserProfile {
   displayName: string;
   email?: string;
   lrn?: string; // Learner Reference Number
+  password?: string;
+  temporaryPassword?: string;
   grade?: string;
   section?: string;
   role: 'student' | 'faculty';
@@ -196,6 +354,10 @@ export interface UserProfile {
   mathAbility?: string;
   competencyScores?: Record<string, number>;
   activePathway?: LearningPathway;
+  errorFrequencies?: Record<string, number>;
+  errorHistory?: ErrorPatternOccurrence[];
+  resolvedErrors?: string[];
+  oralRecitationPoints?: number;
 }
 
 export interface Achievement {
@@ -336,5 +498,82 @@ export interface ImportedDocument {
   validationReport?: DepEdValidationReport;
   pipeline?: MathAdaptPipeline;
 }
+
+export type SlideLayout = 
+  | 'title' 
+  | 'concept' 
+  | 'formula_breakdown' 
+  | 'worked_example' 
+  | 'interactive_check' 
+  | 'summary' 
+  | 'key_takeaways';
+
+export interface PresentationSlide {
+  id: string;
+  slideNumber: number;
+  title: string;
+  subtitle?: string;
+  layout?: SlideLayout;
+  content: string[];
+  keyFormula?: string;
+  formulaExplanation?: string;
+  exampleProblem?: {
+    problemStatement: string;
+    steps: string[];
+    finalAnswer: string;
+  };
+  quickCheck?: {
+    question: string;
+    options: string[];
+    correctAnswer: number;
+    explanation: string;
+  };
+  speakerNotes?: string;
+  diagramDescription?: string;
+  iconName?: string;
+}
+
+export interface Presentation {
+  id: string;
+  title: string;
+  description: string;
+  topicId: string;
+  topicTitle: string;
+  grade: string;
+  section: string;
+  authorFacultyId?: string;
+  authorFacultyName?: string;
+  originalFileName?: string;
+  format?: 'PPTX' | 'PDF' | 'DOCX' | 'INTERACTIVE_DECK';
+  slides: PresentationSlide[];
+  totalSlides: number;
+  connectedQuizId?: string;
+  connectedQuizTitle?: string;
+  suggestedAssessmentType?: 'quiz' | 'diagnostic' | 'both';
+  createdAt: string;
+  updatedAt?: string;
+  viewsCount?: number;
+  completionsCount?: number;
+}
+
+export interface PresentationViewRecord {
+  id?: string;
+  presentationId: string;
+  presentationTitle: string;
+  topicId: string;
+  topicTitle: string;
+  studentUid: string;
+  studentName: string;
+  grade?: string;
+  section?: string;
+  startedAt: string;
+  completedAt?: string;
+  slidesViewed: number;
+  totalSlides: number;
+  isCompleted: boolean;
+  proceededToQuiz?: boolean;
+  quizScore?: number;
+}
+
 
 

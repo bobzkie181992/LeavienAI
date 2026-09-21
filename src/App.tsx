@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { BookOpen, Users, Zap, Play, AlertCircle } from 'lucide-react';
 import { useAuth, useUserProfile, useQuizHistory, useCurriculum } from './hooks/useFirebase';
@@ -14,14 +14,35 @@ import StudentModule from './modules/StudentModule';
 import FacultyModule from './modules/FacultyModule';
 import AuthScreen from './components/AuthScreen';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { localSignOut } from './lib/localAuth';
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
   const { profile, loading: profileLoading, error: profileError, addXP, unlockBadge, createProfile, updateDisplayName, updateProfileDetails, saveDiagnosticResult, savePathwayProgress } = useUserProfile(user?.uid);
   const { results, saveResult } = useQuizHistory(user?.uid);
   const { topics, loading: topicsLoading } = useCurriculum();
+  const [isCreatingRole, setIsCreatingRole] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
 
-  const handleLogout = () => signOut(auth);
+  const handleLogout = async () => {
+    await localSignOut();
+    try {
+      await signOut(auth);
+    } catch (e) {}
+  };
+
+  const handleSelectRole = async (selectedRole: 'student' | 'faculty') => {
+    setIsCreatingRole(true);
+    setRoleError(null);
+    try {
+      await createProfile(selectedRole);
+    } catch (err: any) {
+      console.error("Error setting role:", err);
+      setRoleError(err.message || "Failed to set up profile. Please try again.");
+    } finally {
+      setIsCreatingRole(false);
+    }
+  };
 
   const checkAchievements = async (newXP: number, score: number, total: number, topicId: string) => {
     if (!profile) return;
@@ -65,34 +86,49 @@ export default function App() {
           className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 text-center"
         >
           <h2 className="text-3xl font-black text-slate-900 mb-2">Welcome!</h2>
-          <p className="text-slate-500 mb-8">Choose your path to get started.</p>
+          <p className="text-slate-500 mb-6">Choose your path to get started.</p>
+
+          {roleError && (
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center justify-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{roleError}</span>
+            </div>
+          )}
           
           <div className="grid gap-4">
             <button 
-              onClick={() => createProfile('student')}
-              className="p-6 bg-indigo-50 border-2 border-indigo-200 rounded-3xl text-left group hover:bg-indigo-600 transition-all"
+              id="choose-student-role-btn"
+              disabled={isCreatingRole}
+              onClick={() => handleSelectRole('student')}
+              className="p-6 bg-indigo-50 border-2 border-indigo-200 rounded-3xl text-left group hover:bg-indigo-600 transition-all disabled:opacity-50"
             >
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white group-hover:bg-white group-hover:text-indigo-600 transition-colors">
                   <BookOpen className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="font-black text-indigo-900 group-hover:text-white transition-colors">Student</div>
+                  <div className="font-black text-indigo-900 group-hover:text-white transition-colors">
+                    {isCreatingRole ? 'Setting Up...' : 'Student'}
+                  </div>
                   <div className="text-xs text-indigo-600 group-hover:text-indigo-100 transition-colors">Learn & Level Up</div>
                 </div>
               </div>
             </button>
 
             <button 
-              onClick={() => createProfile('faculty')}
-              className="p-6 bg-slate-50 border-2 border-slate-200 rounded-3xl text-left group hover:bg-slate-900 transition-all"
+              id="choose-faculty-role-btn"
+              disabled={isCreatingRole}
+              onClick={() => handleSelectRole('faculty')}
+              className="p-6 bg-slate-50 border-2 border-slate-200 rounded-3xl text-left group hover:bg-slate-900 transition-all disabled:opacity-50"
             >
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white group-hover:bg-white group-hover:text-slate-900 transition-colors">
                   <Users className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="font-black text-slate-900 group-hover:text-white transition-colors">Faculty</div>
+                  <div className="font-black text-slate-900 group-hover:text-white transition-colors">
+                    {isCreatingRole ? 'Setting Up...' : 'Faculty'}
+                  </div>
                   <div className="text-xs text-slate-600 group-hover:text-slate-300 transition-colors">Manage Students & Progress</div>
                 </div>
               </div>

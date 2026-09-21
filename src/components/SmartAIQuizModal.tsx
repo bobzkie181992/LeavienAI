@@ -105,19 +105,19 @@ export default function SmartAIQuizModal({
       >
         {/* Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-indigo-900 via-indigo-800 to-violet-900 text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-amber-300 border border-white/20 shadow-inner">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black tracking-tight">Smart AI Quiz Generator</h2>
+                <h2 className="text-lg font-black tracking-tight">AI Personalized Practice & Drill Generator</h2>
                 <span className="bg-amber-400 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  Gemini 3.8 AI
+                  Pillar 3: AI Support
                 </span>
               </div>
               <p className="text-xs text-indigo-200">
-                Generate custom, rigorous Grade 11 math quizzes tailored to your learning needs
+                Generate tailored Grade 11 math practice with step-by-step Socratic explanations
               </p>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Zap, 
@@ -12,19 +12,19 @@ import {
   AlertCircle,
   ShieldCheck,
   Check,
-  IdCard
+  IdCard,
+  Info,
+  ExternalLink,
+  Database,
+  ChevronDown
 } from 'lucide-react';
-import { 
-  signInWithPopup, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  signInAnonymously,
-  updateProfile
-} from 'firebase/auth';
+import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
+import { UserProfile } from '../types';
+import { localSignIn, localSignUp, getLocalUsers } from '../lib/localAuth';
 
 interface AuthScreenProps {
-  onProfileCreated?: (role: 'student' | 'faculty', displayName?: string, lrn?: string) => Promise<void>;
+  onProfileCreated?: (role: 'student' | 'faculty', displayName?: string, lrn?: string, customUid?: string) => Promise<void>;
 }
 
 export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
@@ -36,17 +36,28 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
   const [role, setRole] = useState<'student' | 'faculty'>('student');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAccountsList, setShowAccountsList] = useState(false);
+  const [localAccounts, setLocalAccounts] = useState<UserProfile[]>([]);
+  const [unregisteredEmail, setUnregisteredEmail] = useState<string | null>(null);
+  const [autoCreateNew, setAutoCreateNew] = useState(true);
 
-  // 1. Google Sign-In
+  useEffect(() => {
+    setLocalAccounts(getLocalUsers());
+  }, [tab]);
+
+  // 1. Google Sign-In (Optional)
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
+    setUnregisteredEmail(null);
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       console.error("Google sign-in error:", err);
       if (err.code === 'auth/popup-blocked') {
-        setError("Sign-in popup was blocked by your browser. Please use Email/Password or Demo Login below.");
+        setError("Sign-in popup was blocked by your browser. Please use Local Database sign-in below.");
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError("Firebase domain is not authorized. Please use the Local Database sign-in form below.");
       } else if (err.code !== 'auth/popup-closed-by-user') {
         setError(err.message || "Failed to sign in with Google.");
       }
@@ -55,36 +66,81 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
     }
   };
 
-  // 2. Email & Password Sign In
-  const handleEmailSignIn = async (e: React.FormEvent) => {
+  // 2. Local Database Sign In
+  const handleLocalSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError("Please fill in both email and password.");
+      setError("Please fill in both email/LRN and password.");
       return;
     }
     setLoading(true);
     setError(null);
+    setUnregisteredEmail(null);
+
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      // If autoCreateNew is enabled, pass current role so new accounts enter seamlessly
+      const profile = await localSignIn(email, password, {
+        autoCreateRole: autoCreateNew ? role : undefined
+      });
+      if (onProfileCreated && profile.role) {
+        await onProfileCreated(profile.role, profile.displayName, profile.lrn, profile.uid);
+      }
     } catch (err: any) {
-      console.error("Sign-in error:", err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        setError("Invalid email or password. Please try again or create a new account.");
-      } else if (err.code === 'auth/invalid-email') {
-        setError("Please enter a valid email address.");
+      console.error("Local sign-in error:", err);
+      if (err.code === 'ACCOUNT_NOT_FOUND') {
+        setUnregisteredEmail(err.identifier || email.trim());
+        setError(null);
       } else {
-        setError(err.message || "Sign-in failed. Please try again.");
+        setError(err.message || "Sign-in failed. Please verify your credentials or register a new account.");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. Email & Password Sign Up (Create Account)
-  const handleEmailSignUp = async (e: React.FormEvent) => {
+  // Quick register for account not found
+  const handleQuickRegister = async (chosenRole: 'student' | 'faculty') => {
+    const target = (unregisteredEmail || email).trim();
+    if (!target || !password) {
+      setError("Please ensure email and password are provided.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+
+    const defaultRawName = target.includes('@') 
+      ? target.split('@')[0].replace(/[._]/g, ' ') 
+      : `Student ${target}`;
+    const capitalizedName = defaultRawName.charAt(0).toUpperCase() + defaultRawName.slice(1);
+
+    try {
+      const newProfile = await localSignUp({
+        displayName: displayName.trim() || capitalizedName,
+        email: target.includes('@') ? target : `${target}@student.mathquest.internal`,
+        lrn: !target.includes('@') ? target : undefined,
+        password: password.trim(),
+        role: chosenRole,
+        grade: chosenRole === 'student' ? 'Grade 11' : undefined,
+        section: chosenRole === 'student' ? 'STEM-A' : undefined
+      });
+
+      setUnregisteredEmail(null);
+      if (onProfileCreated) {
+        await onProfileCreated(chosenRole, newProfile.displayName, newProfile.lrn, newProfile.uid);
+      }
+    } catch (err: any) {
+      console.error("Quick registration error:", err);
+      setError(err.message || "Failed to create account.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Local Database Sign Up (Create Account)
+  const handleLocalSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !displayName) {
-      setError("Please complete all fields (Name, Email, and Password).");
+      setError("Please complete all required fields (Name, Email, and Password).");
       return;
     }
     if (password.length < 6) {
@@ -95,47 +151,33 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
     setLoading(true);
     setError(null);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      // Update Firebase Auth user profile display name
-      if (auth.currentUser) {
-        await updateProfile(auth.currentUser, { displayName: displayName.trim() });
-      }
+      const newProfile = await localSignUp({
+        displayName: displayName.trim(),
+        email: email.trim(),
+        password: password.trim(),
+        role,
+        lrn: lrn.trim() || undefined,
+        grade: role === 'student' ? 'Grade 11' : undefined,
+        section: role === 'student' ? 'STEM-A' : undefined
+      });
+
       if (onProfileCreated) {
-        await onProfileCreated(role, displayName.trim(), lrn.trim());
+        await onProfileCreated(role, displayName.trim(), lrn.trim(), newProfile.uid);
       }
     } catch (err: any) {
-      console.error("Sign-up error:", err);
-      if (err.code === 'auth/email-already-in-use') {
-        setError("An account with this email already exists. Please sign in instead.");
-      } else if (err.code === 'auth/weak-password') {
-        setError("Password is too weak. Please choose a stronger password.");
-      } else {
-        setError(err.message || "Failed to create account. Please try again.");
-      }
+      console.error("Local sign-up error:", err);
+      setError(err.message || "Failed to create account. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // 4. Quick Demo Guest Access
-  const handleDemoLogin = async (selectedRole: 'student' | 'faculty') => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await signInAnonymously(auth);
-      const name = selectedRole === 'student' ? 'Alex Mercer (Demo Student)' : 'Dr. Evelyn Vance (Faculty)';
-      if (res.user) {
-        await updateProfile(res.user, { displayName: name });
-      }
-      if (onProfileCreated) {
-        await onProfileCreated(selectedRole, name);
-      }
-    } catch (err: any) {
-      console.error("Demo login error:", err);
-      setError(err.message || "Demo sign-in failed.");
-    } finally {
-      setLoading(false);
+  const handleSelectAccount = (account: UserProfile) => {
+    setEmail(account.email || account.lrn || '');
+    if (account.password || account.temporaryPassword) {
+      setPassword(account.password || account.temporaryPassword || '');
     }
+    setShowAccountsList(false);
   };
 
   return (
@@ -146,12 +188,19 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
         className="max-w-md w-full bg-white rounded-[36px] shadow-xl p-6 sm:p-10 border border-slate-100 relative overflow-hidden"
       >
         {/* Brand Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-200">
             <Zap className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">LeavienAI</h1>
           <p className="text-slate-500 text-sm mt-1">Grade 11 Mathematics Mastery & Diagnostics</p>
+
+          <div className="mt-3 flex items-center justify-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-xs font-bold">
+              <Database className="w-3.5 h-3.5 text-emerald-600" />
+              Local Database Auth Active
+            </span>
+          </div>
         </div>
 
         {/* Tab Switcher: Sign In vs Create Account */}
@@ -185,10 +234,63 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
           <motion.div 
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-5 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs flex items-start gap-2.5"
+            className="mb-5 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs flex items-start gap-2.5"
           >
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-            <span className="leading-relaxed">{error}</span>
+            <span className="leading-relaxed font-medium">{error}</span>
+          </motion.div>
+        )}
+
+        {/* Unregistered Account Quick-Register Banner */}
+        {unregisteredEmail && (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-5 p-4 bg-indigo-50 border border-indigo-200 rounded-2xl text-slate-800 text-xs space-y-3 shadow-xs"
+          >
+            <div className="flex items-center gap-2 font-bold text-indigo-900">
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <span>No account found for "{unregisteredEmail}"</span>
+            </div>
+            <p className="text-slate-600 text-[11px] leading-relaxed">
+              Create this account now using your entered password:
+            </p>
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => handleQuickRegister('student')}
+                disabled={loading}
+                className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Register as Student</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickRegister('faculty')}
+                disabled={loading}
+                className="py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Register as Faculty</span>
+              </button>
+            </div>
+            <div className="text-center pt-1 border-t border-indigo-100">
+              <button
+                type="button"
+                onClick={() => {
+                  if (unregisteredEmail.includes('@')) {
+                    const cleanName = unregisteredEmail.split('@')[0].replace(/[._]/g, ' ');
+                    setDisplayName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+                  }
+                  setTab('signup');
+                  setUnregisteredEmail(null);
+                }}
+                className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold"
+              >
+                Or fill custom profile details in Create Account tab &rarr;
+              </button>
+            </div>
           </motion.div>
         )}
 
@@ -200,19 +302,57 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
-              onSubmit={handleEmailSignIn}
+              onSubmit={handleLocalSignIn}
               className="space-y-4"
             >
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Email Address
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Email Address or 12-digit LRN
+                  </label>
+                  {localAccounts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAccountsList(!showAccountsList)}
+                      className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <span>Saved Accounts ({localAccounts.length})</span>
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showAccountsList ? 'rotate-180' : ''}`} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Stored Accounts Quick Selector */}
+                {showAccountsList && localAccounts.length > 0 && (
+                  <div className="mb-3 p-2 bg-slate-50 border border-slate-200 rounded-xl max-h-48 overflow-y-auto space-y-1 text-left">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase px-2 py-1">Select Account to Auto-fill:</div>
+                    {localAccounts.map((acc) => (
+                      <button
+                        key={acc.uid}
+                        type="button"
+                        onClick={() => handleSelectAccount(acc)}
+                        className="w-full p-2 hover:bg-white rounded-lg text-left text-xs flex items-center justify-between transition-colors border border-transparent hover:border-slate-200 shadow-none hover:shadow-xs"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <div className="font-bold text-slate-800 truncate">{acc.displayName}</div>
+                          <div className="text-[11px] text-slate-500 truncate">{acc.email || `LRN: ${acc.lrn}`}</div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
+                          acc.role === 'faculty' ? 'bg-slate-200 text-slate-800' : 'bg-indigo-100 text-indigo-800'
+                        }`}>
+                          {acc.role}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                   <input
-                    type="email"
+                    type="text"
                     required
-                    placeholder="student@school.edu"
+                    placeholder="e.g. amora@gmail.com, bobzkie181992@gmail.com, or LRN"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
@@ -237,12 +377,37 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
                 </div>
               </div>
 
+              <div className="flex items-center justify-between text-xs py-0.5">
+                <label className="flex items-center gap-2 text-slate-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoCreateNew}
+                    onChange={(e) => setAutoCreateNew(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                  />
+                  <span>Auto-create account if new</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (email && email.includes('@')) {
+                      const clean = email.split('@')[0].replace(/[._]/g, ' ');
+                      setDisplayName(clean.charAt(0).toUpperCase() + clean.slice(1));
+                    }
+                    setTab('signup');
+                  }}
+                  className="text-indigo-600 hover:text-indigo-800 font-semibold"
+                >
+                  Create Account
+                </button>
+              </div>
+
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
               >
-                {loading ? 'Signing In...' : 'Sign In to Account'}
+                {loading ? 'Authenticating...' : 'Sign In with Local Database'}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </motion.form>
@@ -252,7 +417,7 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
-              onSubmit={handleEmailSignUp}
+              onSubmit={handleLocalSignUp}
               className="space-y-4"
             >
               <div>
@@ -371,7 +536,7 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
                 disabled={loading}
                 className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
               >
-                {loading ? 'Creating Account...' : 'Create Account & Start'}
+                {loading ? 'Creating Local Account...' : 'Register Local Account & Enter'}
                 <Sparkles className="w-4 h-4" />
               </button>
             </motion.form>
@@ -384,7 +549,7 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
             <div className="w-full border-t border-slate-200" />
           </div>
           <span className="relative bg-white px-3 text-xs text-slate-400 font-bold uppercase tracking-wider">
-            Or quick access
+            Or continue with
           </span>
         </div>
 
@@ -393,7 +558,7 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
           type="button"
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="w-full py-3 px-4 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-3 text-sm mb-3 shadow-sm active:scale-[0.99]"
+          className="w-full py-3 px-4 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl border border-slate-200 transition-all flex items-center justify-center gap-3 text-sm shadow-sm active:scale-[0.99]"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -404,27 +569,21 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
           <span>Continue with Google</span>
         </button>
 
-        {/* One-Click Instant Demo Access */}
-        <div className="pt-2 flex gap-2">
-          <button
-            type="button"
-            onClick={() => handleDemoLogin('student')}
-            disabled={loading}
-            className="flex-1 py-2.5 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
+        {/* Database Status Footer */}
+        <div className="pt-4 text-center border-t border-slate-100 mt-4 flex items-center justify-between text-xs text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Local Accounts: {localAccounts.length}
+          </span>
+          <a
+            href="https://console.firebase.google.com/project/united-spirit-hsjh2/authentication/users"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-slate-400 hover:text-indigo-600 transition-colors"
           >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>Demo Student</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleDemoLogin('faculty')}
-            disabled={loading}
-            className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>Demo Faculty</span>
-          </button>
+            <span>Firebase Console</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
         </div>
       </motion.div>
     </div>

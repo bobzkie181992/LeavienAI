@@ -8,12 +8,49 @@ import {
   updateDoc, 
   doc 
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, sanitizeForFirestore } from '../lib/firebase';
 import { ChatMessage, ChatConversation, UserProfile, StudyRequestStatus } from '../types';
+
+const LOCAL_MESSAGES_KEY = 'mathquest_local_chat_messages_v1';
+
+function getLocalChatMessages(): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_MESSAGES_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalChatMessage(msg: ChatMessage) {
+  try {
+    const all = getLocalChatMessages();
+    const idx = all.findIndex(m => m.id === msg.id);
+    if (idx >= 0) {
+      all[idx] = msg;
+    } else {
+      all.push(msg);
+    }
+    localStorage.setItem(LOCAL_MESSAGES_KEY, JSON.stringify(all));
+    window.dispatchEvent(new Event('mathquest_chat_updated'));
+  } catch (err) {
+    console.warn("Failed to save local chat message:", err);
+  }
+}
 
 export function usePeerChat(currentUserId: string | undefined, currentUserName: string | undefined, peers: UserProfile[]) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const syncLocalMessages = useCallback(() => {
+    if (!currentUserId) return;
+    const all = getLocalChatMessages();
+    const mine = all.filter(m => m.participants.includes(currentUserId));
+    mine.sort((a, b) => (new Date(a.createdAt).getTime() || 0) - (new Date(b.createdAt).getTime() || 0));
+    setMessages(mine);
+    setLoading(false);
+  }, [currentUserId]);
 
   // Real-time listener for direct messages where current user is a participant
   useEffect(() => {
@@ -24,6 +61,11 @@ export function usePeerChat(currentUserId: string | undefined, currentUserName: 
     }
 
     setLoading(true);
+    syncLocalMessages();
+
+    const handleLocalUpdate = () => syncLocalMessages();
+    window.addEventListener('mathquest_chat_updated', handleLocalUpdate);
+
     try {
       const q = query(
         collection(db, 'chat_messages'),
@@ -33,33 +75,47 @@ export function usePeerChat(currentUserId: string | undefined, currentUserName: 
       const unsubscribe = onSnapshot(
         q,
         (snapshot) => {
-          const fetchedMessages: ChatMessage[] = snapshot.docs.map(docSnap => ({
+          const cloudMessages: ChatMessage[] = snapshot.docs.map(docSnap => ({
             id: docSnap.id,
             ...docSnap.data()
           } as ChatMessage));
 
-          // Sort chronologically ascending
-          fetchedMessages.sort((a, b) => {
+          // Merge local and cloud
+          const localMessages = getLocalChatMessages().filter(m => m.participants.includes(currentUserId));
+          const msgMap = new Map<string, ChatMessage>();
+          localMessages.forEach(m => msgMap.set(m.id, m));
+          cloudMessages.forEach(m => msgMap.set(m.id, m));
+
+          const merged = Array.from(msgMap.values());
+          merged.sort((a, b) => {
             const timeA = new Date(a.createdAt).getTime() || 0;
             const timeB = new Date(b.createdAt).getTime() || 0;
             return timeA - timeB;
           });
 
-          setMessages(fetchedMessages);
+          setMessages(merged);
           setLoading(false);
         },
         (error) => {
-          console.error("Error listening to peer chat messages:", error);
+          console.warn("Firestore peer chat listener note:", error?.message || error);
+          syncLocalMessages();
           setLoading(false);
         }
       );
 
-      return () => unsubscribe();
+      return () => {
+        window.removeEventListener('mathquest_chat_updated', handleLocalUpdate);
+        unsubscribe();
+      };
     } catch (err) {
-      console.error("Failed to initialize chat listener:", err);
+      console.warn("Could not initialize Firestore chat listener:", err);
+      syncLocalMessages();
       setLoading(false);
+      return () => {
+        window.removeEventListener('mathquest_chat_updated', handleLocalUpdate);
+      };
     }
-  }, [currentUserId]);
+  }, [currentUserId, syncLocalMessages]);
 
   // Derive conversation threads from messages and peers
   const conversations = useMemo<ChatConversation[]>(() => {
@@ -150,13 +206,37 @@ export function usePeerChat(currentUserId: string | undefined, currentUserName: 
       ...(params.studyRequestData ? { studyRequestData: params.studyRequestData } : {})
     };
 
-    const docRef = await addDoc(collection(db, 'chat_messages'), newMessage);
-    return docRef.id;
+    const newId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const fullMessage: ChatMessage = {
+      id: newId,
+      ...newMessage
+    };
+    saveLocalChatMessage(fullMessage);
+
+    try {
+      await addDoc(collection(db, 'chat_messages'), sanitizeForFirestore(newMessage));
+    } catch (err) {
+      console.warn("Firestore message send skipped (saved locally):", err);
+    }
+    return newId;
   }, [currentUserId, currentUserName]);
 
   // Mark all unread messages in a conversation as read
   const markConversationAsRead = useCallback(async (conversationId: string) => {
     if (!currentUserId) return;
+
+    const all = getLocalChatMessages();
+    let changed = false;
+    all.forEach(m => {
+      if (m.conversationId === conversationId && m.recipientId === currentUserId && !m.read) {
+        m.read = true;
+        changed = true;
+      }
+    });
+    if (changed) {
+      localStorage.setItem(LOCAL_MESSAGES_KEY, JSON.stringify(all));
+      window.dispatchEvent(new Event('mathquest_chat_updated'));
+    }
 
     const unreadMsgs = messages.filter(
       m => m.conversationId === conversationId && m.recipientId === currentUserId && !m.read
@@ -165,19 +245,27 @@ export function usePeerChat(currentUserId: string | undefined, currentUserName: 
     if (unreadMsgs.length === 0) return;
 
     await Promise.all(
-      unreadMsgs.map(m => updateDoc(doc(db, 'chat_messages', m.id), { read: true }).catch(console.error))
+      unreadMsgs.map(m => updateDoc(doc(db, 'chat_messages', m.id), { read: true }).catch(() => {}))
     );
   }, [messages, currentUserId]);
 
   // Update status of study request attached to a message
   const updateChatMessageStudyStatus = useCallback(async (messageId: string, status: StudyRequestStatus) => {
+    const all = getLocalChatMessages();
+    const target = all.find(m => m.id === messageId);
+    if (target && target.studyRequestData) {
+      target.studyRequestData.status = status;
+      localStorage.setItem(LOCAL_MESSAGES_KEY, JSON.stringify(all));
+      window.dispatchEvent(new Event('mathquest_chat_updated'));
+    }
+
     try {
       const msgRef = doc(db, 'chat_messages', messageId);
       await updateDoc(msgRef, {
         'studyRequestData.status': status
       });
     } catch (err) {
-      console.error("Error updating study request status in chat message:", err);
+      console.warn("Firestore status update in chat message skipped (saved locally):", err);
     }
   }, []);
 

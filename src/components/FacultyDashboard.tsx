@@ -4,11 +4,16 @@ import { Users, UserPlus, Search, GraduationCap, TrendingUp, Award, Mail, Chevro
 import * as Icons from 'lucide-react';
 import { useAllStudents } from '../hooks/useFirebase';
 import { UserProfile } from '../types';
+import { topics } from '../data/curriculum';
 
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 
-export default function FacultyDashboard() {
-  const { students, loading, addStudent, deleteStudent, editStudent, exportResearchData } = useAllStudents();
+interface FacultyDashboardProps {
+  facultyProfile?: UserProfile;
+}
+
+export default function FacultyDashboard({ facultyProfile }: FacultyDashboardProps = {}) {
+  const { students, loading, addStudent, deleteStudent, editStudent, exportResearchData, awardOralRecitation } = useAllStudents();
   const [deletingStudentUid, setDeletingStudentUid] = useState<string | null>(null);
   const [deletingStudentName, setDeletingStudentName] = useState<string>('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -20,8 +25,32 @@ export default function FacultyDashboard() {
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentEmail, setNewStudentEmail] = useState('');
   const [newStudentLrn, setNewStudentLrn] = useState('');
+  const [newStudentPassword, setNewStudentPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [newStudentGrade, setNewStudentGrade] = useState('Grade 11');
   const [newStudentSection, setNewStudentSection] = useState('STEM-A');
+  const [isSavingStudent, setIsSavingStudent] = useState(false);
+  const [studentActionError, setStudentActionError] = useState<string | null>(null);
+
+  // Oral Recitation Award state
+  const [isAwardingRecitation, setIsAwardingRecitation] = useState<UserProfile | null>(null);
+  const [recitationPoints, setRecitationPoints] = useState<number>(1);
+  const [recitationTopicId, setRecitationTopicId] = useState<string>('general');
+  const [recitationNotes, setRecitationNotes] = useState<string>('');
+  const [isSavingRecitation, setIsSavingRecitation] = useState<boolean>(false);
+
+  // Credentials view and copy slip modal
+  const [createdStudentCredentials, setCreatedStudentCredentials] = useState<{
+    displayName: string;
+    email: string;
+    lrn?: string;
+    password?: string;
+    grade?: string;
+    section?: string;
+  } | null>(null);
+  const [viewingCredentialsStudent, setViewingCredentialsStudent] = useState<UserProfile | null>(null);
+  const [showViewingPassword, setShowViewingPassword] = useState(false);
+  const [copiedSuccess, setCopiedSuccess] = useState(false);
 
   const handleExportData = async () => {
     try {
@@ -89,40 +118,111 @@ export default function FacultyDashboard() {
     return matchesSearch && matchesGrade && matchesSection;
   });
 
+  const handleGeneratePassword = () => {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const pass = `Math@${randomNum}`;
+    setNewStudentPassword(pass);
+    setShowPassword(true);
+  };
+
+  const copyCredentialsSlip = (name: string, email: string, lrn?: string, password?: string) => {
+    const text = [
+      `📚 MathQuest Grade 11 — Student Login Credentials`,
+      `Student: ${name}`,
+      `Email / ID: ${email || (lrn ? `${lrn}@student.mathquest.internal` : 'N/A')}`,
+      ...(lrn ? [`LRN: ${lrn}`] : []),
+      ...(password ? [`Password: ${password}`] : []),
+      `Portal: Sign in at MathQuest using your Email/LRN and Password.`
+    ].join('\n');
+
+    navigator.clipboard.writeText(text);
+    setCopiedSuccess(true);
+    setTimeout(() => setCopiedSuccess(false), 2500);
+  };
+
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudentName) return;
-    await addStudent({ 
-      displayName: newStudentName, 
-      email: newStudentEmail,
-      lrn: newStudentLrn,
-      grade: newStudentGrade,
-      section: newStudentSection
-    });
-    setNewStudentName('');
-    setNewStudentEmail('');
-    setNewStudentLrn('');
-    setNewStudentGrade('Grade 11');
-    setNewStudentSection('STEM-A');
-    setIsAddingStudent(false);
+    if (!newStudentName.trim()) return;
+    if (newStudentPassword.trim() && newStudentPassword.trim().length < 6) {
+      setStudentActionError("Password must be at least 6 characters long.");
+      return;
+    }
+
+    setIsSavingStudent(true);
+    setStudentActionError(null);
+    try {
+      const added = await addStudent({ 
+        displayName: newStudentName.trim(), 
+        email: newStudentEmail.trim(),
+        lrn: newStudentLrn.trim(),
+        grade: newStudentGrade,
+        section: newStudentSection.trim(),
+        password: newStudentPassword.trim() || undefined
+      });
+
+      const effectiveEmail = newStudentEmail.trim() || (newStudentLrn.trim() ? `${newStudentLrn.trim()}@student.mathquest.internal` : '');
+      
+      // If a password was provided, trigger the credentials confirmation slip
+      if (newStudentPassword.trim()) {
+        setCreatedStudentCredentials({
+          displayName: newStudentName.trim(),
+          email: effectiveEmail,
+          lrn: newStudentLrn.trim(),
+          password: newStudentPassword.trim(),
+          grade: newStudentGrade,
+          section: newStudentSection.trim()
+        });
+      }
+
+      setNewStudentName('');
+      setNewStudentEmail('');
+      setNewStudentLrn('');
+      setNewStudentPassword('');
+      setShowPassword(false);
+      setNewStudentGrade('Grade 11');
+      setNewStudentSection('STEM-A');
+      setIsAddingStudent(false);
+    } catch (err: any) {
+      console.error("Error adding student:", err);
+      setStudentActionError(err.message || "Failed to add student. Please try again.");
+    } finally {
+      setIsSavingStudent(false);
+    }
   };
 
   const handleEditStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isEditingStudent || !newStudentName) return;
-    await editStudent(isEditingStudent.uid, { 
-      displayName: newStudentName, 
-      email: newStudentEmail,
-      lrn: newStudentLrn,
-      grade: newStudentGrade,
-      section: newStudentSection
-    });
-    setNewStudentName('');
-    setNewStudentEmail('');
-    setNewStudentLrn('');
-    setNewStudentGrade('Grade 11');
-    setNewStudentSection('STEM-A');
-    setIsEditingStudent(null);
+    if (!isEditingStudent || !newStudentName.trim()) return;
+    if (newStudentPassword.trim() && newStudentPassword.trim().length < 6) {
+      setStudentActionError("Password must be at least 6 characters long.");
+      return;
+    }
+
+    setIsSavingStudent(true);
+    setStudentActionError(null);
+    try {
+      await editStudent(isEditingStudent.uid, { 
+        displayName: newStudentName.trim(), 
+        email: newStudentEmail.trim(),
+        lrn: newStudentLrn.trim(),
+        grade: newStudentGrade,
+        section: newStudentSection.trim(),
+        password: newStudentPassword.trim() || undefined
+      });
+      setNewStudentName('');
+      setNewStudentEmail('');
+      setNewStudentLrn('');
+      setNewStudentPassword('');
+      setShowPassword(false);
+      setNewStudentGrade('Grade 11');
+      setNewStudentSection('STEM-A');
+      setIsEditingStudent(null);
+    } catch (err: any) {
+      console.error("Error editing student:", err);
+      setStudentActionError(err.message || "Failed to update student.");
+    } finally {
+      setIsSavingStudent(false);
+    }
   };
 
   const openDeleteConfirm = (student: UserProfile) => {
@@ -142,27 +242,62 @@ export default function FacultyDashboard() {
     }
   };
 
+  const openAddModal = () => {
+    setIsAddingStudent(true);
+    setIsEditingStudent(null);
+    setNewStudentName('');
+    setNewStudentEmail('');
+    setNewStudentLrn('');
+    setNewStudentPassword('');
+    setShowPassword(false);
+    setNewStudentGrade('Grade 11');
+    setNewStudentSection('STEM-A');
+    setStudentActionError(null);
+  };
+
   const openEditModal = (student: UserProfile) => {
     setIsEditingStudent(student);
+    setIsAddingStudent(false);
     setNewStudentName(student.displayName);
     setNewStudentEmail(student.email || '');
     setNewStudentLrn(student.lrn || '');
+    setNewStudentPassword(student.temporaryPassword || student.password || '');
+    setShowPassword(false);
     setNewStudentGrade(student.grade || 'Grade 11');
     setNewStudentSection(student.section || 'STEM-A');
+    setStudentActionError(null);
   };
 
-  const handleSeedStudents = async () => {
-    if (window.confirm('This will add sample students to the database. Continue?')) {
-      const sampleStudents = [
-        { displayName: 'Alice Chen', email: 'alice@example.com', lrn: '109283741001', grade: 'Grade 11', section: 'STEM-A', xp: 450, level: 3, streak: 5, badges: ['first-steps', 'perfect-score'] },
-        { displayName: 'Marcus Johnson', email: 'marcus@example.com', lrn: '109283741002', grade: 'Grade 11', section: 'STEM-B', xp: 1200, level: 4, streak: 12, badges: ['first-steps', 'math-whiz'] },
-        { displayName: 'Sarah Williams', email: 'sarah@example.com', lrn: '109283741003', grade: 'Grade 12', section: 'ABM-1', xp: 850, level: 3, streak: 2, badges: ['first-steps'] },
-      ];
+  const handleAwardRecitation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAwardingRecitation) return;
+    
+    setIsSavingRecitation(true);
+    try {
+      const selectedTopic = topics.find(t => t.id === recitationTopicId);
+      const topicTitle = selectedTopic ? selectedTopic.title : 'General Math Recitation';
       
-      for (const s of sampleStudents) {
-        await addStudent(s);
-      }
-      alert('Sample students added!');
+      const facultyName = facultyProfile?.displayName || 'Faculty Instructor';
+      
+      await awardOralRecitation(
+        isAwardingRecitation.uid,
+        isAwardingRecitation.displayName,
+        recitationPoints,
+        recitationTopicId,
+        topicTitle,
+        recitationNotes,
+        facultyName
+      );
+      
+      // Reset state
+      setIsAwardingRecitation(null);
+      setRecitationPoints(1);
+      setRecitationTopicId('general');
+      setRecitationNotes('');
+    } catch (err) {
+      console.error("Error awarding recitation points:", err);
+    } finally {
+      setIsSavingRecitation(false);
     }
   };
 
@@ -224,17 +359,18 @@ export default function FacultyDashboard() {
                 <Icons.Download className="w-4 h-4" />
                 Export Data
               </button>
-              {students.length === 0 && (
-                <button 
-                  onClick={handleSeedStudents}
-                  className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 font-bold rounded-xl hover:bg-amber-100 transition-colors text-xs"
-                >
-                  <Database className="w-4 h-4" />
-                  Seed Sample Students
-                </button>
-              )}
+              <a 
+                href="https://console.firebase.google.com/project/united-spirit-hsjh2/authentication/users"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 text-amber-800 font-bold rounded-xl hover:bg-amber-100 transition-colors text-xs border border-amber-200/70 shadow-sm"
+                title="Open Firebase Console to view and manage registered Auth accounts"
+              >
+                <Icons.ExternalLink className="w-3.5 h-3.5 text-amber-700" />
+                Firebase Auth Console
+              </a>
               <button 
-                onClick={() => setIsAddingStudent(true)}
+                onClick={openAddModal}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors text-xs shadow-sm"
               >
                 <UserPlus className="w-4 h-4" />
@@ -301,11 +437,27 @@ export default function FacultyDashboard() {
                         {student.displayName[0]}
                       </div>
                       <div>
-                        <div className="font-bold text-slate-900">{student.displayName}</div>
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          <span>{student.displayName}</span>
+                          {(student.temporaryPassword || student.password) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-semibold border border-emerald-100" title="Login credentials configured">
+                              <Icons.Key className="w-2.5 h-2.5" />
+                              Pass Set
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-slate-500 flex items-center gap-1">
                           <Mail className="w-3 h-3" />
                           {student.email || 'No email'}
                         </div>
+                        {student.oralRecitationPoints ? (
+                          <div className="mt-1 flex items-center gap-1">
+                            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200" title="Oral Recitation Points">
+                              <Icons.Mic className="w-3 h-3 text-amber-600" />
+                              Recitations: +{student.oralRecitationPoints} pts
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </td>
@@ -350,6 +502,30 @@ export default function FacultyDashboard() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => {
+                          setIsAwardingRecitation(student);
+                          setRecitationPoints(1);
+                          setRecitationTopicId('general');
+                          setRecitationNotes('');
+                        }}
+                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                        title="Award Oral Recitation Plus Points"
+                      >
+                        <Icons.Mic className="w-5 h-5" />
+                      </button>
+                      {(student.temporaryPassword || student.password) && (
+                        <button 
+                          onClick={() => {
+                            setViewingCredentialsStudent(student);
+                            setShowViewingPassword(false);
+                          }}
+                          className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                          title="View & Copy Student Login Credentials"
+                        >
+                          <Icons.Key className="w-5 h-5" />
+                        </button>
+                      )}
                       <button 
                         onClick={() => openEditModal(student)}
                         className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
@@ -397,6 +573,7 @@ export default function FacultyDashboard() {
                 onClick={() => {
                   setIsAddingStudent(false);
                   setIsEditingStudent(null);
+                  setStudentActionError(null);
                 }}
                 className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-50 rounded-full"
               >
@@ -417,6 +594,13 @@ export default function FacultyDashboard() {
               <p className="text-slate-500 mb-6 text-sm">
                 {isEditingStudent ? 'Update student profile details, grade level, and section.' : 'Create a profile for your student with grade and section details.'}
               </p>
+
+              {studentActionError && (
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
+                  <Icons.AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                  <span>{studentActionError}</span>
+                </div>
+              )}
 
               <form onSubmit={isEditingStudent ? handleEditStudent : handleAddStudent} className="space-y-4">
                 <div>
@@ -477,12 +661,304 @@ export default function FacultyDashboard() {
                   </div>
                 </div>
 
+                <div>
+                  <div className="flex items-center justify-between mb-1.5 ml-1">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">
+                      {isEditingStudent ? 'Account Password (Optional)' : 'Student Password'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleGeneratePassword}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 hover:underline"
+                    >
+                      <Icons.Sparkles className="w-3 h-3" />
+                      Auto-generate
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input 
+                      type={showPassword ? "text" : "password"} 
+                      value={newStudentPassword}
+                      onChange={(e) => setNewStudentPassword(e.target.value)}
+                      placeholder={isEditingStudent ? "Leave blank to keep current password" : "Min. 6 characters (or click Auto-generate)"}
+                      className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 text-sm pr-11 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <Icons.EyeOff className="w-4 h-4" /> : <Icons.Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 ml-1">
+                    {isEditingStudent 
+                      ? "Enter a new password (min. 6 chars) to update, or leave blank to keep unchanged." 
+                      : "Password for the student to log into MathQuest. Minimum 6 characters."}
+                  </p>
+                </div>
+
                 <button 
                   type="submit"
-                  className="w-full py-3.5 mt-2 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 text-sm"
+                  disabled={isSavingStudent}
+                  className="w-full py-3.5 mt-2 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
                 >
-                  {isEditingStudent ? 'Save Changes' : 'Create Student Profile'}
+                  {isSavingStudent ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving Student...</span>
+                    </>
+                  ) : (
+                    <span>{isEditingStudent ? 'Save Changes' : 'Create Student Profile'}</span>
+                  )}
                 </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Student Credentials Slip / Card Modal */}
+      <AnimatePresence>
+        {(createdStudentCredentials || viewingCredentialsStudent) && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative border border-slate-100"
+            >
+              <button 
+                onClick={() => {
+                  setCreatedStudentCredentials(null);
+                  setViewingCredentialsStudent(null);
+                }}
+                className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-xl transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mb-5 text-emerald-600">
+                <Icons.Key className="w-7 h-7" />
+              </div>
+
+              <h3 className="text-xl font-bold text-slate-900 mb-1">
+                {createdStudentCredentials ? 'Student Account Created' : 'Student Login Credentials'}
+              </h3>
+              <p className="text-slate-500 text-xs mb-5">
+                Share these login details with the student so they can access their MathQuest portal.
+              </p>
+
+              {(() => {
+                const creds = createdStudentCredentials || {
+                  displayName: viewingCredentialsStudent?.displayName || '',
+                  email: viewingCredentialsStudent?.email || '',
+                  lrn: viewingCredentialsStudent?.lrn,
+                  password: viewingCredentialsStudent?.temporaryPassword || viewingCredentialsStudent?.password || '(Set by student or teacher)',
+                  grade: viewingCredentialsStudent?.grade,
+                  section: viewingCredentialsStudent?.section
+                };
+                const displayPass = creds.password || '••••••••';
+
+                return (
+                  <div className="space-y-4">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2.5 text-xs">
+                      <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Student</span>
+                        <span className="font-bold text-slate-800 text-sm">{creds.displayName}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Login ID / Email</span>
+                        <span className="font-mono font-bold text-indigo-600 text-xs break-all">{creds.email || 'N/A'}</span>
+                      </div>
+
+                      {creds.lrn && (
+                        <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
+                          <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">LRN</span>
+                          <span className="font-mono font-bold text-slate-800 text-xs">{creds.lrn}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Password</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            {showViewingPassword ? displayPass : '••••••••••••'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowViewingPassword(!showViewingPassword)}
+                            className="text-slate-400 hover:text-slate-600 p-0.5"
+                            title={showViewingPassword ? "Hide" : "Show"}
+                          >
+                            {showViewingPassword ? <Icons.EyeOff className="w-3.5 h-3.5" /> : <Icons.Eye className="w-3.5 h-3.5 text-slate-500" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => copyCredentialsSlip(creds.displayName, creds.email, creds.lrn, creds.password)}
+                        className="flex-1 py-3 px-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 text-xs shadow-md shadow-indigo-100"
+                      >
+                        {copiedSuccess ? (
+                          <>
+                            <Icons.Check className="w-4 h-4 text-emerald-300" />
+                            <span>Copied to Clipboard!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Icons.Copy className="w-4 h-4" />
+                            <span>Copy Login Slip</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreatedStudentCredentials(null);
+                          setViewingCredentialsStudent(null);
+                        }}
+                        className="py-3 px-5 bg-slate-100 text-slate-700 font-bold rounded-2xl hover:bg-slate-200 transition-all text-xs"
+                      >
+                        Done
+                      </button>
+                    </div>
+
+                    <div className="pt-2 text-center">
+                      <a
+                        href="https://console.firebase.google.com/project/united-spirit-hsjh2/authentication/users"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                      >
+                        <Icons.ExternalLink className="w-3 h-3" />
+                        <span>Manage accounts in Firebase Console</span>
+                      </a>
+                    </div>
+                  </div>
+                );
+              })()}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Oral Recitation Award Modal */}
+      <AnimatePresence>
+        {isAwardingRecitation && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[32px] p-8 w-full max-w-md shadow-2xl relative"
+            >
+              <button 
+                type="button"
+                onClick={() => setIsAwardingRecitation(null)}
+                className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-50 rounded-full"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-6">
+                <Icons.Mic className="w-8 h-8 text-amber-600" />
+              </div>
+
+              <h2 className="text-2xl font-bold text-slate-900 mb-1">
+                Award Recitation Points
+              </h2>
+              <p className="text-slate-500 mb-6 text-sm">
+                Award classroom plus points to <strong className="text-slate-800">{isAwardingRecitation.displayName}</strong>. Points will be converted into XP (+100 XP per point).
+              </p>
+
+              <form onSubmit={handleAwardRecitation} className="space-y-5">
+                {/* Points selector */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5 ml-1">
+                    Select Plus Points
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[1, 2, 3, 5].map((pts) => (
+                      <button
+                        key={pts}
+                        type="button"
+                        onClick={() => setRecitationPoints(pts)}
+                        className={`py-3 text-center rounded-xl font-extrabold text-sm border transition-all ${
+                          recitationPoints === pts
+                            ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-100 scale-[1.03]'
+                            : 'bg-slate-50 text-slate-700 border-slate-100 hover:bg-slate-100'
+                        }`}
+                      >
+                        +{pts} Pt{pts > 1 ? 's' : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Topic selector */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                    Class Topic / Lesson
+                  </label>
+                  <select
+                    value={recitationTopicId}
+                    onChange={(e) => setRecitationTopicId(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-amber-500 text-sm font-semibold text-slate-800"
+                  >
+                    <option value="general">General / Unassigned</option>
+                    {topics.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Remarks */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                    Feedback / Teacher's Remarks
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={recitationNotes}
+                    onChange={(e) => setRecitationNotes(e.target.value)}
+                    placeholder="e.g. Excellent participation. Answered the complex logarithmic rational equation correctly."
+                    required
+                    className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-amber-500 text-sm resize-none"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAwardingRecitation(null)}
+                    className="flex-1 py-3.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition-all text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingRecitation}
+                    className="flex-1 py-3.5 px-4 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold rounded-2xl shadow-lg shadow-amber-100 transition-all flex items-center justify-center gap-2 text-xs"
+                  >
+                    {isSavingRecitation ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Icons.Award className="w-4 h-4" />
+                        <span>Award +{(recitationPoints * 100).toLocaleString()} XP</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </form>
             </motion.div>
           </div>
