@@ -355,13 +355,14 @@ export function useUserProfile(uid: string | undefined) {
     }
   };
 
-  const saveDiagnosticResult = async (ability: string, scores: Record<string, number>, pathway?: LearningPathway) => {
+  const saveDiagnosticResult = async (ability: string, scores: Record<string, number>, pathway?: LearningPathway, violations?: number) => {
     if (!uid || !profile) return;
     const updated: UserProfile = {
       ...profile,
       diagnosticCompleted: true,
       diagnosticAbility: ability,
       diagnosticScores: scores,
+      diagnosticViolations: violations,
       mathAbility: ability,
       competencyScores: scores,
       ...(pathway ? { activePathway: pathway } : {})
@@ -374,6 +375,7 @@ export function useUserProfile(uid: string | undefined) {
         diagnosticCompleted: true,
         diagnosticAbility: ability,
         diagnosticScores: scores,
+        diagnosticViolations: violations,
         mathAbility: ability,
         competencyScores: scores,
         ...(pathway ? { activePathway: pathway } : {})

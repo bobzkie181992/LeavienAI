@@ -83,7 +83,7 @@ interface StudentModuleProps {
   userUid: string;
   addXP: (amount: number) => void;
   saveResult: (result: Omit<QuizResult, 'timestamp'>) => void;
-  saveDiagnosticResult: (ability: string, scores: Record<string, number>, pathway?: LearningPathway) => void;
+  saveDiagnosticResult: (ability: string, scores: Record<string, number>, pathway?: LearningPathway, violations?: number) => void;
   savePathwayProgress: (pathway: LearningPathway | null) => void;
   updateDisplayName?: (newName: string) => Promise<void>;
   updateProfileDetails?: (newName: string, grade: string, section: string, lrn?: string) => Promise<void>;
@@ -630,8 +630,8 @@ export default function StudentModule({
             >
               <DiagnosticAssessment 
                 topics={topics}
-                onComplete={(ability, scores, pathway) => {
-                  saveDiagnosticResult(ability, scores, pathway);
+                onComplete={(ability, scores, pathway, violations) => {
+                  saveDiagnosticResult(ability, scores, pathway, violations);
                   setIsTakingDiagnostic(false);
                   if (pathway) {
                     setIsViewingPathway(true);

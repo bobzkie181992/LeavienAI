@@ -1,15 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Topic, Problem, LearningPathway, isValidatedOrActive, AIMistakeGuidance } from '../types';
 import * as Icons from 'lucide-react';
 import { generateLearningPathway } from '../utils/pathwayGenerator';
 import { generateAIMistakeGuidance, fetchAIMistakeDiagnosis } from '../utils/aiTutorCoach';
-import { playPopSound } from '../utils/audioEffects';
+import { playPopSound, playWarningSound } from '../utils/audioEffects';
 import { useDiagnosticExam } from '../hooks/useFirebase';
 
 interface DiagnosticAssessmentProps {
   topics: Topic[];
-  onComplete: (ability: string, scores: Record<string, number>, pathway?: LearningPathway) => void;
+  onComplete: (ability: string, scores: Record<string, number>, pathway?: LearningPathway, violations?: number) => void;
   onCancel?: () => void;
 }
 
@@ -28,6 +28,8 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
   const { questions: fetchedQuestions, settings: diagnosticSettings, loading: loadingQuestions } = useDiagnosticExam();
 
   const [assessmentPhase, setAssessmentPhase] = useState<'intro' | 'testing' | 'summary'>('intro');
+  const [violationCount, setViolationCount] = useState<number>(0);
+  const [showAltTabWarning, setShowAltTabWarning] = useState<boolean>(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [firstAttemptCorrect, setFirstAttemptCorrect] = useState<Record<string, boolean>>({});
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -49,6 +51,49 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
   const [boosterIsSubmitted, setBoosterIsSubmitted] = useState(false);
   const [boosterFinished, setBoosterFinished] = useState(false);
   const [boosterScore, setBoosterScore] = useState(0);
+
+  useEffect(() => {
+    if (assessmentPhase !== 'testing' && !isTakingBooster) {
+      return;
+    }
+
+    let blurTimeout: any;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        playWarningSound();
+        setViolationCount(prev => prev + 1);
+        setShowAltTabWarning(true);
+      }
+    };
+
+    const handleWindowBlur = () => {
+      blurTimeout = setTimeout(() => {
+        playWarningSound();
+        setViolationCount(prev => prev + 1);
+        setShowAltTabWarning(true);
+      }, 400); // 400ms buffer to allow normal system delays
+    };
+
+    const handleWindowFocus = () => {
+      if (blurTimeout) {
+        clearTimeout(blurTimeout);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+      if (blurTimeout) {
+        clearTimeout(blurTimeout);
+      }
+    };
+  }, [assessmentPhase, isTakingBooster]);
 
   // Premium Next-Level Transition Questions List (Grade 11/12 Mathematics Bridge)
   const boosterQuestions = useMemo(() => [
@@ -703,7 +748,7 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
             <button
               onClick={() => {
                 const finalBoosterScores = { ...finalScores, boosterScore, boosterPercent: boostPercent };
-                onComplete(estimatedAbility, finalBoosterScores, generatedPathway);
+                onComplete(estimatedAbility, finalBoosterScores, generatedPathway, violationCount);
                 setBoosterFinished(false);
               }}
               className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg transition-all text-center"
@@ -919,7 +964,7 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
               {generatedPathway && (
                 <button
                   id="start-recommended-pathway-btn"
-                  onClick={() => onComplete(estimatedAbility, finalScores, generatedPathway)}
+                  onClick={() => onComplete(estimatedAbility, finalScores, generatedPathway, violationCount)}
                   className="flex-1 py-3.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
                 >
                   <Icons.Route className="w-4 h-4" />
@@ -928,7 +973,7 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
               )}
               <button
                 id="complete-diagnostic-save-btn"
-                onClick={() => onComplete(estimatedAbility, finalScores, undefined)}
+                onClick={() => onComplete(estimatedAbility, finalScores, undefined, violationCount)}
                 className="px-6 py-3.5 bg-white/20 hover:bg-white/30 text-white font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
               >
                 <span>Go to Student Dashboard</span>
@@ -1378,6 +1423,58 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
           )}
         </div>
       </div>
+
+      {/* Alt-Tab/Browser Loss focus warning popup during diagnostic */}
+      <AnimatePresence>
+        {showAltTabWarning && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[32px] max-w-md w-full p-8 text-center shadow-2xl relative border border-rose-100"
+            >
+              <div className="w-16 h-16 bg-rose-50 border border-rose-100 text-rose-600 rounded-3xl flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <Icons.AlertTriangle className="w-8 h-8" />
+              </div>
+
+              <h2 className="text-xl font-extrabold text-slate-900 mb-2 tracking-tight">
+                Academic Integrity Logged!
+              </h2>
+              
+              <p className="text-slate-500 text-xs leading-relaxed mb-6">
+                You have navigated away from the active Diagnostic Assessment window (switched tabs, opened another application, or clicked elsewhere).
+              </p>
+
+              <div className="p-4 bg-rose-50/50 rounded-2xl border border-rose-100 mb-6 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping shrink-0" />
+                  <span className="text-xs font-black uppercase text-rose-800 tracking-wider">
+                    Violation Warning Active
+                  </span>
+                </div>
+                <p className="text-xs text-rose-700 font-semibold leading-relaxed text-left">
+                  Leaving Assessment Instance count: <strong className="text-rose-950 text-sm font-black">{violationCount}</strong>
+                </p>
+                <p className="text-[10px] text-rose-600/90 leading-tight text-left">
+                  This action is recorded in your student progress card. Multiple leaves can invalidate your baseline competency scores.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playPopSound();
+                  setShowAltTabWarning(false);
+                }}
+                className="w-full py-4 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-black rounded-2xl shadow-lg shadow-rose-100 transition-all text-xs tracking-wider uppercase"
+              >
+                Return & Resume Assessment
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

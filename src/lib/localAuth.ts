@@ -13,37 +13,7 @@ const CURRENT_SESSION_KEY = 'mathquest_local_auth_session_v1';
 const AUTH_EVENT_NAME = 'mathquest_local_auth_event';
 
 // Initial pre-configured accounts (e.g. administrator / faculty / sample student)
-const DEFAULT_ACCOUNTS: UserProfile[] = [
-  {
-    uid: 'faculty_admin_bobzkie',
-    displayName: 'Prof. Bob (Admin)',
-    email: 'bobzkie181992@gmail.com',
-    role: 'faculty',
-    password: 'faculty123',
-    temporaryPassword: 'faculty123',
-    xp: 0,
-    level: 5,
-    streak: 10,
-    lastActive: new Date().toISOString(),
-    badges: ['topic-master']
-  },
-  {
-    uid: 'student_amora_default',
-    displayName: 'Amora',
-    email: 'amora@gmail.com',
-    role: 'student',
-    grade: 'Grade 11',
-    section: 'STEM-A',
-    lrn: '109283741008',
-    password: 'password123',
-    temporaryPassword: 'password123',
-    xp: 350,
-    level: 2,
-    streak: 4,
-    lastActive: new Date().toISOString(),
-    badges: ['first-steps', 'quick-learner']
-  }
-];
+const DEFAULT_ACCOUNTS: UserProfile[] = [];
 
 export function getLocalUsers(): UserProfile[] {
   try {

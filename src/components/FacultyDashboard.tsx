@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Users, UserPlus, Search, GraduationCap, TrendingUp, Award, Mail, ChevronRight, X, Database, BookOpen } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { useAllStudents } from '../hooks/useFirebase';
-import { UserProfile } from '../types';
+import { db } from '../lib/firebase';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { UserProfile, QuizResult } from '../types';
 import { topics } from '../data/curriculum';
 
 import ConfirmDeleteModal from './ConfirmDeleteModal';
@@ -51,6 +53,36 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
   const [viewingCredentialsStudent, setViewingCredentialsStudent] = useState<UserProfile | null>(null);
   const [showViewingPassword, setShowViewingPassword] = useState(false);
   const [copiedSuccess, setCopiedSuccess] = useState(false);
+
+  // Student Assessment Results View States
+  const [viewingResultsStudent, setViewingResultsStudent] = useState<UserProfile | null>(null);
+  const [studentResults, setStudentResults] = useState<QuizResult[]>([]);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [resultsTab, setResultsTab] = useState<'diagnostic' | 'formative'>('diagnostic');
+  const [expandedQuizId, setExpandedQuizId] = useState<string | null>(null);
+
+  const fetchStudentResults = async (studentId: string) => {
+    setIsLoadingResults(true);
+    setStudentResults([]);
+    try {
+      const q = query(collection(db, `users/${studentId}/results`), orderBy('timestamp', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuizResult));
+      setStudentResults(list);
+    } catch (err) {
+      console.error("Error fetching student results:", err);
+      // Fallback local storage check if offline or firestore fails
+      try {
+        const allLocalResults = JSON.parse(localStorage.getItem('quiz_results_backup') || '[]');
+        const filtered = allLocalResults.filter((r: any) => r.userId === studentId);
+        setStudentResults(filtered);
+      } catch (e) {
+        setStudentResults([]);
+      }
+    } finally {
+      setIsLoadingResults(false);
+    }
+  };
 
   const handleExportData = async () => {
     try {
@@ -445,6 +477,12 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                               Pass Set
                             </span>
                           )}
+                          {(student.diagnosticViolations && student.diagnosticViolations > 0) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-100" title={`${student.diagnosticViolations} Academic Integrity Violations (Tab Switches)`}>
+                              <Icons.ShieldAlert className="w-2.5 h-2.5 text-rose-500 animate-pulse" />
+                              {student.diagnosticViolations} Tab Out{(student.diagnosticViolations > 1) ? 's' : ''}
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-slate-500 flex items-center gap-1">
                           <Mail className="w-3 h-3" />
@@ -502,6 +540,17 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => {
+                          setViewingResultsStudent(student);
+                          setResultsTab('diagnostic');
+                          fetchStudentResults(student.uid);
+                        }}
+                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                        title="View Diagnostic & Formative Results"
+                      >
+                        <Icons.BarChart2 className="w-5 h-5 text-indigo-600" />
+                      </button>
                       <button 
                         onClick={() => {
                           setIsAwardingRecitation(student);
@@ -960,6 +1009,355 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+ 
+      {/* Student Progress / Results Modal */}
+      <AnimatePresence>
+        {viewingResultsStudent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[32px] w-full max-w-3xl shadow-2xl relative flex flex-col my-8 max-h-[90vh]"
+            >
+              {/* Header */}
+              <button 
+                type="button"
+                onClick={() => setViewingResultsStudent(null)}
+                className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-50 rounded-full z-10"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center">
+                  <Icons.GraduationCap className="w-6 h-6 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                    {viewingResultsStudent.displayName}
+                    <span className="text-xs bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full font-bold">
+                      Level {viewingResultsStudent.level}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                    LRN: {viewingResultsStudent.lrn || 'N/A'} • {viewingResultsStudent.grade || 'Grade 11'} - {viewingResultsStudent.section || 'STEM-A'} • {viewingResultsStudent.email}
+                  </p>
+                </div>
+              </div>
+
+              {/* Tab Selector */}
+              <div className="flex border-b border-slate-100 px-6 bg-white shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setResultsTab('diagnostic')}
+                  className={`py-4 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 ${
+                    resultsTab === 'diagnostic'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <Icons.Compass className="w-4 h-4" />
+                  <span>Diagnostic Assessment</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResultsTab('formative')}
+                  className={`py-4 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 ${
+                    resultsTab === 'formative'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <Icons.BookOpen className="w-4 h-4" />
+                  <span>Formative Quizzes ({isLoadingResults ? '...' : studentResults.length})</span>
+                </button>
+              </div>
+
+              {/* Scrollable Content Panel */}
+              <div className="p-6 overflow-y-auto flex-1 bg-slate-50/40 space-y-6">
+                {resultsTab === 'diagnostic' ? (
+                  <div className="space-y-6">
+                    {/* Diagnostic Summary stats */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Status</span>
+                        <div className="flex items-center gap-2">
+                          {viewingResultsStudent.diagnosticCompleted ? (
+                            <>
+                              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                              <span className="font-extrabold text-slate-800 text-sm">Completed Assessment</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                              <span className="font-extrabold text-slate-700 text-sm">Pending / Incomplete</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Baseline Ability</span>
+                        <div className="flex items-center gap-2">
+                          <Icons.TrendingUp className="w-4 h-4 text-indigo-500" />
+                          <span className="font-extrabold text-slate-800 text-sm">
+                            {viewingResultsStudent.diagnosticCompleted 
+                              ? `Ability Estimate (θ): ${viewingResultsStudent.diagnosticAbility || '0.00'}`
+                              : 'Pending Assessment'
+                            }
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Academic Integrity</span>
+                        <div className="flex items-center gap-2">
+                          <Icons.ShieldAlert className={`w-4 h-4 ${
+                            (viewingResultsStudent.diagnosticViolations || 0) > 0 ? 'text-rose-500 animate-pulse' : 'text-emerald-500'
+                          }`} />
+                          <span className="font-extrabold text-slate-800 text-sm">
+                            {(viewingResultsStudent.diagnosticViolations || 0) > 0 ? (
+                              <span className="text-rose-600">
+                                {viewingResultsStudent.diagnosticViolations} Tab Out{(viewingResultsStudent.diagnosticViolations || 0) > 1 ? 's' : ''}
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600">No Violations Logged</span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mathematical Ability Slider indicator */}
+                    {viewingResultsStudent.diagnosticCompleted && (
+                      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Estimated Baseline Competency Range</h4>
+                        
+                        <div className="relative pt-6 pb-2">
+                          {/* Scale line */}
+                          <div className="h-2 w-full bg-slate-100 rounded-full relative">
+                            {/* Accent indicator */}
+                            <div className="absolute left-1/4 right-1/4 h-2 bg-indigo-100" />
+                            
+                            {/* Pin */}
+                            {(() => {
+                              const ability = parseFloat(viewingResultsStudent.diagnosticAbility || '0');
+                              // Normalise -3.0 to +3.0 onto 0% to 100%
+                              const pct = Math.max(5, Math.min(95, ((ability + 3) / 6) * 100));
+                              return (
+                                <div 
+                                  className="absolute w-5 h-5 bg-indigo-600 rounded-full border-2 border-white shadow -top-1.5 -translate-x-1/2 flex items-center justify-center group cursor-pointer"
+                                  style={{ left: `${pct}%` }}
+                                >
+                                  <div className="absolute -top-7 bg-indigo-950 text-white text-[9px] font-black px-1.5 py-0.5 rounded whitespace-nowrap">
+                                    θ = {ability.toFixed(2)}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          
+                          {/* Labels */}
+                          <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-2.5">
+                            <span>REMEDIAL (θ ≤ -1.5)</span>
+                            <span>BASIC (θ = 0.0)</span>
+                            <span>ADVANCED (θ ≥ +1.5)</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Competency Mastery breakdown */}
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                      <div className="p-4 border-b border-slate-100 bg-slate-50/60">
+                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Baseline Topic Competency Scores</h4>
+                      </div>
+                      <div className="p-4 divide-y divide-slate-50">
+                        {topics.map((topic) => {
+                          // Extract scores
+                          const score = viewingResultsStudent.diagnosticScores?.[topic.title] ?? 
+                            viewingResultsStudent.diagnosticScores?.[topic.id] ?? 
+                            viewingResultsStudent.competencyScores?.[topic.title] ?? 
+                            viewingResultsStudent.competencyScores?.[topic.id];
+                          
+                          const hasScore = score !== undefined;
+                          const scorePct = hasScore ? Math.round(score) : 0;
+                          
+                          return (
+                            <div key={topic.id} className="py-3 flex items-center justify-between gap-4 text-xs">
+                              <div className="flex-1">
+                                <span className="font-bold text-slate-800 block">{topic.title}</span>
+                                <span className="text-[10px] text-slate-400 font-medium">Topic Area placement status</span>
+                              </div>
+                              <div className="flex items-center gap-3 w-48 shrink-0">
+                                {hasScore ? (
+                                  <>
+                                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                      <div 
+                                        className={`h-full rounded-full ${
+                                          scorePct >= 75 ? 'bg-emerald-500' : scorePct >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                                        }`}
+                                        style={{ width: `${scorePct}%` }}
+                                      />
+                                    </div>
+                                    <span className={`font-black text-right w-10 ${
+                                      scorePct >= 75 ? 'text-emerald-600' : scorePct >= 50 ? 'text-amber-600' : 'text-rose-600'
+                                    }`}>
+                                      {scorePct}%
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 italic block text-right w-full">Pending Diagnostic</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {isLoadingResults ? (
+                      <div className="flex flex-col items-center justify-center py-20 text-center">
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                          className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full mb-3"
+                        />
+                        <span className="text-xs text-slate-500">Querying formative quiz records from Firebase...</span>
+                      </div>
+                    ) : studentResults.length === 0 ? (
+                      <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center text-slate-400 shadow-sm">
+                        <Icons.Inbox className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                        <h4 className="font-bold text-slate-700">No Formative Quiz Attempts</h4>
+                        <p className="text-xs text-slate-500 mt-1">This student has not submitted any lesson formative quizzes yet.</p>
+                      </div>
+                    ) : (
+                      studentResults.map((result) => {
+                        // Match topic ID to topic Title
+                        const matchedTopic = topics.find(t => t.id === result.quizId || t.quizzes?.some(q => q.id === result.quizId));
+                        const title = matchedTopic ? matchedTopic.title : result.quizId;
+                        const scorePct = Math.round((result.score / result.total) * 100);
+                        const isExpanded = expandedQuizId === result.id;
+                        
+                        return (
+                          <div key={result.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                            {/* Card Header clickable to expand response log */}
+                            <div 
+                              onClick={() => setExpandedQuizId(isExpanded ? null : (result.id || null))}
+                              className="p-5 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/60 transition-colors"
+                            >
+                              <div className="space-y-1">
+                                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                                  {title}
+                                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                    result.quizMode === 'adaptive'
+                                      ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                                      : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                                  }`}>
+                                    {result.quizMode || 'Standard'}
+                                  </span>
+                                </h4>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400 font-medium">
+                                  <span>
+                                    Attempt Date: {result.timestamp ? new Date(result.timestamp).toLocaleDateString(undefined, { dateStyle: 'medium' }) + ' ' + new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown Date'}
+                                  </span>
+                                  <span className="w-1 h-1 rounded-full bg-slate-300 hidden sm:inline" />
+                                  {result.violations && result.violations > 0 ? (
+                                    <span className="inline-flex items-center gap-1 font-black text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100">
+                                      <Icons.ShieldAlert className="w-2.5 h-2.5 text-rose-500 animate-pulse" />
+                                      {result.violations} Tab Out{(result.violations > 1) ? 's' : ''} Logged
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                                      <Icons.ShieldCheck className="w-2.5 h-2.5 text-emerald-500" />
+                                      Secure Session
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                <div className="text-right">
+                                  <span className={`text-base font-black ${
+                                    scorePct >= 75 ? 'text-emerald-600' : scorePct >= 50 ? 'text-amber-600' : 'text-rose-600'
+                                  }`}>
+                                    {result.score} / {result.total}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 block font-bold">Score ({scorePct}%)</span>
+                                </div>
+                                <div className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+                                  {isExpanded ? (
+                                    <Icons.ChevronUp className="w-4 h-4 text-slate-500" />
+                                  ) : (
+                                    <Icons.ChevronDown className="w-4 h-4 text-slate-500" />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Expanded Response Details log */}
+                            {isExpanded && (
+                              <div className="border-t border-slate-100 bg-slate-50/50 p-5 space-y-4">
+                                <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Item Response Breakdown</h5>
+                                {result.itemResponses && result.itemResponses.length > 0 ? (
+                                  <div className="space-y-3">
+                                    {result.itemResponses.map((ir, rIdx) => (
+                                      <div key={rIdx} className="bg-white p-4 rounded-xl border border-slate-100 text-xs space-y-2">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="font-bold text-slate-800">
+                                            Q{rIdx + 1}: {ir.questionText || `Mathematics Competency Problem (ID: ${ir.itemId})`}
+                                          </div>
+                                          <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                                            ir.isCorrect 
+                                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                          }`}>
+                                            {ir.isCorrect ? 'Correct' : 'Incorrect'}
+                                          </span>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                          <div className="p-2 rounded bg-slate-50 text-slate-600 text-[11px]">
+                                            <span className="font-semibold text-slate-400 mr-1.5">Submitted Option:</span> 
+                                            {ir.selectedOption !== undefined ? `Option ${String.fromCharCode(65 + ir.selectedOption)}` : 'No Response'}
+                                          </div>
+                                          <div className="p-2 rounded bg-emerald-50/40 text-emerald-800 text-[11px] font-medium">
+                                            <span className="font-semibold text-emerald-600 mr-1.5">Correct Option:</span> 
+                                            {ir.correctOption !== undefined ? `Option ${String.fromCharCode(65 + ir.correctOption)}` : 'N/A'}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-400 italic">No itemized responses stored for this attempt record.</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0 rounded-b-[32px]">
+                <button
+                  type="button"
+                  onClick={() => setViewingResultsStudent(null)}
+                  className="px-6 py-2.5 bg-slate-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl hover:bg-slate-900 transition-all shadow-md"
+                >
+                  Close Report
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

@@ -351,6 +351,7 @@ export interface UserProfile {
   diagnosticCompleted?: boolean;
   diagnosticAbility?: string;
   diagnosticScores?: Record<string, number>;
+  diagnosticViolations?: number;
   mathAbility?: string;
   competencyScores?: Record<string, number>;
   activePathway?: LearningPathway;
