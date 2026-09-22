@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Edit2, Trash2, Save, X, ArrowLeft, GripVertical, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Topic, Quiz, Problem, ItemStatus } from '../types';
+import { Plus, Edit2, Trash2, Save, X, ArrowLeft, GripVertical, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { Topic, Quiz, Problem, ItemStatus, AssessmentType } from '../types';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
+import AIGenerateQuestionModal, { GeneratedQuestionPayload } from './AIGenerateQuestionModal';
 
 interface QuizManagerProps {
   topic: Topic;
@@ -16,6 +17,34 @@ export default function QuizManager({ topic, onSave, onBack }: QuizManagerProps)
   const [deletingQuizId, setDeletingQuizId] = useState<string | null>(null);
   const [deletingProblemId, setDeletingProblemId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
+
+  const handleAIGeneratedQuestion = (q: GeneratedQuestionPayload) => {
+    const newProblem: Problem = {
+      id: `problem-${Date.now()}`,
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correctIndex,
+      solution: q.explanation,
+      topic: q.topic || topic.title,
+      competency: q.competency,
+      assessmentType: q.assessmentType || (editingQuiz?.quizType === 'diagnostic' ? 'diagnostic' : 'formative'),
+      assessmentLevel: q.assessmentLevel,
+      difficulty: q.difficulty,
+      difficultyParameter: q.difficultyParameter ?? (q.difficulty === 'easy' ? -1 : q.difficulty === 'hard' ? 1.5 : 0),
+      discriminationParameter: q.discriminationParameter ?? 1.2,
+      cognitiveLevel: q.cognitiveLevel ? (q.cognitiveLevel.charAt(0).toUpperCase() + q.cognitiveLevel.slice(1)) : 'Applying',
+      misconceptionCategory: q.misconceptions?.[0]?.misconception || '',
+      hint1: q.hint1 || '',
+      hint2: q.hint2 || '',
+      hints: q.hint1 && q.hint2 ? [q.hint1, q.hint2] : [],
+      explanation: q.explanation,
+      remediation: `Review foundational concepts for ${topic.title}.`,
+      status: 'Active'
+    };
+
+    setEditingProblem(newProblem);
+  };
 
   const startNewQuiz = () => {
     setEditingQuiz({
@@ -221,14 +250,24 @@ export default function QuizManager({ topic, onSave, onBack }: QuizManagerProps)
             <div className="pt-6 border-t border-slate-100">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-lg font-bold text-slate-900">Problems</h4>
-                <button 
-                  type="button"
-                  onClick={startNewProblem}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 transition-colors text-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Problem
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => setIsAIGenerateOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-indigo-700 shadow-sm transition-all text-xs active:scale-95"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    AI Generate Problem
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={startNewProblem}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 transition-colors text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Problem
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -299,16 +338,29 @@ export default function QuizManager({ topic, onSave, onBack }: QuizManagerProps)
       {/* Problem Editor Modal */}
       <AnimatePresence>
         {editingProblem && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-[30px] p-8 w-full max-w-xl shadow-2xl relative max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-[30px] p-8 w-full max-w-xl shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar my-8"
             >
-              <h3 className="text-2xl font-bold text-slate-900 mb-6">
-                {editingProblem.id.startsWith('problem-') ? 'New Problem' : 'Edit Problem'}
-              </h3>
+              <div className="flex items-center justify-between mb-6 pb-3 border-b border-slate-100">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">
+                    {editingProblem.id.startsWith('problem-') ? 'New Problem' : 'Edit Problem'}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Define problem, competencies, and hints.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAIGenerateOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  AI Auto-Fill
+                </button>
+              </div>
 
               <div className="space-y-6">
                 <div>
@@ -545,6 +597,19 @@ export default function QuizManager({ topic, onSave, onBack }: QuizManagerProps)
         variant="danger"
         onConfirm={confirmDeleteProblem}
         onClose={() => setDeletingProblemId(null)}
+      />
+
+      {/* AI GENERATE QUESTION MODAL */}
+      <AIGenerateQuestionModal
+        isOpen={isAIGenerateOpen}
+        onClose={() => setIsAIGenerateOpen(false)}
+        defaultAssessmentType={editingQuiz?.quizType === 'diagnostic' ? 'diagnostic' : 'formative'}
+        defaultAssessmentLevel={editingQuiz?.quizType === 'diagnostic' ? 'Level 2 - Core Concept Baseline' : 'Level 2 - Guided Skill Application'}
+        defaultTopic={topic.title}
+        availableTopics={[topic.title]}
+        onQuestionGenerated={handleAIGeneratedQuestion}
+        title={`AI Question Generator - ${topic.title}`}
+        subtitle="Generate standards-aligned questions with psychometric calibration parameters and misconceptions."
       />
     </div>
   );

@@ -57,6 +57,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Teacher progress, diagnostic, remediation, and section evaluation reports
+    match /teacher_reports/{reportId} {
+      allow read, write: if true;
+    }
+
     // Summative Assessment Transcripts and outcome evaluations
     match /summative_transcripts/{transcriptId} {
       allow read, write: if true;

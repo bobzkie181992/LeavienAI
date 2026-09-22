@@ -108,24 +108,28 @@ export default function QuizEngine({
     return newArray;
   };
 
+  // Helper to shuffle a single problem's options and adjust the correctAnswer index
+  const shuffleProblemChoices = (p: Problem): Problem => {
+    const options = p.options || [];
+    const correctAnswer = p.correctAnswer ?? 0;
+    const correctOption = options[correctAnswer];
+    
+    const shuffled = shuffleArray(options);
+    const newCorrectAnswer = shuffled.indexOf(correctOption);
+    
+    return {
+      ...p,
+      options: shuffled,
+      correctAnswer: newCorrectAnswer >= 0 ? newCorrectAnswer : correctAnswer
+    };
+  };
+
   // Active problem set (can grow dynamically in adaptive mode)
   const [problems, setProblems] = useState<Problem[]>([]);
   useEffect(() => {
-    if (mode === 'adaptive') {
-      setProblems(quiz.problems);
-    } else {
-      setProblems(shuffleArray(quiz.problems).map(p => {
-        const options = p.options;
-        const correctAnswer = p.correctAnswer;
-        const correctOption = options[correctAnswer];
-        
-        // Shuffle options and update correctAnswer index
-        const shuffled = shuffleArray(options);
-        const newCorrectAnswer = shuffled.indexOf(correctOption);
-        
-        return { ...p, options: shuffled, correctAnswer: newCorrectAnswer };
-      }));
-    }
+    // For every student, shuffle question order AND randomize options
+    const randomizedProblems = shuffleArray(quiz.problems).map(shuffleProblemChoices);
+    setProblems(randomizedProblems);
   }, [quiz.problems, mode]);
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -417,9 +421,10 @@ export default function QuizEngine({
       });
 
       if (nextProb) {
-        newUsedIds.add(nextProb.id);
+        const randomizedNextProb = shuffleProblemChoices(nextProb);
+        newUsedIds.add(randomizedNextProb.id);
         setUsedProblemIds(newUsedIds);
-        setProblems(prev => [...prev, nextProb]);
+        setProblems(prev => [...prev, randomizedNextProb]);
         setCurrentStep(s => s + 1);
         setSelectedOption(null);
         setIsAnswered(false);
@@ -465,7 +470,7 @@ export default function QuizEngine({
     setAiMistakeGuidance(null);
     setIsSolutionRevealed(false);
     setRevealedHintTier(0);
-    setProblems(quiz.problems);
+    setProblems(shuffleArray(quiz.problems).map(shuffleProblemChoices));
     setUsedProblemIds(new Set(quiz.problems.map(p => p.id)));
     setStartTime(Date.now());
     if (targetMode) {

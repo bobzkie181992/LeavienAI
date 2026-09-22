@@ -103,7 +103,7 @@ export default function TopicAnalysisModal({ topic, onClose }: TopicAnalysisModa
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 sm:p-8 overflow-y-auto space-y-8 flex-1 print:overflow-visible print:p-0">
+        <div className="p-6 sm:p-8 overflow-y-auto space-y-8 flex-1 print:overflow-visible print:p-0 custom-scrollbar">
           {/* Key Metrics Overview */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-100/80">

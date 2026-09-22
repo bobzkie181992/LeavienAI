@@ -13,7 +13,72 @@ const CURRENT_SESSION_KEY = 'mathquest_local_auth_session_v1';
 const AUTH_EVENT_NAME = 'mathquest_local_auth_event';
 
 // Initial pre-configured accounts (e.g. administrator / faculty / sample student)
-const DEFAULT_ACCOUNTS: UserProfile[] = [];
+const DEFAULT_ACCOUNTS: UserProfile[] = [
+  {
+    uid: 'student_amora',
+    displayName: 'Amora Santos',
+    email: 'amora@gmail.com',
+    lrn: '109283741001',
+    role: 'student',
+    grade: 'Grade 11',
+    section: 'STEM-A',
+    password: 'password123',
+    temporaryPassword: 'password123',
+    xp: 350,
+    level: 2,
+    streak: 3,
+    lastActive: new Date().toISOString(),
+    badges: ['first-steps'],
+    mathAbility: 'Proficient'
+  },
+  {
+    uid: 'faculty_bobzkie',
+    displayName: 'Prof. Bob (Faculty)',
+    email: 'bobzkie181992@gmail.com',
+    role: 'faculty',
+    password: 'password123',
+    temporaryPassword: 'password123',
+    xp: 0,
+    level: 5,
+    streak: 1,
+    lastActive: new Date().toISOString(),
+    badges: ['topic-master']
+  },
+  {
+    uid: 'student_alex',
+    displayName: 'Alex Chen',
+    email: 'alex.chen@school.edu',
+    lrn: '109283741002',
+    role: 'student',
+    grade: 'Grade 11',
+    section: 'STEM-A',
+    password: 'password123',
+    temporaryPassword: 'password123',
+    xp: 450,
+    level: 3,
+    streak: 4,
+    lastActive: new Date().toISOString(),
+    badges: ['first-steps'],
+    mathAbility: 'Proficient'
+  },
+  {
+    uid: 'student_maria',
+    displayName: 'Maria Santos',
+    email: 'maria.santos@school.edu',
+    lrn: '109283741003',
+    role: 'student',
+    grade: 'Grade 11',
+    section: 'STEM-A',
+    password: 'password123',
+    temporaryPassword: 'password123',
+    xp: 720,
+    level: 4,
+    streak: 7,
+    lastActive: new Date().toISOString(),
+    badges: ['first-steps', 'perfect-score'],
+    mathAbility: 'Advanced'
+  }
+];
 
 export function getLocalUsers(): UserProfile[] {
   try {
@@ -196,11 +261,31 @@ export async function localSignIn(
     }
   }
 
-  // 3. Special handling for Admin/Faculty email if first time logging in
-  if (!matchedUser && idLower === 'bobzkie181992@gmail.com') {
+  // 3. Special handling for Amora Santos (Student) or Admin/Faculty email if first time logging in
+  if (!matchedUser && (idLower === 'amora@gmail.com' || idLower === 'amora')) {
+    const amoraUser: UserProfile = {
+      uid: 'student_amora',
+      displayName: 'Amora Santos',
+      email: 'amora@gmail.com',
+      lrn: '109283741001',
+      role: 'student',
+      grade: 'Grade 11',
+      section: 'STEM-A',
+      password: trimmedPassword,
+      temporaryPassword: trimmedPassword,
+      xp: 350,
+      level: 2,
+      streak: 3,
+      lastActive: new Date().toISOString(),
+      badges: ['first-steps'],
+      mathAbility: 'Proficient'
+    };
+    saveLocalUser(amoraUser);
+    matchedUser = amoraUser;
+  } else if (!matchedUser && idLower === 'bobzkie181992@gmail.com') {
     const adminUser: UserProfile = {
       uid: 'faculty_bobzkie',
-      displayName: 'Prof. Bob',
+      displayName: 'Prof. Bob (Faculty)',
       email: 'bobzkie181992@gmail.com',
       role: 'faculty',
       password: trimmedPassword,
@@ -291,16 +376,57 @@ export async function localSignUp(params: {
 
   const users = getLocalUsers();
   const emailLower = email.trim().toLowerCase();
+  const nameLower = displayName.trim().toLowerCase();
   const trimmedLrn = lrn?.trim();
 
-  // Check uniqueness in local database
-  const exists = users.find(u => 
+  // 1. Check uniqueness in local database
+  const existsLocal = users.find(u => 
     (u.email && u.email.toLowerCase() === emailLower) || 
+    (u.displayName && u.displayName.toLowerCase() === nameLower) ||
     (trimmedLrn && u.lrn && u.lrn === trimmedLrn)
   );
 
-  if (exists) {
-    throw new Error(`An account with email "${email}" or LRN "${trimmedLrn}" already exists. Please sign in instead.`);
+  if (existsLocal) {
+    let duplicateField = "";
+    if (existsLocal.email && existsLocal.email.toLowerCase() === emailLower) {
+      duplicateField = `email "${email}"`;
+    } else if (existsLocal.displayName && existsLocal.displayName.toLowerCase() === nameLower) {
+      duplicateField = `name "${displayName}"`;
+    } else if (trimmedLrn && existsLocal.lrn && existsLocal.lrn === trimmedLrn) {
+      duplicateField = `LRN "${trimmedLrn}"`;
+    }
+    throw new Error(`An account with this ${duplicateField} already exists. Please choose another or sign in.`);
+  }
+
+  // 2. Check uniqueness in Firestore users collection
+  try {
+    const usersRef = collection(db, 'users');
+    const allDocs = await getDocs(usersRef);
+    const firestoreUsers = allDocs.docs.map(d => d.data() as UserProfile);
+
+    const existsInFirestore = firestoreUsers.find(u => 
+      (u.email && u.email.toLowerCase() === emailLower) || 
+      (u.displayName && u.displayName.toLowerCase() === nameLower) ||
+      (trimmedLrn && u.lrn && u.lrn === trimmedLrn)
+    );
+
+    if (existsInFirestore) {
+      let duplicateField = "";
+      if (existsInFirestore.email && existsInFirestore.email.toLowerCase() === emailLower) {
+        duplicateField = `email "${email}"`;
+      } else if (existsInFirestore.displayName && existsInFirestore.displayName.toLowerCase() === nameLower) {
+        duplicateField = `name "${displayName}"`;
+      } else if (trimmedLrn && existsInFirestore.lrn && existsInFirestore.lrn === trimmedLrn) {
+        duplicateField = `LRN "${trimmedLrn}"`;
+      }
+      throw new Error(`An account with this ${duplicateField} already exists. Please choose another or sign in.`);
+    }
+  } catch (err: any) {
+    // If it's the duplicate error we explicitly threw, propagate it!
+    if (err.message && err.message.includes("already exists")) {
+      throw err;
+    }
+    console.warn("Could not query Firestore for duplicates, proceeding with local database checks:", err);
   }
 
   const newUid = 'local_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);

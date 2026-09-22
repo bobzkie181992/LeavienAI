@@ -30,8 +30,11 @@ import {
   SummativeTranscript,
   OutcomeMasteryResult,
   UserProfile,
-  ItemResponse
+  ItemResponse,
+  Problem
 } from '../types';
+
+type SummativeProblem = SummativeAssessment['problems'][0];
 
 interface SummativeAssessmentModalProps {
   assessment: SummativeAssessment;
@@ -57,8 +60,25 @@ export default function SummativeAssessmentModal({
   onSaveResult,
   onAddXP
 }: SummativeAssessmentModalProps) {
+  // Helper to shuffle choices for an individual problem
+  const shuffleProblemChoices = (p: SummativeProblem): SummativeProblem => {
+    const options = p.options || [];
+    const correctAnswer = p.correctAnswer ?? 0;
+    const correctOption = options[correctAnswer];
+    
+    const shuffled = [...options].sort(() => 0.5 - Math.random());
+    const newCorrectAnswer = shuffled.indexOf(correctOption);
+    
+    return {
+      ...p,
+      options: shuffled,
+      correctAnswer: newCorrectAnswer >= 0 ? newCorrectAnswer : correctAnswer
+    };
+  };
+
   // Assessment phases: 'blueprint' (TOS & Outcomes overview) | 'testing' (in progress) | 'transcript' (results & outcome analysis)
   const [phase, setPhase] = useState<'blueprint' | 'testing' | 'transcript'>('blueprint');
+  const [activeProblems, setActiveProblems] = useState<SummativeProblem[]>([]);
   const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
@@ -70,7 +90,7 @@ export default function SummativeAssessmentModal({
   const [activeOutcomeFilter, setActiveOutcomeFilter] = useState<string | 'all'>('all');
   const [transcript, setTranscript] = useState<SummativeTranscript | null>(null);
 
-  // Reset state on open
+  // Reset and randomize problems on open
   useEffect(() => {
     if (isOpen) {
       setPhase('blueprint');
@@ -83,6 +103,12 @@ export default function SummativeAssessmentModal({
       setShowItemReview(false);
       setActiveOutcomeFilter('all');
       setTranscript(null);
+
+      // Randomize question sequence and choice options for anti-cheating
+      const randomized = [...assessment.problems]
+        .sort(() => 0.5 - Math.random())
+        .map(shuffleProblemChoices);
+      setActiveProblems(randomized);
     }
   }, [isOpen, assessment]);
 
@@ -113,12 +139,19 @@ export default function SummativeAssessmentModal({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const problemsList = activeProblems.length > 0 ? activeProblems : assessment.problems;
   const answeredCount = Object.keys(answers).length;
-  const totalQuestions = assessment.problems.length;
+  const totalQuestions = problemsList.length;
   const unansweredCount = totalQuestions - answeredCount;
 
   // Start exam from blueprint
   const handleStartExam = () => {
+    if (activeProblems.length === 0) {
+      const randomized = [...assessment.problems]
+        .sort(() => 0.5 - Math.random())
+        .map(shuffleProblemChoices);
+      setActiveProblems(randomized);
+    }
     setPhase('testing');
     setIsTimerRunning(true);
   };
@@ -171,7 +204,7 @@ export default function SummativeAssessmentModal({
       outcomeScores[ilo.id] = { correct: 0, total: 0, outcome: ilo };
     });
 
-    assessment.problems.forEach((problem, index) => {
+    problemsList.forEach((problem, index) => {
       const selected = answers[index];
       const isCorrect = selected !== undefined && selected === problem.correctAnswer;
       if (isCorrect) rawScore += 1;
@@ -287,7 +320,7 @@ export default function SummativeAssessmentModal({
 
   if (!isOpen) return null;
 
-  const currentProblem = assessment.problems[currentProblemIndex];
+  const currentProblem = problemsList[currentProblemIndex];
   const currentOutcome = assessment.intendedOutcomes.find(
     (o) => o.id === currentProblem?.intendedOutcomeId
   );
@@ -636,7 +669,7 @@ export default function SummativeAssessmentModal({
 
                   {/* Grid of Question Numbers */}
                   <div className="grid grid-cols-5 gap-2 pt-2">
-                    {assessment.problems.map((_, idx) => {
+                    {problemsList.map((_, idx) => {
                       const isAnswered = answers[idx] !== undefined;
                       const isFlag = flagged[idx];
                       const isCurrent = idx === currentProblemIndex;
@@ -929,6 +962,10 @@ export default function SummativeAssessmentModal({
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => {
+                          const randomized = [...assessment.problems]
+                            .sort(() => 0.5 - Math.random())
+                            .map(shuffleProblemChoices);
+                          setActiveProblems(randomized);
                           setPhase('blueprint');
                           setAnswers({});
                           setFlagged({});
@@ -956,7 +993,7 @@ export default function SummativeAssessmentModal({
                         Item Solutions & Outcome Tagging:
                       </h4>
 
-                      {assessment.problems.map((prob, idx) => {
+                      {problemsList.map((prob, idx) => {
                         const userAns = answers[idx];
                         const isCorrect = userAns === prob.correctAnswer;
 

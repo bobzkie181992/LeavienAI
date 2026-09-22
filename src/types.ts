@@ -1,5 +1,73 @@
 export type ItemStatus = 'Draft' | 'For Validation' | 'Validated' | 'Active' | 'Inactive';
 
+export type AssessmentType = 'diagnostic' | 'formative' | 'summative';
+
+export type DiagnosticAssessmentLevel = 
+  | 'Level 1 - Prerequisite / Foundational'
+  | 'Level 2 - Core Concept Baseline'
+  | 'Level 3 - Intermediate Analytical'
+  | 'Level 4 - Advanced Mastery / Challenge';
+
+export type FormativeAssessmentLevel = 
+  | 'Level 1 - Recall & Concept Check'
+  | 'Level 2 - Guided Skill Application'
+  | 'Level 3 - Problem Solving & Remediation'
+  | 'Level 4 - Mastery & Synthesis';
+
+export const DIAGNOSTIC_LEVELS: { id: DiagnosticAssessmentLevel; title: string; description: string; targetGroup: string }[] = [
+  {
+    id: 'Level 1 - Prerequisite / Foundational',
+    title: 'Level 1: Prerequisite / Foundational',
+    description: 'Diagnoses prerequisite knowledge, fundamental algebraic skills, and prior-grade proficiencies.',
+    targetGroup: 'Early Readiness / Remediation Target'
+  },
+  {
+    id: 'Level 2 - Core Concept Baseline',
+    title: 'Level 2: Core Concept Baseline',
+    description: 'Assesses standard entry-level understanding and direct identification of core Grade 11 concepts.',
+    targetGroup: 'Grade-Level Baseline'
+  },
+  {
+    id: 'Level 3 - Intermediate Analytical',
+    title: 'Level 3: Intermediate Analytical',
+    description: 'Evaluates multi-step problem solving, structural analysis, graphing, and computational fluency.',
+    targetGroup: 'Developing & Proficient Learners'
+  },
+  {
+    id: 'Level 4 - Advanced Mastery / Challenge',
+    title: 'Level 4: Advanced Mastery / Challenge',
+    description: 'Diagnoses higher-order critical thinking, abstract mathematical modeling, and conceptual transfer.',
+    targetGroup: 'Advanced / Mastery Candidates'
+  }
+];
+
+export const FORMATIVE_LEVELS: { id: FormativeAssessmentLevel; title: string; description: string; targetGroup: string }[] = [
+  {
+    id: 'Level 1 - Recall & Concept Check',
+    title: 'Level 1: Recall & Concept Check',
+    description: 'Rapid check for immediate understanding after direct lecture or slide introduction.',
+    targetGroup: 'Initial Lesson Priming'
+  },
+  {
+    id: 'Level 2 - Guided Skill Application',
+    title: 'Level 2: Guided Skill Application',
+    description: 'Evaluates procedural execution, formula substitution, and routine exercise proficiency.',
+    targetGroup: 'Active Guided Practice'
+  },
+  {
+    id: 'Level 3 - Problem Solving & Remediation',
+    title: 'Level 3: Problem Solving & Remediation',
+    description: 'Assesses non-routine problem solving, error identification, and targeted remediation checks.',
+    targetGroup: 'Independent Practice & Intervention'
+  },
+  {
+    id: 'Level 4 - Mastery & Synthesis',
+    title: 'Level 4: Mastery & Synthesis',
+    description: 'Evaluates application to real-world contexts, multi-concept synthesis, and mastery demonstration.',
+    targetGroup: 'Topic Mastery & Summative Prep'
+  }
+];
+
 export const isValidatedOrActive = (problem: Problem): boolean => {
   if (!problem.status) return true; // Default legacy items to Active
   return problem.status === 'Validated' || problem.status === 'Active';
@@ -25,6 +93,8 @@ export interface Problem {
   explanation: string;
   remediation: string;
   status?: ItemStatus;
+  assessmentType?: AssessmentType;
+  assessmentLevel?: string;
 }
 
 export interface AIMistakeGuidance {
@@ -255,6 +325,16 @@ export interface DailyScheduleItem {
   date: string;
   lessonTitle: string;
   objective?: string;
+  activityType?: 'Whole Class' | 'Group Work' | 'Pair Work' | 'Individual Work' | string;
+}
+
+export interface PerformanceTask {
+  assigned: boolean;
+  number?: number;
+  title?: string;
+  description?: string;
+  weightPercentage?: number;
+  rubricSummary?: string;
 }
 
 export interface LessonPlan {
@@ -306,6 +386,11 @@ export interface Topic {
   description: string;
   icon: string;
   color: string;
+  term?: string;
+  week?: string;
+  weekNumber?: number;
+  weeklyFocus?: string;
+  performanceTask?: PerformanceTask;
   quizzes: Quiz[];
   lessonPlan?: LessonPlan;
   summativeAssessment?: SummativeAssessment;
@@ -546,6 +631,8 @@ export interface Presentation {
   authorFacultyName?: string;
   originalFileName?: string;
   format?: 'PPTX' | 'PDF' | 'DOCX' | 'INTERACTIVE_DECK';
+  powerpointUrl?: string;
+  embedUrl?: string;
   slides: PresentationSlide[];
   totalSlides: number;
   connectedQuizId?: string;
@@ -587,10 +674,61 @@ export interface DiagnosticQuestion {
   hint1?: string;
   hint2?: string;
   createdAt?: string;
+  assessmentType?: 'diagnostic' | 'formative';
+  assessmentLevel?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  cognitiveLevel?: string;
 }
 
 export interface DiagnosticSettings {
   itemsCount: number;
+}
+
+export type TeacherReportCategory = 
+  | 'student_progress'
+  | 'diagnostic_mastery'
+  | 'remediation_plan'
+  | 'recitation_summary'
+  | 'class_section_summary'
+  | 'at_risk_alert';
+
+export type AcademicQuarter = 'Quarter 1' | 'Quarter 2' | 'Quarter 3' | 'Quarter 4' | 'Midterm' | 'Finals';
+
+export type PerformanceRating = 'Outstanding' | 'Satisfactory' | 'Developing' | 'Needs Remediation' | 'Critical Support';
+
+export interface TeacherReport {
+  id: string;
+  title: string;
+  category: TeacherReportCategory;
+  quarter: AcademicQuarter;
+  targetType: 'student' | 'section';
+  studentUid?: string;
+  studentName?: string;
+  studentLrn?: string;
+  grade: string;
+  section: string;
+  topicId?: string;
+  topicTitle?: string;
+  rating: PerformanceRating;
+  summary: string;
+  strengths: string[];
+  areasForImprovement: string[];
+  actionPlan: string;
+  metricsSnapshot?: {
+    xp?: number;
+    level?: number;
+    streak?: number;
+    oralRecitationPoints?: number;
+    diagnosticScore?: number;
+    diagnosticTotal?: number;
+    diagnosticPercentage?: number;
+    quizzesCompleted?: number;
+    averageAccuracy?: number;
+  };
+  teacherUid: string;
+  teacherName: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 

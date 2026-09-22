@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { auth, db, createStudentAuthAccount, sanitizeForFirestore } from '../lib/firebase';
 import { User } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, query, where, getDocs, orderBy, limit, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { UserProfile, QuizResult, Topic, LearningPathway, Problem, ItemStatus, ItemStats, StudyRequest, VideoLecture, Presentation, PresentationViewRecord, DiagnosticQuestion, DiagnosticSettings } from '../types';
+import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, query, where, getDocs, orderBy, limit, deleteDoc, onSnapshot, writeBatch } from 'firebase/firestore';
+import { UserProfile, QuizResult, Topic, LearningPathway, Problem, ItemStatus, ItemStats, StudyRequest, VideoLecture, Presentation, PresentationViewRecord, DiagnosticQuestion, DiagnosticSettings, TeacherReport } from '../types';
 import { topics as initialTopics } from '../data/curriculum';
 import { initialPresentations } from '../data/presentations';
+import { allDiagnosticQuestions } from '../data/diagnosticQuestions';
 import { 
   getLocalSession, 
   onLocalAuthStateChange, 
@@ -792,26 +793,112 @@ export function useQuizHistory(uid: string | undefined) {
 }
 
 export function useLeaderboard() {
-  const [leaderboard, setLeaderboard] = useState<UserProfile[]>([]);
+  const [leaderboard, setLeaderboard] = useState<UserProfile[]>(() => {
+    // Immediate initial local seed so students see the leaderboard instantly
+    const local = getLocalUsers().filter(u => u.role === 'student' || u.role !== 'faculty');
+    return local.sort((a, b) => (b.xp || 0) - (a.xp || 0));
+  });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
+  const syncLeaderboard = async () => {
+    try {
+      const localUsers = getLocalUsers().filter(u => u.role === 'student' || u.role !== 'faculty');
+      const usersMap = new Map<string, UserProfile>();
+
+      // Populate with local users first
+      for (const u of localUsers) {
+        usersMap.set(u.uid, u);
+      }
+
+      // Check legacy custom students cache
       try {
-        const q = query(collection(db, 'users'), orderBy('xp', 'desc'), limit(10));
+        const cachedRaw = localStorage.getItem('mathquest_custom_students');
+        if (cachedRaw) {
+          const customStudents = JSON.parse(cachedRaw) as UserProfile[];
+          for (const cs of customStudents) {
+            if (cs.role !== 'faculty') {
+              usersMap.set(cs.uid, { ...(usersMap.get(cs.uid) || {}), ...cs });
+            }
+          }
+        }
+      } catch (e) {}
+
+      // Fetch from Firestore
+      try {
+        const q = query(collection(db, 'users'), limit(50));
         const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => doc.data() as UserProfile);
-        setLeaderboard(data);
+        querySnapshot.docs.forEach(doc => {
+          const data = doc.data() as UserProfile;
+          if (data.role !== 'faculty') {
+            const existing = usersMap.get(data.uid);
+            // Keep the one with higher or updated XP
+            if (!existing || (data.xp || 0) >= (existing.xp || 0)) {
+              usersMap.set(data.uid, { ...(existing || {}), ...data });
+            }
+          }
+        });
       } catch (err) {
-        console.error("Error fetching leaderboard:", err);
-      } finally {
+        console.warn("Could not query remote Firestore leaderboard, using local database:", err);
+      }
+
+      const merged = Array.from(usersMap.values()).sort((a, b) => (b.xp || 0) - (a.xp || 0));
+      setLeaderboard(merged);
+    } catch (err) {
+      console.error("Error fetching leaderboard:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    syncLeaderboard();
+
+    // Listen to local changes (e.g. XP gains, quiz completions)
+    const handleLocalAuthChange = () => {
+      syncLeaderboard();
+    };
+    window.addEventListener('mathquest_local_auth_event', handleLocalAuthChange);
+    window.addEventListener('storage', handleLocalAuthChange);
+
+    // Also attempt real-time Firestore subscription
+    let unsubFirestore: (() => void) | undefined;
+    try {
+      const q = query(collection(db, 'users'), limit(50));
+      unsubFirestore = onSnapshot(q, (snapshot) => {
+        const localUsers = getLocalUsers().filter(u => u.role !== 'faculty');
+        const usersMap = new Map<string, UserProfile>();
+        for (const u of localUsers) {
+          usersMap.set(u.uid, u);
+        }
+        snapshot.docs.forEach(doc => {
+          const data = doc.data() as UserProfile;
+          if (data.role !== 'faculty') {
+            const existing = usersMap.get(data.uid);
+            if (!existing || (data.xp || 0) >= (existing.xp || 0)) {
+              usersMap.set(data.uid, { ...(existing || {}), ...data });
+            }
+          }
+        });
+        const merged = Array.from(usersMap.values()).sort((a, b) => (b.xp || 0) - (a.xp || 0));
+        setLeaderboard(merged);
         setLoading(false);
+      }, (err) => {
+        console.warn("Firestore leaderboard snapshot subscription deferred:", err);
+      });
+    } catch (e) {
+      // ignore
+    }
+
+    return () => {
+      window.removeEventListener('mathquest_local_auth_event', handleLocalAuthChange);
+      window.removeEventListener('storage', handleLocalAuthChange);
+      if (unsubFirestore) {
+        unsubFirestore();
       }
     };
-    fetchLeaderboard();
   }, []);
 
-  return { leaderboard, loading };
+  return { leaderboard, loading, refreshLeaderboard: syncLeaderboard };
 }
 
 export function useCurriculum() {
@@ -1736,7 +1823,7 @@ const defaultDiagnosticQuestions: Omit<DiagnosticQuestion, 'id'>[] = [
 ];
 
 export function useDiagnosticExam() {
-  const [questions, setQuestions] = useState<DiagnosticQuestion[]>([]);
+  const [questions, setQuestions] = useState<DiagnosticQuestion[]>(allDiagnosticQuestions);
   const [settings, setSettings] = useState<DiagnosticSettings>({ itemsCount: 10 });
   const [loading, setLoading] = useState(true);
 
@@ -1749,24 +1836,29 @@ export function useDiagnosticExam() {
         qList.push({ id: docSnap.id, ...docSnap.data() } as DiagnosticQuestion);
       });
 
-      // If the pool is completely empty, auto-seed with the curated baseline set
+      // If the pool is completely empty, auto-seed with the complete 200 question bank (50 per level)
       if (qList.length === 0 && snapshot.metadata.fromCache === false) {
         setLoading(true);
         try {
-          for (const dq of defaultDiagnosticQuestions) {
-            const docRef = doc(collection(db, 'diagnostic_questions'));
-            await setDoc(docRef, sanitizeForFirestore({ ...dq, id: docRef.id }));
+          const batch = writeBatch(db);
+          for (const dq of allDiagnosticQuestions) {
+            const docRef = doc(db, 'diagnostic_questions', dq.id);
+            batch.set(docRef, sanitizeForFirestore({ ...dq, id: dq.id }), { merge: true });
           }
+          await batch.commit();
         } catch (err) {
           console.error("Error auto-seeding diagnostic questions:", err);
+          setQuestions(allDiagnosticQuestions);
+          setLoading(false);
         }
       } else {
-        setQuestions(qList);
+        // If Firestore has questions, use them, otherwise use the complete 200-question curriculum set
+        setQuestions(qList.length > 0 ? qList : allDiagnosticQuestions);
         setLoading(false);
       }
     }, (err) => {
       console.error("Error loading diagnostic questions:", err);
-      setQuestions([]);
+      setQuestions(allDiagnosticQuestions);
       setLoading(false);
     });
 
@@ -1831,14 +1923,152 @@ export function useDiagnosticExam() {
     }
   };
 
+  // 6. Seed/Sync All 200 Diagnostic Questions (50 per level from Level 1 to Level 4)
+  const seedAllCurriculumDiagnosticQuestions = async (forceOverwrite: boolean = false): Promise<boolean> => {
+    try {
+      setLoading(true);
+      const batch = writeBatch(db);
+      for (const dq of allDiagnosticQuestions) {
+        const docRef = doc(db, 'diagnostic_questions', dq.id);
+        batch.set(docRef, sanitizeForFirestore({ ...dq, id: dq.id }), { merge: !forceOverwrite });
+      }
+      await batch.commit();
+      setQuestions(allDiagnosticQuestions);
+      setLoading(false);
+      return true;
+    } catch (err) {
+      console.error("Error batch seeding 200 diagnostic questions:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'diagnostic_questions');
+      setLoading(false);
+      return false;
+    }
+  };
+
   return {
     questions,
     settings,
     loading,
     saveQuestion,
     deleteQuestion,
-    saveSettings
+    saveSettings,
+    seedAllCurriculumDiagnosticQuestions
   };
+}
+
+export function useTeacherReports() {
+  const [reports, setReports] = useState<TeacherReport[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 1. Initial local cache
+    try {
+      const cached = localStorage.getItem('mathquest_teacher_reports');
+      if (cached) {
+        setReports(JSON.parse(cached));
+      }
+    } catch (e) {}
+
+    // 2. Firestore query
+    const q = query(collection(db, 'teacher_reports'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: TeacherReport[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ id: docSnap.id, ...docSnap.data() } as TeacherReport);
+      });
+      setReports(list);
+      try {
+        localStorage.setItem('mathquest_teacher_reports', JSON.stringify(list));
+      } catch (e) {}
+      setLoading(false);
+    }, (err) => {
+      console.warn("Error fetching teacher reports, using local storage cache:", err);
+      try {
+        const cached = localStorage.getItem('mathquest_teacher_reports');
+        if (cached) {
+          setReports(JSON.parse(cached));
+        }
+      } catch (e) {}
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const saveReport = async (reportData: Omit<TeacherReport, 'id' | 'createdAt'> & { id?: string; createdAt?: string }) => {
+    try {
+      const isNew = !reportData.id;
+      const docRef = isNew 
+        ? doc(collection(db, 'teacher_reports'))
+        : doc(db, 'teacher_reports', reportData.id!);
+
+      const payload: TeacherReport = {
+        ...reportData,
+        id: docRef.id,
+        createdAt: reportData.createdAt || new Date().toISOString(),
+        updatedAt: isNew ? undefined : new Date().toISOString()
+      };
+
+      const sanitized = sanitizeForFirestore(payload);
+      await setDoc(docRef, sanitized, { merge: true });
+
+      // Update local state immediately
+      setReports(prev => {
+        const index = prev.findIndex(r => r.id === docRef.id);
+        const next = [...prev];
+        if (index >= 0) {
+          next[index] = payload;
+        } else {
+          next.unshift(payload);
+        }
+        try {
+          localStorage.setItem('mathquest_teacher_reports', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+
+      return payload;
+    } catch (err) {
+      console.warn("Remote report save failed, saving to local state:", err);
+      const fallbackId = reportData.id || 'report_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      const fallbackPayload: TeacherReport = {
+        ...reportData,
+        id: fallbackId,
+        createdAt: reportData.createdAt || new Date().toISOString(),
+        updatedAt: reportData.id ? new Date().toISOString() : undefined
+      };
+      setReports(prev => {
+        const index = prev.findIndex(r => r.id === fallbackId);
+        const next = [...prev];
+        if (index >= 0) {
+          next[index] = fallbackPayload;
+        } else {
+          next.unshift(fallbackPayload);
+        }
+        try {
+          localStorage.setItem('mathquest_teacher_reports', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+      return fallbackPayload;
+    }
+  };
+
+  const deleteReport = async (reportId: string) => {
+    try {
+      await deleteDoc(doc(db, 'teacher_reports', reportId));
+    } catch (err) {
+      console.warn("Remote report delete note:", err);
+    }
+    setReports(prev => {
+      const next = prev.filter(r => r.id !== reportId);
+      try {
+        localStorage.setItem('mathquest_teacher_reports', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  return { reports, loading, saveReport, deleteReport };
 }
 
 

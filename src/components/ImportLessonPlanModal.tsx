@@ -605,7 +605,7 @@ export default function ImportLessonPlanModal({ existingTopics, onImportSuccess,
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className="bg-white rounded-[32px] p-6 sm:p-8 w-full max-w-4xl shadow-2xl relative border border-slate-100 max-h-[92vh] overflow-y-auto"
+        className="bg-white rounded-[32px] p-6 sm:p-8 w-full max-w-4xl shadow-2xl relative border border-slate-100 max-h-[92vh] overflow-y-auto custom-scrollbar"
       >
         <button
           onClick={onClose}

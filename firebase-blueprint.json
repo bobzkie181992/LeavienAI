@@ -210,9 +210,43 @@
         "itemsCount": { "type": "number", "description": "The target number of items presented on the diagnostic test" }
       },
       "required": ["itemsCount"]
+    },
+    "TeacherReport": {
+      "title": "Teacher Progress & Academic Evaluation Report",
+      "description": "Reports created by teachers evaluating individual student progress, remediation plans, diagnostic outcomes, or class section performance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "quarter": { "type": "string" },
+        "targetType": { "type": "string" },
+        "studentUid": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentLrn": { "type": "string" },
+        "grade": { "type": "string" },
+        "section": { "type": "string" },
+        "topicId": { "type": "string" },
+        "topicTitle": { "type": "string" },
+        "rating": { "type": "string" },
+        "summary": { "type": "string" },
+        "strengths": { "type": "array" },
+        "areasForImprovement": { "type": "array" },
+        "actionPlan": { "type": "string" },
+        "metricsSnapshot": { "type": "object" },
+        "teacherUid": { "type": "string" },
+        "teacherName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "category", "quarter", "targetType", "grade", "section", "rating", "summary", "teacherUid", "teacherName", "createdAt"]
     }
   },
   "firestore": {
+    "/teacher_reports/{reportId}": {
+      "schema": "TeacherReport",
+      "description": "Progress, diagnostic, remediation, and section evaluation reports created by faculty"
+    },
     "/diagnostic_questions/{questionId}": {
       "schema": "DiagnosticQuestion",
       "description": "Curated diagnostic question item pool"

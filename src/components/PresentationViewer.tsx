@@ -24,7 +24,14 @@ import {
   GraduationCap,
   Activity,
   Check,
-  Brain
+  Brain,
+  Edit2,
+  Trash2,
+  PenTool,
+  Radio,
+  ExternalLink,
+  Presentation as PresentationIcon,
+  Monitor
 } from 'lucide-react';
 import { Presentation, PresentationSlide, UserProfile } from '../types';
 
@@ -57,7 +64,18 @@ export default function PresentationViewer({
   const [showAssessmentSuggestion, setShowAssessmentSuggestion] = useState(false);
   const [hasCompletedPresentation, setHasCompletedPresentation] = useState(false);
 
+  // PowerPoint & Presenter Tools State
+  const [viewMode, setViewMode] = useState<'interactive' | 'powerpoint'>(
+    presentation.embedUrl || presentation.powerpointUrl ? 'powerpoint' : 'interactive'
+  );
+  const [isLaserActive, setIsLaserActive] = useState(false);
+  const [laserPos, setLaserPos] = useState({ x: 0, y: 0 });
+  const [isPenActive, setIsPenActive] = useState(false);
+  const [penColor, setPenColor] = useState('#ef4444');
+  const [isDrawing, setIsDrawing] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const slideCanvasRef = useRef<HTMLCanvasElement>(null);
   const synthRef = useRef<SpeechSynthesis | null>(typeof window !== 'undefined' ? window.speechSynthesis : null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
@@ -66,12 +84,22 @@ export default function PresentationViewer({
   const totalSlides = slides.length;
   const progressPercent = totalSlides > 0 ? Math.round(((currentSlideIndex + 1) / totalSlides) * 100) : 0;
 
+  // Clear pen canvas on slide change
+  const clearPenCanvas = () => {
+    const canvas = slideCanvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
   // Track slide completion
   useEffect(() => {
     setCompletedSlides(prev => new Set([...prev, currentSlideIndex]));
     setRevealedSteps([]);
     setSelectedQuickAnswer(null);
     setShowQuickCheckFeedback(false);
+    clearPenCanvas();
 
     // Stop ongoing speech on slide change
     if (synthRef.current && synthRef.current.speaking) {
@@ -79,6 +107,45 @@ export default function PresentationViewer({
       setIsSpeaking(false);
     }
   }, [currentSlideIndex]);
+
+  // Laser Mouse Tracker
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isLaserActive || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setLaserPos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+  };
+
+  // Pen Drawing Handlers
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isPenActive || !slideCanvasRef.current) return;
+    setIsDrawing(true);
+    const canvas = slideCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    ctx.beginPath();
+    ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !isPenActive || !slideCanvasRef.current) return;
+    const canvas = slideCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    ctx.strokeStyle = penColor;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
 
   // Speech Narration Handler
   const toggleSpeech = () => {
@@ -208,6 +275,10 @@ export default function PresentationViewer({
               <span className="text-xs text-slate-400 font-medium">
                 {presentation.grade} • {presentation.section}
               </span>
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-extrabold animate-pulse">
+                <Radio className="w-3 h-3 text-rose-400" />
+                Live Presentation Mode
+              </span>
             </div>
             <h2 className="text-sm font-bold text-white truncate max-w-md">
               {presentation.title}
@@ -215,13 +286,37 @@ export default function PresentationViewer({
           </div>
         </div>
 
-        {/* Center Progress Tracker */}
+        {/* Center View Mode Switcher & Progress Tracker */}
         <div className="hidden md:flex items-center gap-4">
+          {/* PowerPoint View vs Interactive Deck Switcher */}
+          {(presentation.embedUrl || presentation.powerpointUrl || presentation.format === 'PPTX') && (
+            <div className="flex bg-slate-800 p-1 rounded-xl text-xs font-bold">
+              <button
+                onClick={() => setViewMode('interactive')}
+                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                  viewMode === 'interactive' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <PresentationIcon className="w-3.5 h-3.5" />
+                <span>Interactive Deck</span>
+              </button>
+              <button
+                onClick={() => setViewMode('powerpoint')}
+                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                  viewMode === 'powerpoint' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                <span>PowerPoint (.PPTX)</span>
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-300">
               Slide {currentSlideIndex + 1} of {totalSlides}
             </span>
-            <div className="w-36 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+            <div className="w-32 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
               <div 
                 className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300 rounded-full"
                 style={{ width: `${progressPercent}%` }}
@@ -235,6 +330,60 @@ export default function PresentationViewer({
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-2">
+          {/* Laser Pointer Tool */}
+          <button
+            onClick={() => {
+              setIsLaserActive(!isLaserActive);
+              if (isPenActive) setIsPenActive(false);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              isLaserActive 
+                ? 'bg-rose-600 text-white ring-2 ring-rose-400 shadow-lg shadow-rose-600/50' 
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+            }`}
+            title="Toggle Laser Pointer"
+          >
+            <div className={`w-2.5 h-2.5 rounded-full ${isLaserActive ? 'bg-white animate-ping' : 'bg-rose-500'}`} />
+            <span className="hidden lg:inline">Laser Pointer</span>
+          </button>
+
+          {/* Pen Drawing Tool */}
+          <button
+            onClick={() => {
+              setIsPenActive(!isPenActive);
+              if (isLaserActive) setIsLaserActive(false);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              isPenActive 
+                ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/30' 
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+            }`}
+            title="Toggle Drawing Pen"
+          >
+            <PenTool className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">Pen Draw</span>
+          </button>
+
+          {isPenActive && (
+            <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-xl">
+              {['#ef4444', '#f59e0b', '#10b981', '#3b82f6'].map(color => (
+                <button
+                  key={color}
+                  onClick={() => setPenColor(color)}
+                  className={`w-4 h-4 rounded-full transition-transform ${penColor === color ? 'scale-125 ring-2 ring-white' : 'opacity-70 hover:opacity-100'}`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+              <button
+                onClick={clearPenCanvas}
+                className="ml-1 text-[10px] font-bold text-slate-400 hover:text-rose-400 px-1.5 py-0.5 rounded"
+                title="Clear Drawing"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
           {/* Lecture Audio Read Aloud */}
           <button
             onClick={toggleSpeech}
@@ -287,8 +436,95 @@ export default function PresentationViewer({
       </header>
 
       {/* Main Presentation Stage */}
-      <div className="flex-1 relative flex items-center justify-center p-4 md:p-8 overflow-y-auto">
-        <AnimatePresence mode="wait">
+      <div 
+        className="flex-1 relative flex items-center justify-center p-4 md:p-8 overflow-y-auto"
+        onMouseMove={handleMouseMove}
+      >
+        {/* Laser Pointer Red Glow Follower */}
+        {isLaserActive && (
+          <div 
+            className="fixed pointer-events-none z-50 transform -translate-x-1/2 -translate-y-1/2 transition-transform duration-75"
+            style={{ left: `${laserPos.x}px`, top: `${laserPos.y}px` }}
+          >
+            <div className="w-6 h-6 rounded-full bg-rose-500/40 animate-ping absolute inset-0" />
+            <div className="w-4 h-4 rounded-full bg-rose-600 border-2 border-white shadow-[0_0_15px_#ef4444]" />
+          </div>
+        )}
+
+        {/* Pen Canvas Overlay */}
+        <canvas
+          ref={slideCanvasRef}
+          width={1024}
+          height={600}
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          className={`absolute inset-0 m-auto z-40 max-w-5xl h-auto pointer-events-auto rounded-3xl ${
+            isPenActive ? 'cursor-crosshair border-2 border-amber-400/50' : 'pointer-events-none'
+          }`}
+        />
+
+        {/* NATIVE POWERPOINT EMBED MODE */}
+        {viewMode === 'powerpoint' ? (
+          <div className="w-full max-w-5xl h-[580px] bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between">
+            <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Monitor className="w-5 h-5 text-indigo-400" />
+                <span className="text-sm font-bold text-white">PowerPoint (.PPTX) Native Reader & Viewer</span>
+                <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-mono">
+                  {presentation.originalFileName || `${presentation.title}.pptx`}
+                </span>
+              </div>
+              {presentation.powerpointUrl && (
+                <a 
+                  href={presentation.powerpointUrl} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open in Office 365
+                </a>
+              )}
+            </div>
+
+            <div className="flex-1 bg-slate-950 flex items-center justify-center p-2 relative">
+              {presentation.embedUrl ? (
+                <iframe 
+                  src={presentation.embedUrl}
+                  className="w-full h-full rounded-2xl border-none"
+                  title="PowerPoint Presentation Embed"
+                  allowFullScreen
+                />
+              ) : presentation.powerpointUrl ? (
+                <iframe 
+                  src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(presentation.powerpointUrl)}`}
+                  className="w-full h-full rounded-2xl border-none"
+                  title="Office Web Viewer"
+                  allowFullScreen
+                />
+              ) : (
+                <div className="text-center p-8 max-w-lg">
+                  <div className="w-16 h-16 rounded-3xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto mb-4">
+                    <Monitor className="w-8 h-8" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white mb-2">PowerPoint Slide Deck Synchronized</h3>
+                  <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+                    This PowerPoint deck (<span className="text-white font-medium">{presentation.originalFileName || presentation.title}</span>) has been converted into interactive, audio-narrated STEM slides for live student presentation!
+                  </p>
+                  <button
+                    onClick={() => setViewMode('interactive')}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-lg"
+                  >
+                    View Formatted Slide Deck ({totalSlides} Slides)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
           {currentSlide && (
             <motion.div
               key={currentSlide.id || currentSlideIndex}
@@ -578,6 +814,7 @@ export default function PresentationViewer({
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </div>
 
       {/* Teacher Speaker Notes Drawer */}

@@ -55,6 +55,7 @@ import LevelProgressionModal from '../components/LevelProgressionModal';
 import AvatarCustomizerModal from '../components/AvatarCustomizerModal';
 import LevelUpCelebrationModal from '../components/LevelUpCelebrationModal';
 import SummativeAssessmentModal from '../components/SummativeAssessmentModal';
+import WeeklyStudySummary from '../components/WeeklyStudySummary';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { usePeers } from '../hooks/useFirebase';
 import { usePeerChat } from '../hooks/usePeerChat';
@@ -647,6 +648,12 @@ export default function StudentModule({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
+              <WeeklyStudySummary
+                topics={topics}
+                results={results}
+                profile={profile}
+                onSelectTopic={setSelectedTopic}
+              />
               <Dashboard 
                 topics={topics}
                 profile={profile}

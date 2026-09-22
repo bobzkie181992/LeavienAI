@@ -319,7 +319,7 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
         )}
 
         {/* Modal Content Body */}
-        <div className="p-6 sm:p-8 overflow-y-auto space-y-8 flex-1 print:overflow-visible print:p-0">
+        <div className="p-6 sm:p-8 overflow-y-auto space-y-8 flex-1 print:overflow-visible print:p-0 custom-scrollbar">
           {isEditing ? (
             <form onSubmit={handleSave} className="space-y-6">
               <div className="flex items-center justify-between bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
@@ -502,20 +502,25 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
                           {/* Lesson Title Row */}
                           <tr className="border-b-2 border-slate-900">
                             <td className="p-3 border-r-2 border-slate-900 font-bold italic bg-slate-50 text-slate-900 align-top">
-                              Lesson Title
+                              Lesson Title & Activity Mode
                             </td>
                             {(plan.weeklySchedule && plan.weeklySchedule.length === 5 
                               ? plan.weeklySchedule 
                               : [
-                                  { day: 'MONDAY', date: 'Aug. 10, 2026', lessonTitle: `Understanding ${topic.title} & Core Definitions` },
-                                  { day: 'TUESDAY', date: 'Aug. 11, 2026', lessonTitle: `Key Properties, Formulas & Graphical Representations` },
-                                  { day: 'WEDNESDAY', date: 'Aug. 12, 2026', lessonTitle: `Step-by-Step Problem Solving & Calculations` },
-                                  { day: 'THURSDAY', date: 'Aug. 13, 2026', lessonTitle: `Collaborative Application & Contextual Modeling` },
-                                  { day: 'FRIDAY', date: 'Aug. 14, 2026', lessonTitle: `Real-Life Word Problems & Formative Assessment` }
+                                  { day: 'MONDAY', date: 'Aug. 10, 2026', lessonTitle: `Understanding ${topic.title} & Core Definitions`, activityType: 'Whole Class' },
+                                  { day: 'TUESDAY', date: 'Aug. 11, 2026', lessonTitle: `Key Properties, Formulas & Graphical Representations`, activityType: 'Group Work' },
+                                  { day: 'WEDNESDAY', date: 'Aug. 12, 2026', lessonTitle: `Step-by-Step Problem Solving & Calculations`, activityType: 'Pair Work' },
+                                  { day: 'THURSDAY', date: 'Aug. 13, 2026', lessonTitle: `Collaborative Application & Contextual Modeling`, activityType: 'Whole Class' },
+                                  { day: 'FRIDAY', date: 'Aug. 14, 2026', lessonTitle: `Real-Life Word Problems & Formative Assessment`, activityType: 'Individual Work' }
                                 ]
                             ).map((item, idx) => (
                               <td key={idx} className="p-3 border-r border-slate-900 last:border-r-0 align-top font-medium text-slate-900 leading-relaxed">
-                                {item.lessonTitle}
+                                <div>{item.lessonTitle}</div>
+                                {item.activityType && (
+                                  <div className="mt-2 text-[10px] font-bold text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200/60 inline-block font-sans">
+                                    {item.activityType}
+                                  </div>
+                                )}
                               </td>
                             ))}
                           </tr>

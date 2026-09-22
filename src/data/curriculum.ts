@@ -8,6 +8,17 @@ export const topics: Topic[] = [
     description: 'Master the building blocks of algebra: mapping inputs to outputs.',
     icon: 'Activity',
     color: 'blue',
+    term: 'Term 1',
+    week: 'Week 1',
+    weekNumber: 1,
+    weeklyFocus: 'Master relations, functions, piecewise evaluation, and composite functions in Grade 11 General Mathematics.',
+    performanceTask: {
+      assigned: true,
+      number: 1,
+      title: 'Function Mapping Portfolio',
+      description: 'Document real-world functional relationships in everyday scenarios.',
+      weightPercentage: 20
+    },
     summativeAssessment: SUMMATIVE_ASSESSMENTS.find(a => a.id === 'summative-functions'),
     lessonPlan: {
       id: 'lp-functions',
@@ -22,11 +33,11 @@ export const topics: Topic[] = [
       section: 'Grade 11 – Gauss (6:00 AM – 7:00 AM)',
       doOrderRef: 'As per D.O. No. 016, s.2026',
       weeklySchedule: [
-        { day: 'MONDAY', date: 'Aug. 10, 2026', lessonTitle: 'Understanding Relations, Functions, and Vertical Line Test' },
-        { day: 'TUESDAY', date: 'Aug. 11, 2026', lessonTitle: 'Evaluating Functions and Piecewise Defined Functions' },
-        { day: 'WEDNESDAY', date: 'Aug. 12, 2026', lessonTitle: 'Performing Operations on Functions (Addition, Subtraction, Multiplication)' },
-        { day: 'THURSDAY', date: 'Aug. 13, 2026', lessonTitle: 'Composition of Functions (f ∘ g)(x) and Inverse Concepts' },
-        { day: 'FRIDAY', date: 'Aug. 14, 2026', lessonTitle: 'Real-Life Problems Involving Functions, Piecewise Rates, and Assessment' }
+        { day: 'MONDAY', date: 'Aug. 10, 2026', lessonTitle: 'Understanding Relations, Functions, and Vertical Line Test', activityType: 'Whole Class' },
+        { day: 'TUESDAY', date: 'Aug. 11, 2026', lessonTitle: 'Evaluating Functions and Piecewise Defined Functions', activityType: 'Group Work' },
+        { day: 'WEDNESDAY', date: 'Aug. 12, 2026', lessonTitle: 'Performing Operations on Functions (Addition, Subtraction, Multiplication)', activityType: 'Pair Work' },
+        { day: 'THURSDAY', date: 'Aug. 13, 2026', lessonTitle: 'Composition of Functions (f ∘ g)(x) and Inverse Concepts', activityType: 'Whole Class' },
+        { day: 'FRIDAY', date: 'Aug. 14, 2026', lessonTitle: 'Real-Life Problems Involving Functions, Piecewise Rates, and Assessment', activityType: 'Individual Work' }
       ],
       references: [
         'DepEd SSHS General Mathematics – Budget of Work (BoW)',
@@ -593,6 +604,13 @@ export const topics: Topic[] = [
     description: 'Growth, decay, and the power of logarithms.',
     icon: 'TrendingUp',
     color: 'orange',
+    term: 'Term 1',
+    week: 'Week 2',
+    weekNumber: 2,
+    weeklyFocus: 'Master exponential equations, logarithmic laws, and real-world growth & decay models.',
+    performanceTask: {
+      assigned: false
+    },
     summativeAssessment: SUMMATIVE_ASSESSMENTS.find(a => a.id === 'summative-exp-log'),
     quizzes: [
       {
@@ -700,6 +718,437 @@ export const topics: Topic[] = [
         ]
       }
     ]
+  },
+  /* ================= TERM 2 CURRICULUM (8 WEEKS, 5 PERFORMANCE TASKS) ================= */
+  {
+    id: 'term2-w1-piecewise',
+    title: 'Piecewise Functions',
+    description: 'Illustrate piecewise functions in practical contexts (fare rates, purchasing, income tax) and solve practical problems.',
+    icon: 'Activity',
+    color: 'orange',
+    term: 'Term 2',
+    week: 'Week 1',
+    weekNumber: 1,
+    weeklyFocus: 'Illustrate a piecewise function in practical contexts (fare rates, purchasing, income tax); solve practical problems involving piecewise functions.',
+    performanceTask: {
+      assigned: true,
+      number: 1,
+      title: 'Piecewise Functions Real-World Modeling Project',
+      description: 'Formulate and evaluate real-world piecewise functions based on jeepney fare matrices, electricity billing tiers, or progressive income tax schedules.',
+      weightPercentage: 20
+    },
+    quizzes: [],
+    lessonPlan: {
+      id: 'lp-term2-w1',
+      topicId: 'term2-w1-piecewise',
+      title: 'Week 1 Lesson Plan — Piecewise Functions',
+      gradeLevel: 'Grade 11 - General Mathematics',
+      duration: '60 minutes / day',
+      subject: 'General Mathematics',
+      term: 'Term 2',
+      week: 'Week 1',
+      weeklySchedule: [
+        { day: 'MONDAY', date: 'Oct. 12, 2026', lessonTitle: 'Introduction to Piecewise Functions', activityType: 'Whole Class', objective: 'Define piecewise functions and identify domain intervals.' },
+        { day: 'TUESDAY', date: 'Oct. 13, 2026', lessonTitle: 'Piecewise Functions in Fare Rates', activityType: 'Group Work', objective: 'Model transportation fare matrices as piecewise linear equations.' },
+        { day: 'WEDNESDAY', date: 'Oct. 14, 2026', lessonTitle: 'Piecewise Functions in Purchasing', activityType: 'Pair Work', objective: 'Calculate bulk pricing discounts using piecewise step functions.' },
+        { day: 'THURSDAY', date: 'Oct. 15, 2026', lessonTitle: 'Piecewise Functions in Income Tax Computation', activityType: 'Whole Class', objective: 'Evaluate progressive tax brackets using domain constraints.' },
+        { day: 'FRIDAY', date: 'Oct. 16, 2026', lessonTitle: 'Word Problems Involving Piecewise Functions', activityType: 'Individual Work', objective: 'Solve contextual word problems and complete Performance Task 1.' }
+      ],
+      prerequisites: ['Linear Functions', 'Cartesian Coordinates'],
+      learningCompetencies: ['M11GM-Ia-1: Represents real-life situations using functions, including piece-wise functions.'],
+      objectives: {
+        cognitive: 'Formulate piecewise function equations from practical context statements.',
+        psychomotor: 'Plot piecewise functions on Cartesian graphs accurately.',
+        affective: 'Appreciate how mathematical models govern utility rates and taxation.'
+      },
+      materialsNeeded: ['Graphing paper', 'Fare rate matrices', 'Calculators'],
+      keyConcepts: [{ term: 'Piecewise Function', definition: 'A function defined by multiple sub-functions over specific intervals.' }],
+      workedExamples: [],
+      procedures: [],
+      differentiation: { remediation: 'Interval substitution worksheets.', enrichment: 'Multi-step electric bill modeling.' },
+      assessmentPlan: 'Performance Task 1 submission and 5-item Friday formative check.'
+    }
+  },
+  {
+    id: 'term2-w2-statistics',
+    title: 'Statistics: Data, Central Tendency & Variability',
+    description: 'Grouped and ungrouped data analysis, measures of central tendency, range, variance, and standard deviation.',
+    icon: 'TrendingUp',
+    color: 'emerald',
+    term: 'Term 2',
+    week: 'Week 2',
+    weekNumber: 2,
+    weeklyFocus: 'Calculate and interpret mean, median, mode, and measures of variability for grouped and ungrouped statistical data sets.',
+    performanceTask: {
+      assigned: true,
+      number: 2,
+      title: 'Statistical Survey & Data Analysis Report',
+      description: 'Collect real class survey data, compute measures of central tendency & variance, and draw statistical conclusions.',
+      weightPercentage: 20
+    },
+    quizzes: [],
+    lessonPlan: {
+      id: 'lp-term2-w2',
+      topicId: 'term2-w2-statistics',
+      title: 'Week 2 Lesson Plan — Statistics & Central Tendency',
+      gradeLevel: 'Grade 11 - Statistics & Probability',
+      duration: '60 minutes / day',
+      subject: 'Statistics & Probability',
+      term: 'Term 2',
+      week: 'Week 2',
+      weeklySchedule: [
+        { day: 'MONDAY', date: 'Oct. 19, 2026', lessonTitle: 'Introduction to Central Tendency & Data Types', activityType: 'Whole Class' },
+        { day: 'TUESDAY', date: 'Oct. 20, 2026', lessonTitle: 'Calculating Mean, Median, and Mode for Grouped Data', activityType: 'Group Work' },
+        { day: 'WEDNESDAY', date: 'Oct. 21, 2026', lessonTitle: 'Measures of Variability & Range Computation', activityType: 'Pair Work' },
+        { day: 'THURSDAY', date: 'Oct. 22, 2026', lessonTitle: 'Variance & Standard Deviation in Sample Sets', activityType: 'Whole Class' },
+        { day: 'FRIDAY', date: 'Oct. 23, 2026', lessonTitle: 'Statistical Interpretation & Survey Data Presentation', activityType: 'Individual Work' }
+      ],
+      prerequisites: ['Frequency Distribution Tables', 'Basic Arithmetic'],
+      learningCompetencies: ['M11/12SP-IIIa-1: Computes mean, variance, and standard deviation.'],
+      objectives: {
+        cognitive: 'Differentiate between measures of central tendency and dispersion.',
+        psychomotor: 'Calculate variance and standard deviation accurately.',
+        affective: 'Value data-driven decision making.'
+      },
+      materialsNeeded: ['Scientific calculators', 'Sample survey datasets'],
+      keyConcepts: [{ term: 'Standard Deviation', definition: 'A measure of the amount of variation or dispersion of a set of values.' }],
+      workedExamples: [],
+      procedures: [],
+      differentiation: { remediation: 'Guided variance calculation templates.', enrichment: 'Interquartile range analysis.' },
+      assessmentPlan: 'Performance Task 2 presentation.'
+    }
+  },
+  {
+    id: 'term2-w3-trig-right',
+    title: 'Trigonometry: Right Triangles',
+    description: 'SOH-CAH-TOA, trigonometric ratios, angles of elevation and depression, and right triangle problem solving.',
+    icon: 'Triangle',
+    color: 'orange',
+    term: 'Term 2',
+    week: 'Week 3',
+    weekNumber: 3,
+    weeklyFocus: 'Apply trigonometric ratios (sine, cosine, tangent) to solve right triangle problems involving angles of elevation and depression.',
+    performanceTask: {
+      assigned: false
+    },
+    quizzes: [],
+    lessonPlan: {
+      id: 'lp-term2-w3',
+      topicId: 'term2-w3-trig-right',
+      title: 'Week 3 Lesson Plan — Trigonometry: Right Triangles',
+      gradeLevel: 'Grade 11 - General Mathematics',
+      duration: '60 minutes / day',
+      subject: 'General Mathematics',
+      term: 'Term 2',
+      week: 'Week 3',
+      weeklySchedule: [
+        { day: 'MONDAY', date: 'Oct. 26, 2026', lessonTitle: 'Primary Trigonometric Ratios (Sine, Cosine, Tangent)', activityType: 'Whole Class' },
+        { day: 'TUESDAY', date: 'Oct. 27, 2026', lessonTitle: 'Solving Right Triangles with SOH-CAH-TOA', activityType: 'Pair Work' },
+        { day: 'WEDNESDAY', date: 'Oct. 28, 2026', lessonTitle: 'Angles of Elevation and Depression', activityType: 'Group Work' },
+        { day: 'THURSDAY', date: 'Oct. 29, 2026', lessonTitle: 'Practical Applications of Right Triangles', activityType: 'Whole Class' },
+        { day: 'FRIDAY', date: 'Oct. 30, 2026', lessonTitle: 'Formative Right Triangle Drill & Problem Solving', activityType: 'Individual Work' }
+      ],
+      prerequisites: ['Pythagorean Theorem', 'Angle Measurement'],
+      learningCompetencies: ['M9GE-IVe-1: Illustrates angles of elevation and angles of depression.'],
+      objectives: {
+        cognitive: 'Identify opposite, adjacent, and hypotenuse sides correctly.',
+        psychomotor: 'Solve right triangle side lengths using trigonometric ratios.',
+        affective: 'Recognize trigonometric applications in architecture and surveying.'
+      },
+      materialsNeeded: ['Clinometer', 'Scientific calculators'],
+      keyConcepts: [{ term: 'SOH-CAH-TOA', definition: 'Mnemonic for sine = opp/hyp, cosine = adj/hyp, tangent = opp/adj.' }],
+      workedExamples: [],
+      procedures: [],
+      differentiation: { remediation: 'Color-coded triangle labeling practice.', enrichment: 'Clinometer height measurement exercise.' },
+      assessmentPlan: 'Formative right triangle quiz.'
+    }
+  },
+  {
+    id: 'term2-w4-trig-oblique',
+    title: 'Trigonometry: Oblique Triangles',
+    description: 'Law of Sines, Law of Cosines, ambiguous cases, and non-right triangle applications.',
+    icon: 'Triangle',
+    color: 'emerald',
+    term: 'Term 2',
+    week: 'Week 4',
+    weekNumber: 4,
+    weeklyFocus: 'Solve non-right (oblique) triangles using the Law of Sines and Law of Cosines in real-life navigation and engineering contexts.',
+    performanceTask: {
+      assigned: true,
+      number: 3,
+      title: 'Land Surveying & Triangulation Project',
+      description: 'Apply Law of Sines and Cosines to solve a multi-point topographical triangulation problem for land area calculation.',
+      weightPercentage: 20
+    },
+    quizzes: [],
+    lessonPlan: {
+      id: 'lp-term2-w4',
+      topicId: 'term2-w4-trig-oblique',
+      title: 'Week 4 Lesson Plan — Oblique Triangles',
+      gradeLevel: 'Grade 11 - General Mathematics',
+      duration: '60 minutes / day',
+      subject: 'General Mathematics',
+      term: 'Term 2',
+      week: 'Week 4',
+      weeklySchedule: [
+        { day: 'MONDAY', date: 'Nov. 02, 2026', lessonTitle: 'Introduction to Oblique Triangles & SSA / SAS Cases', activityType: 'Whole Class' },
+        { day: 'TUESDAY', date: 'Nov. 03, 2026', lessonTitle: 'Law of Sines and Practical Applications', activityType: 'Group Work' },
+        { day: 'WEDNESDAY', date: 'Nov. 04, 2026', lessonTitle: 'Law of Cosines and Applications', activityType: 'Pair Work' },
+        { day: 'THURSDAY', date: 'Nov. 05, 2026', lessonTitle: 'The Ambiguous Case (SSA) in Law of Sines', activityType: 'Whole Class' },
+        { day: 'FRIDAY', date: 'Nov. 06, 2026', lessonTitle: 'Oblique Triangle Real-World Problem Solving', activityType: 'Individual Work' }
+      ],
+      prerequisites: ['Right Triangle Trigonometry'],
+      learningCompetencies: ['M9GE-IVf-g-1: Solves problems involving oblique triangles.'],
+      objectives: {
+        cognitive: 'Determine whether to use Law of Sines or Law of Cosines based on given triangle parts.',
+        psychomotor: 'Solve unknown sides and angles of non-right triangles.',
+        affective: 'Appreciate triangulation methods in GPS and land surveying.'
+      },
+      materialsNeeded: ['Protractors', 'Scientific calculators'],
+      keyConcepts: [{ term: 'Law of Sines', definition: 'a / sin A = b / sin B = c / sin C.' }],
+      workedExamples: [],
+      procedures: [],
+      differentiation: { remediation: 'Law decision flowchart.', enrichment: 'Navigational bearing calculations.' },
+      assessmentPlan: 'Performance Task 3 report submission.'
+    }
+  },
+  {
+    id: 'term2-w5-area-perimeter',
+    title: 'Practical Measurement: Area & Perimeter',
+    description: 'Polygons, composite figures, Heron\'s formula, sector area, and practical perimeter estimations.',
+    icon: 'Target',
+    color: 'orange',
+    term: 'Term 2',
+    week: 'Week 5',
+    weekNumber: 5,
+    weeklyFocus: 'Calculate area and perimeter of complex plane figures and regular polygons using Heron\'s formula and sector geometries.',
+    performanceTask: {
+      assigned: false
+    },
+    quizzes: [],
+    lessonPlan: {
+      id: 'lp-term2-w5',
+      topicId: 'term2-w5-area-perimeter',
+      title: 'Week 5 Lesson Plan — Practical Measurement',
+      gradeLevel: 'Grade 11 - General Mathematics',
+      duration: '60 minutes / day',
+      subject: 'General Mathematics',
+      term: 'Term 2',
+      week: 'Week 5',
+      weeklySchedule: [
+        { day: 'MONDAY', date: 'Nov. 09, 2026', lessonTitle: 'Review of Composite Plane Figures', activityType: 'Whole Class' },
+        { day: 'TUESDAY', date: 'Nov. 10, 2026', lessonTitle: 'Hero\'s Formula for Non-Right Triangular Area', activityType: 'Pair Work' },
+        { day: 'WEDNESDAY', date: 'Nov. 11, 2026', lessonTitle: 'Sector Area and Arc Lengths in Circular Geometry', activityType: 'Group Work' },
+        { day: 'THURSDAY', date: 'Nov. 12, 2026', lessonTitle: 'Practical Land & Floor Plan Measurement', activityType: 'Whole Class' },
+        { day: 'FRIDAY', date: 'Nov. 13, 2026', lessonTitle: 'Area & Perimeter Estimation Drills', activityType: 'Individual Work' }
+      ],
+      prerequisites: ['Basic Geometry Formulas'],
+      learningCompetencies: ['Computes perimeter and area of composite figures.'],
+      objectives: {
+        cognitive: 'Decompose complex composite shapes into standard geometric figures.',
+        psychomotor: 'Apply Heron\'s formula to find area given three side lengths.',
+        affective: 'Value accuracy in flooring and land surveying calculations.'
+      },
+      materialsNeeded: ['Rulers', 'Floor plan blueprints'],
+      keyConcepts: [{ term: 'Heron\'s Formula', definition: 'Area = √(s(s-a)(s-b)(s-c)) where s = (a+b+c)/2.' }],
+      workedExamples: [],
+      procedures: [],
+      differentiation: { remediation: 'Shape decomposition templates.', enrichment: 'Irregular parcel perimeter estimation.' },
+      assessmentPlan: 'Formative plane geometry check.'
+    }
+  },
+  {
+    id: 'term2-w6-volume-cost',
+    title: 'Volume, Capacity & Cost Estimation',
+    description: 'Three-dimensional solid geometry, volume, volumetric capacity, surface area, and material cost budgeting.',
+    icon: 'Database',
+    color: 'emerald',
+    term: 'Term 2',
+    week: 'Week 6',
+    weekNumber: 6,
+    weeklyFocus: 'Determine volume, surface area, and capacity of prisms, pyramids, cylinders, and cones to estimate material and manufacturing costs.',
+    performanceTask: {
+      assigned: true,
+      number: 4,
+      title: 'Packaging Design & Cost Minimization Project',
+      description: 'Construct a 3D container prototype, compute its volume and surface area, and determine the optimal cost per unit produced.',
+      weightPercentage: 20
+    },
+    quizzes: [],
+    lessonPlan: {
+      id: 'lp-term2-w6',
+      topicId: 'term2-w6-volume-cost',
+      title: 'Week 6 Lesson Plan — Volume & Cost Estimation',
+      gradeLevel: 'Grade 11 - General Mathematics',
+      duration: '60 minutes / day',
+      subject: 'General Mathematics',
+      term: 'Term 2',
+      week: 'Week 6',
+      weeklySchedule: [
+        { day: 'MONDAY', date: 'Nov. 16, 2026', lessonTitle: 'Volumes of Prisms, Pyramids, Cylinders & Cones', activityType: 'Whole Class' },
+        { day: 'TUESDAY', date: 'Nov. 17, 2026', lessonTitle: 'Calculating Volume and Volumetric Capacity', activityType: 'Pair Work' },
+        { day: 'WEDNESDAY', date: 'Nov. 18, 2026', lessonTitle: 'Surface Area and Packaging Material Calculations', activityType: 'Group Work' },
+        { day: 'THURSDAY', date: 'Nov. 19, 2026', lessonTitle: 'Material Cost Estimation & Budgeting', activityType: 'Whole Class' },
+        { day: 'FRIDAY', date: 'Nov. 20, 2026', lessonTitle: 'Applied Engineering Cost Analysis', activityType: 'Individual Work' }
+      ],
+      prerequisites: ['3D Solid Shapes', 'Surface Area'],
+      learningCompetencies: ['Solves problems involving surface area, volume, and cost estimation.'],
+      objectives: {
+        cognitive: 'Relate surface area to raw material costs and volume to capacity.',
+        psychomotor: 'Calculate fluid capacities and volumetric weights.',
+        affective: 'Understand economical material utilization in manufacturing.'
+      },
+      materialsNeeded: ['3D solid models', 'Cardboard', 'Scissors'],
+      keyConcepts: [{ term: 'Volumetric Capacity', definition: 'The volume of fluid or contents a 3D container can hold.' }],
+      workedExamples: [],
+      procedures: [],
+      differentiation: { remediation: 'Net unfolding exercises.', enrichment: 'Surface-area-to-volume ratio optimization.' },
+      assessmentPlan: 'Performance Task 4 packaging model evaluation.'
+    }
+  },
+  {
+    id: 'term2-w7-random-variables',
+    title: 'Discrete Random Variables',
+    description: 'Discrete probability distributions, mean, expected value, variance, and standard deviation of random variables.',
+    icon: 'HelpCircle',
+    color: 'orange',
+    term: 'Term 2',
+    week: 'Week 7',
+    weekNumber: 7,
+    weeklyFocus: 'Construct probability distributions for discrete random variables and compute expected values in games of chance and risk analysis.',
+    performanceTask: {
+      assigned: false
+    },
+    quizzes: [],
+    lessonPlan: {
+      id: 'lp-term2-w7',
+      topicId: 'term2-w7-random-variables',
+      title: 'Week 7 Lesson Plan — Discrete Random Variables',
+      gradeLevel: 'Grade 11 - Statistics & Probability',
+      duration: '60 minutes / day',
+      subject: 'Statistics & Probability',
+      term: 'Term 2',
+      week: 'Week 7',
+      weeklySchedule: [
+        { day: 'MONDAY', date: 'Nov. 23, 2026', lessonTitle: 'Random Variables & Probability Mass Functions', activityType: 'Whole Class' },
+        { day: 'TUESDAY', date: 'Nov. 24, 2026', lessonTitle: 'Mean / Expected Value E(X) of Discrete Variables', activityType: 'Pair Work' },
+        { day: 'WEDNESDAY', date: 'Nov. 25, 2026', lessonTitle: 'Variance & Standard Deviation of Random Variables', activityType: 'Group Work' },
+        { day: 'THURSDAY', date: 'Nov. 26, 2026', lessonTitle: 'Constructing Probability Distributions for Real Experiments', activityType: 'Whole Class' },
+        { day: 'FRIDAY', date: 'Nov. 27, 2026', lessonTitle: 'Games of Chance & Expected Value Decision Problems', activityType: 'Individual Work' }
+      ],
+      prerequisites: ['Basic Probability Concepts'],
+      learningCompetencies: ['M11/12SP-IIIa-1: Illustrates a random variable.'],
+      objectives: {
+        cognitive: 'Distinguish between discrete and continuous random variables.',
+        psychomotor: 'Compute expected value E(X) = Σ x·P(x).',
+        affective: 'Develop cautious financial reasoning regarding games of chance.'
+      },
+      materialsNeeded: ['Dice', 'Coins', 'Probability tables'],
+      keyConcepts: [{ term: 'Expected Value E(X)', definition: 'The weighted average of all possible values of a random variable.' }],
+      workedExamples: [],
+      procedures: [],
+      differentiation: { remediation: 'Coin flip tree diagrams.', enrichment: 'Insurance policy premium risk modeling.' },
+      assessmentPlan: 'Formative probability check.'
+    }
+  },
+  {
+    id: 'term2-w8-normal-distribution',
+    title: 'The Normal Distribution',
+    description: 'Continuous probability, standard normal curve, Z-scores, empirical rule, and probability under the normal curve.',
+    icon: 'Zap',
+    color: 'emerald',
+    term: 'Term 2',
+    week: 'Week 8',
+    weekNumber: 8,
+    weeklyFocus: 'Apply the normal distribution and Z-score standardization to analyze population percentile ranks and standardized test scores.',
+    performanceTask: {
+      assigned: true,
+      number: 5,
+      title: 'Standard Normal Curve & Z-Score Research Paper',
+      description: 'Collect standardized testing or height/weight data, convert scores to Z-scores, and analyze normal curve probabilities.',
+      weightPercentage: 20
+    },
+    quizzes: [],
+    lessonPlan: {
+      id: 'lp-term2-w8',
+      topicId: 'term2-w8-normal-distribution',
+      title: 'Week 8 Lesson Plan — The Normal Distribution',
+      gradeLevel: 'Grade 11 - Statistics & Probability',
+      duration: '60 minutes / day',
+      subject: 'Statistics & Probability',
+      term: 'Term 2',
+      week: 'Week 8',
+      weeklySchedule: [
+        { day: 'MONDAY', date: 'Nov. 30, 2026', lessonTitle: 'Properties of the Normal Curve & Empirical Rule (68-95-99.7)', activityType: 'Whole Class' },
+        { day: 'TUESDAY', date: 'Dec. 01, 2026', lessonTitle: 'Calculating Z-Scores and Standardizing Raw Data', activityType: 'Pair Work' },
+        { day: 'WEDNESDAY', date: 'Dec. 02, 2026', lessonTitle: 'Standard Normal Distribution Table & Area Under Curve', activityType: 'Group Work' },
+        { day: 'THURSDAY', date: 'Dec. 03, 2026', lessonTitle: 'Applications of Normal Curve in Educational Grading', activityType: 'Whole Class' },
+        { day: 'FRIDAY', date: 'Dec. 04, 2026', lessonTitle: 'Term 2 Comprehensive Review & Evaluation', activityType: 'Individual Work' }
+      ],
+      prerequisites: ['Discrete Random Variables', 'Standard Deviation'],
+      learningCompetencies: ['M11/12SP-IIIc-1: Illustrates a normal random variable and its probabilities.'],
+      objectives: {
+        cognitive: 'Explain the properties of the bell curve and Z-score values.',
+        psychomotor: 'Convert raw score X to Z-score Z = (X - μ) / σ.',
+        affective: 'Appreciate how standardized scores enable fair comparisons across populations.'
+      },
+      materialsNeeded: ['Z-score reference tables', 'Calculators'],
+      keyConcepts: [{ term: 'Z-Score', definition: 'The number of standard deviations a data point lies above or below the mean.' }],
+      workedExamples: [],
+      procedures: [],
+      differentiation: { remediation: 'Z-score shading visual aids.', enrichment: 'Central Limit Theorem introduction.' },
+      assessmentPlan: 'Performance Task 5 research paper evaluation.'
+    }
+  },
+  /* ================= TERM 3 CURRICULUM ================= */
+  {
+    id: 'term3-w1-business-math',
+    title: 'Business Mathematics: Simple & Compound Interest',
+    description: 'Financial literacy, simple interest, compound interest, annuities, and loan amortization.',
+    icon: 'Award',
+    color: 'indigo',
+    term: 'Term 3',
+    week: 'Week 1',
+    weekNumber: 1,
+    weeklyFocus: 'Solve problems involving simple interest, compound interest, maturity value, and bank loan schedules.',
+    performanceTask: {
+      assigned: true,
+      number: 1,
+      title: 'Savings & Loan Amortization Plan',
+      description: 'Design a 5-year savings or business loan amortization schedule comparing simple vs compound interest rates.',
+      weightPercentage: 20
+    },
+    quizzes: [],
+    lessonPlan: {
+      id: 'lp-term3-w1',
+      topicId: 'term3-w1-business-math',
+      title: 'Week 1 Lesson Plan — Business Mathematics',
+      gradeLevel: 'Grade 11 - General Mathematics',
+      duration: '60 minutes / day',
+      subject: 'General Mathematics',
+      term: 'Term 3',
+      week: 'Week 1',
+      weeklySchedule: [
+        { day: 'MONDAY', date: 'Jan. 11, 2027', lessonTitle: 'Simple Interest Formula and Principal Calculations', activityType: 'Whole Class' },
+        { day: 'TUESDAY', date: 'Jan. 12, 2027', lessonTitle: 'Compound Interest & Compounding Frequencies', activityType: 'Group Work' },
+        { day: 'WEDNESDAY', date: 'Jan. 13, 2027', lessonTitle: 'Maturity Value and Effective Interest Rates', activityType: 'Pair Work' },
+        { day: 'THURSDAY', date: 'Jan. 14, 2027', lessonTitle: 'Comparing Bank Deposit Offers & Loan Amortization', activityType: 'Whole Class' },
+        { day: 'FRIDAY', date: 'Jan. 15, 2027', lessonTitle: 'Practical Business Math Financial Planning', activityType: 'Individual Work' }
+      ],
+      prerequisites: ['Exponentials', 'Percentages'],
+      learningCompetencies: ['M11GM-IIa-1: Illustrates simple and compound interests.'],
+      objectives: {
+        cognitive: 'Contrast simple and compound growth mechanisms.',
+        psychomotor: 'Compute compound interest A = P(1 + r/n)^(nt).',
+        affective: 'Develop financial prudence regarding debt and investments.'
+      },
+      materialsNeeded: ['Financial calculators', 'Bank rate brochures'],
+      keyConcepts: [{ term: 'Compound Interest', definition: 'Interest calculated on the initial principal and accumulated interest.' }],
+      workedExamples: [],
+      procedures: [],
+      differentiation: { remediation: 'Formula substitution step sheets.', enrichment: 'Inflation-adjusted return calculations.' },
+      assessmentPlan: 'Performance Task 1 submission.'
+    }
   }
 ];
 

@@ -304,6 +304,9 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
     e.preventDefault();
     if (!isAwardingRecitation) return;
     
+    // Ensure points are strictly between 1 and 100
+    const validatedPoints = Math.min(100, Math.max(1, Math.round(Number(recitationPoints)) || 1));
+    
     setIsSavingRecitation(true);
     try {
       const selectedTopic = topics.find(t => t.id === recitationTopicId);
@@ -314,7 +317,7 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
       await awardOralRecitation(
         isAwardingRecitation.uid,
         isAwardingRecitation.displayName,
-        recitationPoints,
+        validatedPoints,
         recitationTopicId,
         topicTitle,
         recitationNotes,
@@ -323,7 +326,7 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
       
       // Reset state
       setIsAwardingRecitation(null);
-      setRecitationPoints(1);
+      setRecitationPoints(10);
       setRecitationTopicId('general');
       setRecitationNotes('');
     } catch (err) {
@@ -921,31 +924,97 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
               </div>
 
               <h2 className="text-2xl font-bold text-slate-900 mb-1">
-                Award Recitation Points
+                Input Oral Recitation Points
               </h2>
-              <p className="text-slate-500 mb-6 text-sm">
-                Award classroom plus points to <strong className="text-slate-800">{isAwardingRecitation.displayName}</strong>. Points will be converted into XP (+100 XP per point).
+              <p className="text-slate-500 mb-5 text-sm">
+                Record oral recitation score for <strong className="text-slate-800">{isAwardingRecitation.displayName}</strong> (1 to 100 points). Points are converted to XP (+100 XP per point).
               </p>
 
-              <form onSubmit={handleAwardRecitation} className="space-y-5">
-                {/* Points selector */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5 ml-1">
-                    Select Plus Points
-                  </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[1, 2, 3, 5].map((pts) => (
+              <form onSubmit={handleAwardRecitation} className="space-y-4">
+                {/* Points selector 1-100 */}
+                <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200/70 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-extrabold text-amber-900 uppercase tracking-wider">
+                      Recitation Score (1 - 100 Points)
+                    </label>
+                    <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                      +{(recitationPoints * 100).toLocaleString()} XP
+                    </span>
+                  </div>
+
+                  {/* Number Input & Steppers */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRecitationPoints(prev => Math.max(1, prev - 5))}
+                      className="px-3 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
+                      title="-5 points"
+                    >
+                      -5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecitationPoints(prev => Math.max(1, prev - 1))}
+                      className="px-3 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
+                      title="-1 point"
+                    >
+                      -1
+                    </button>
+
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        required
+                        value={recitationPoints || ''}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (isNaN(val)) {
+                            setRecitationPoints(1);
+                          } else {
+                            setRecitationPoints(Math.min(100, Math.max(1, val)));
+                          }
+                        }}
+                        className="w-full py-2.5 px-3 bg-white border-2 border-amber-300 rounded-xl text-center text-xl font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 shadow-inner"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                        / 100
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setRecitationPoints(prev => Math.min(100, prev + 1))}
+                      className="px-3 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
+                      title="+1 point"
+                    >
+                      +1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecitationPoints(prev => Math.min(100, prev + 5))}
+                      className="px-3 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
+                      title="+5 points"
+                    >
+                      +5
+                    </button>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div className="flex items-center justify-between gap-1.5 pt-1">
+                    {[5, 10, 20, 50, 75, 100].map((pts) => (
                       <button
                         key={pts}
                         type="button"
                         onClick={() => setRecitationPoints(pts)}
-                        className={`py-3 text-center rounded-xl font-extrabold text-sm border transition-all ${
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
                           recitationPoints === pts
-                            ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-100 scale-[1.03]'
-                            : 'bg-slate-50 text-slate-700 border-slate-100 hover:bg-slate-100'
+                            ? 'bg-amber-500 text-white shadow-sm font-extrabold scale-105'
+                            : 'bg-white/80 text-slate-600 border border-slate-200/70 hover:bg-white'
                         }`}
                       >
-                        +{pts} Pt{pts > 1 ? 's' : ''}
+                        {pts} pts
                       </button>
                     ))}
                   </div>
@@ -976,10 +1045,10 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                     Feedback / Teacher's Remarks
                   </label>
                   <textarea
-                    rows={3}
+                    rows={2}
                     value={recitationNotes}
                     onChange={(e) => setRecitationNotes(e.target.value)}
-                    placeholder="e.g. Excellent participation. Answered the complex logarithmic rational equation correctly."
+                    placeholder="e.g. Excellent recitation. Demonstrated thorough mastery of rational functions."
                     required
                     className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-amber-500 text-sm resize-none"
                   />
@@ -1003,7 +1072,7 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                     ) : (
                       <>
                         <Icons.Award className="w-4 h-4" />
-                        <span>Award +{(recitationPoints * 100).toLocaleString()} XP</span>
+                        <span>Award {recitationPoints} Pts (+{(recitationPoints * 100).toLocaleString()} XP)</span>
                       </>
                     )}
                   </button>

@@ -96,7 +96,7 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
   }, [assessmentPhase, isTakingBooster]);
 
   // Premium Next-Level Transition Questions List (Grade 11/12 Mathematics Bridge)
-  const boosterQuestions = useMemo(() => [
+  const rawBoosterQuestions = useMemo(() => [
     {
       id: "booster_1",
       topic: "Inverse, Exponential & Logarithmic Functions",
@@ -154,29 +154,55 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
     }
   ], []);
 
-  // Generate diagnostic problem set covering key Grade 11 General Mathematics competencies
+  // Shuffle booster questions and options for anti-cheating
+  const boosterQuestions = useMemo(() => {
+    return [...rawBoosterQuestions]
+      .sort(() => 0.5 - Math.random())
+      .map((bq) => {
+        const correctText = bq.options[bq.correct];
+        const shuffledOptions = [...bq.options].sort(() => 0.5 - Math.random());
+        const newCorrect = shuffledOptions.indexOf(correctText);
+        return {
+          ...bq,
+          options: shuffledOptions,
+          correct: newCorrect >= 0 ? newCorrect : bq.correct
+        };
+      });
+  }, [rawBoosterQuestions]);
+
+  // Generate diagnostic problem set with question and choices randomization (Anti-Cheating)
   const diagnosticProblems = useMemo(() => {
     if (!fetchedQuestions || fetchedQuestions.length === 0) return [];
     
-    // Shuffle or maintain stable slice based on teacher-configured settings
-    const shuffled = [...fetchedQuestions].sort(() => 0.5 - Math.random());
+    // 1. Shuffle question order for each student
+    const shuffledQuestions = [...fetchedQuestions].sort(() => 0.5 - Math.random());
     const limit = diagnosticSettings?.itemsCount || 10;
     
-    return shuffled.slice(0, limit).map((q) => ({
-      id: q.id,
-      question: q.question,
-      options: q.options,
-      correctAnswer: q.correct,
-      explanation: q.explanation,
-      hint1: q.hint1 || '',
-      hint2: q.hint2 || '',
-      topicId: q.topic.toLowerCase().replace(/\s+/g, '-'),
-      topicTitle: q.topic,
-      competencyLabel: q.competency,
-      competency: q.competency,
-      status: 'Active' as const,
-      hints: [q.hint1 || '', q.hint2 || '']
-    }));
+    // 2. Take item count limit and randomize options for each individual question
+    return shuffledQuestions.slice(0, limit).map((q) => {
+      const originalOptions = q.options || [];
+      const correctOptionText = originalOptions[q.correct];
+      
+      // Shuffle choices array
+      const shuffledOptions = [...originalOptions].sort(() => 0.5 - Math.random());
+      const newCorrectAnswer = shuffledOptions.indexOf(correctOptionText);
+
+      return {
+        id: q.id,
+        question: q.question,
+        options: shuffledOptions,
+        correctAnswer: newCorrectAnswer >= 0 ? newCorrectAnswer : q.correct,
+        explanation: q.explanation,
+        hint1: q.hint1 || '',
+        hint2: q.hint2 || '',
+        topicId: q.topic.toLowerCase().replace(/\s+/g, '-'),
+        topicTitle: q.topic,
+        competencyLabel: q.competency,
+        competency: q.competency,
+        status: 'Active' as const,
+        hints: [q.hint1 || '', q.hint2 || '']
+      };
+    });
   }, [fetchedQuestions, diagnosticSettings]);
 
   if (loadingQuestions) {

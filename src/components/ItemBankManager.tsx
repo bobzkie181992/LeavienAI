@@ -3,10 +3,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, Plus, Edit2, Trash2, CheckCircle2, AlertCircle, 
   HelpCircle, Download, Upload, FileText, X, BarChart2, Clock, 
-  Layers, ShieldCheck, Eye, ShieldAlert, Sparkles, RefreshCw, Power
+  Layers, ShieldCheck, Eye, ShieldAlert, Sparkles, RefreshCw, Power,
+  Stethoscope, GraduationCap, Info, Compass
 } from 'lucide-react';
-import { Topic, Quiz, Problem, ItemStatus, ItemStats } from '../types';
+import { 
+  Topic, Quiz, Problem, ItemStatus, ItemStats, 
+  AssessmentType, DIAGNOSTIC_LEVELS, FORMATIVE_LEVELS 
+} from '../types';
 import { useCurriculum, useItemStatistics } from '../hooks/useFirebase';
+import AIGenerateQuestionModal, { GeneratedQuestionPayload } from './AIGenerateQuestionModal';
 
 const STATUS_ORDER: ItemStatus[] = ['Draft', 'For Validation', 'Validated', 'Active', 'Inactive'];
 
@@ -62,6 +67,8 @@ export default function ItemBankManager() {
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('All');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('All');
+  const [selectedAssessmentType, setSelectedAssessmentType] = useState<string>('All');
+  const [selectedAssessmentLevel, setSelectedAssessmentLevel] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals
@@ -74,16 +81,58 @@ export default function ItemBankManager() {
 
   const [inspectingStatsItem, setInspectingStatsItem] = useState<FlatItem | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
+
+  const handleAIGeneratedItem = async (q: GeneratedQuestionPayload) => {
+    // Find matching topic or use default
+    const matchedTopic = topics.find(t => t.title.toLowerCase().includes(q.topic.toLowerCase())) || topics[0];
+    const targetTopicId = matchedTopic ? matchedTopic.id : (topics[0]?.id || 'topic-1');
+    const targetQuizId = matchedTopic?.quizzes[0]?.id || (topics[0]?.quizzes[0]?.id || 'quiz-1');
+
+    const newProblem: Problem = {
+      id: `problem-${Date.now()}`,
+      question: q.question,
+      options: q.options,
+      correctAnswer: q.correctIndex,
+      solution: q.explanation,
+      topic: q.topic,
+      competency: q.competency,
+      assessmentType: q.assessmentType || 'formative',
+      assessmentLevel: q.assessmentLevel,
+      difficulty: q.difficulty,
+      difficultyParameter: q.difficultyParameter ?? (q.difficulty === 'easy' ? -1 : q.difficulty === 'hard' ? 1.5 : 0),
+      discriminationParameter: q.discriminationParameter ?? 1.2,
+      cognitiveLevel: q.cognitiveLevel ? (q.cognitiveLevel.charAt(0).toUpperCase() + q.cognitiveLevel.slice(1)) : 'Applying',
+      misconceptionCategory: q.misconceptions?.[0]?.misconception || '',
+      hint1: q.hint1 || '',
+      hint2: q.hint2 || '',
+      hints: q.hint1 && q.hint2 ? [q.hint1, q.hint2] : [],
+      explanation: q.explanation,
+      remediation: `Review foundational concepts and formulas for ${q.topic}.`,
+      status: 'Active'
+    };
+
+    // Open item editor so teacher can review/adjust
+    setEditingItem({
+      item: newProblem,
+      topicId: targetTopicId,
+      quizId: targetQuizId,
+      isNew: true
+    });
+  };
 
   // Flatten all items across topics and quizzes
   const allItems: FlatItem[] = useMemo(() => {
     const list: FlatItem[] = [];
     topics.forEach(topic => {
       topic.quizzes.forEach(quiz => {
+        const defaultType = quiz.quizType === 'diagnostic' ? 'diagnostic' : 'formative';
         quiz.problems.forEach(problem => {
           list.push({
             ...problem,
             status: problem.status || 'Active', // Default legacy items to Active
+            assessmentType: problem.assessmentType || (defaultType as AssessmentType),
+            assessmentLevel: problem.assessmentLevel || (defaultType === 'diagnostic' ? 'Level 2 - Core Concept Baseline' : 'Level 2 - Guided Skill Application'),
             topicId: topic.id,
             topicTitle: topic.title,
             quizId: quiz.id,
@@ -111,19 +160,26 @@ export default function ItemBankManager() {
       if (selectedStatus !== 'All' && itemStatus !== selectedStatus) return false;
       if (selectedTopicId !== 'All' && item.topicId !== selectedTopicId) return false;
       if (selectedDifficulty !== 'All' && item.difficulty !== selectedDifficulty) return false;
+      if (selectedAssessmentType !== 'All' && item.assessmentType !== selectedAssessmentType) return false;
+      if (selectedAssessmentLevel !== 'All') {
+        const lvl = (item.assessmentLevel || '').toLowerCase();
+        const target = selectedAssessmentLevel.toLowerCase();
+        if (!lvl.includes(target)) return false;
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesQuestion = item.question.toLowerCase().includes(q);
         const matchesCompetency = item.competency.toLowerCase().includes(q);
         const matchesId = item.id.toLowerCase().includes(q);
         const matchesSolution = (item.solution || '').toLowerCase().includes(q);
-        if (!matchesQuestion && !matchesCompetency && !matchesId && !matchesSolution) {
+        const matchesLevel = (item.assessmentLevel || '').toLowerCase().includes(q);
+        if (!matchesQuestion && !matchesCompetency && !matchesId && !matchesSolution && !matchesLevel) {
           return false;
         }
       }
       return true;
     });
-  }, [allItems, selectedStatus, selectedTopicId, selectedDifficulty, searchQuery]);
+  }, [allItems, selectedStatus, selectedTopicId, selectedDifficulty, selectedAssessmentType, selectedAssessmentLevel, searchQuery]);
 
   // Handlers
   const handleQuickStatusChange = async (item: FlatItem, newStatus: ItemStatus) => {
@@ -174,7 +230,9 @@ export default function ItemBankManager() {
       hints: [],
       explanation: '',
       remediation: '',
-      status: 'Draft'
+      status: 'Draft',
+      assessmentType: 'formative',
+      assessmentLevel: 'Level 2 - Guided Skill Application'
     };
 
     setEditingItem({
@@ -194,6 +252,8 @@ export default function ItemBankManager() {
     const headers = [
       'Item ID',
       'Status',
+      'Assessment Type',
+      'Assessment Level',
       'Topic',
       'Competency',
       'Difficulty Level',
@@ -223,6 +283,8 @@ export default function ItemBankManager() {
     const rows = allItems.map(item => [
       escapeCSV(item.id),
       escapeCSV(item.status || 'Active'),
+      escapeCSV(item.assessmentType || 'formative'),
+      escapeCSV(item.assessmentLevel || 'Level 2 - Guided Skill Application'),
       escapeCSV(item.topicTitle),
       escapeCSV(item.competency),
       escapeCSV(item.difficulty),
@@ -262,15 +324,23 @@ export default function ItemBankManager() {
           <div className="flex items-center gap-3">
             <h2 className="text-3xl font-black text-slate-900">Item Bank & Psychometrics</h2>
             <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-black rounded-full uppercase tracking-wider">
-              IRT 2-PL
+              Diagnostic & Formative
             </span>
           </div>
           <p className="text-slate-500 text-sm mt-1">
-            Author, validate, calibrate difficulty and discrimination, and track item performance.
+            Author, classify diagnostic/formative assessment levels, calibrate psychometrics, and track performance.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setIsAIGenerateOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-linear-to-r from-purple-600 to-indigo-600 text-white font-black rounded-xl hover:from-purple-700 hover:to-indigo-700 shadow-md shadow-purple-100 transition-all text-sm active:scale-95"
+            title="Generate AI assessment question"
+          >
+            <Sparkles className="w-4 h-4" />
+            AI Generate Item
+          </button>
           <button
             onClick={() => refreshStats()}
             className="flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors text-sm"
@@ -368,7 +438,7 @@ export default function ItemBankManager() {
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search question text, item ID, competency, or solution..."
+            placeholder="Search question, item ID, competency, assessment level, or solution..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -384,6 +454,51 @@ export default function ItemBankManager() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Assessment Type Filter */}
+          <select
+            value={selectedAssessmentType}
+            onChange={e => {
+              setSelectedAssessmentType(e.target.value);
+              setSelectedAssessmentLevel('All');
+            }}
+            className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="All">All Assessment Types</option>
+            <option value="diagnostic">🩺 Diagnostic Assessment</option>
+            <option value="formative">📝 Formative Assessment</option>
+          </select>
+
+          {/* Assessment Level Filter */}
+          <select
+            value={selectedAssessmentLevel}
+            onChange={e => setSelectedAssessmentLevel(e.target.value)}
+            className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="All">All Assessment Levels</option>
+            {selectedAssessmentType === 'diagnostic' ? (
+              <>
+                <option value="Level 1">Level 1 - Prerequisite / Foundational</option>
+                <option value="Level 2">Level 2 - Core Concept Baseline</option>
+                <option value="Level 3">Level 3 - Intermediate Analytical</option>
+                <option value="Level 4">Level 4 - Advanced Mastery / Challenge</option>
+              </>
+            ) : selectedAssessmentType === 'formative' ? (
+              <>
+                <option value="Level 1">Level 1 - Recall & Concept Check</option>
+                <option value="Level 2">Level 2 - Guided Skill Application</option>
+                <option value="Level 3">Level 3 - Problem Solving & Remediation</option>
+                <option value="Level 4">Level 4 - Mastery & Synthesis</option>
+              </>
+            ) : (
+              <>
+                <option value="Level 1">Level 1 (Prerequisite / Recall)</option>
+                <option value="Level 2">Level 2 (Core Baseline / Guided Skill)</option>
+                <option value="Level 3">Level 3 (Analytical / Problem Solving)</option>
+                <option value="Level 4">Level 4 (Advanced Mastery / Synthesis)</option>
+              </>
+            )}
+          </select>
+
           {/* Topic Filter */}
           <select
             value={selectedTopicId}
@@ -417,8 +532,8 @@ export default function ItemBankManager() {
             <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-slate-700">No Assessment Items Found</h3>
             <p className="text-slate-400 text-sm max-w-md mx-auto mt-1">
-              {searchQuery || selectedStatus !== 'All'
-                ? 'Try adjusting your search query or status filter.'
+              {searchQuery || selectedStatus !== 'All' || selectedAssessmentType !== 'All' || selectedAssessmentLevel !== 'All'
+                ? 'Try adjusting your search query, assessment level, or status filters.'
                 : 'Get started by creating a new item or importing items via CSV.'}
             </p>
             <div className="mt-5 flex justify-center gap-3">
@@ -435,6 +550,7 @@ export default function ItemBankManager() {
             const statusConf = STATUS_CONFIG[item.status || 'Active'];
             const stats = statsMap[item.id];
             const isLive = item.status === 'Active' || item.status === 'Validated';
+            const isDiagnostic = item.assessmentType === 'diagnostic';
 
             return (
               <motion.div
@@ -452,6 +568,27 @@ export default function ItemBankManager() {
                       <span className={`px-3 py-1 rounded-full text-xs font-black border ${statusConf.bg} ${statusConf.color} ${statusConf.border} flex items-center gap-1.5`}>
                         {item.status === 'Active' ? <CheckCircle2 className="w-3.5 h-3.5" /> : item.status === 'Inactive' ? <Power className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
                         {statusConf.label}
+                      </span>
+
+                      {/* Assessment Type & Level Badge */}
+                      <span className={`px-3 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 border shadow-2xs ${
+                        isDiagnostic 
+                          ? 'bg-purple-50 text-purple-800 border-purple-200' 
+                          : 'bg-cyan-50 text-cyan-900 border-cyan-200'
+                      }`}>
+                        {isDiagnostic ? (
+                          <>
+                            <Stethoscope className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Diagnostic</span>
+                          </>
+                        ) : (
+                          <>
+                            <GraduationCap className="w-3.5 h-3.5 text-cyan-700" />
+                            <span>Formative</span>
+                          </>
+                        )}
+                        <span className="text-slate-300">•</span>
+                        <span className="font-bold">{item.assessmentLevel || (isDiagnostic ? 'Level 2 - Core Concept Baseline' : 'Level 2 - Guided Skill Application')}</span>
                       </span>
 
                       <span className="px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg">
@@ -649,6 +786,7 @@ export default function ItemBankManager() {
           <ItemEditorModal
             editingItem={editingItem}
             topics={topics}
+            onOpenAIGenerate={() => setIsAIGenerateOpen(true)}
             onClose={() => setEditingItem(null)}
             onSave={async (topicId, quizId, savedProblem) => {
               try {
@@ -691,6 +829,18 @@ export default function ItemBankManager() {
           />
         )}
       </AnimatePresence>
+
+      {/* AI GENERATE QUESTION MODAL */}
+      <AIGenerateQuestionModal
+        isOpen={isAIGenerateOpen}
+        onClose={() => setIsAIGenerateOpen(false)}
+        defaultAssessmentType="formative"
+        defaultAssessmentLevel="Level 2 - Guided Skill Application"
+        availableTopics={topics.map(t => t.title)}
+        onQuestionGenerated={handleAIGeneratedItem}
+        title="AI Assessment Item Generator"
+        subtitle="Generate DepEd curriculum-aligned diagnostic or formative items with psychometric calibrations, distractors, and multi-tier scaffolding."
+      />
     </div>
   );
 }
@@ -706,15 +856,18 @@ interface ItemEditorModalProps {
     isNew: boolean;
   };
   topics: Topic[];
+  onOpenAIGenerate?: () => void;
   onClose: () => void;
   onSave: (topicId: string, quizId: string, item: Problem) => Promise<void>;
 }
 
-function ItemEditorModal({ editingItem, topics, onClose, onSave }: ItemEditorModalProps) {
+function ItemEditorModal({ editingItem, topics, onOpenAIGenerate, onClose, onSave }: ItemEditorModalProps) {
   const [topicId, setTopicId] = useState(editingItem.topicId);
   const [quizId, setQuizId] = useState(editingItem.quizId);
   const [item, setItem] = useState<Problem>({
     ...editingItem.item,
+    assessmentType: editingItem.item.assessmentType || 'formative',
+    assessmentLevel: editingItem.item.assessmentLevel || 'Level 2 - Guided Skill Application',
     hints: editingItem.item.hints || []
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -724,6 +877,80 @@ function ItemEditorModal({ editingItem, topics, onClose, onSave }: ItemEditorMod
     const topic = topics.find(t => t.id === topicId);
     return topic ? topic.quizzes : [];
   }, [topics, topicId]);
+
+  // Selected level description helper
+  const selectedLevelInfo = useMemo(() => {
+    if (item.assessmentType === 'diagnostic') {
+      const match = DIAGNOSTIC_LEVELS.find(l => l.id === item.assessmentLevel || item.assessmentLevel?.includes(l.id.split(' - ')[0]));
+      return match || DIAGNOSTIC_LEVELS[1];
+    } else {
+      const match = FORMATIVE_LEVELS.find(l => l.id === item.assessmentLevel || item.assessmentLevel?.includes(l.id.split(' - ')[0]));
+      return match || FORMATIVE_LEVELS[1];
+    }
+  }, [item.assessmentType, item.assessmentLevel]);
+
+  const handleAssessmentTypeChange = (type: AssessmentType) => {
+    const defaultLevel = type === 'diagnostic' 
+      ? 'Level 2 - Core Concept Baseline' 
+      : 'Level 2 - Guided Skill Application';
+    setItem(prev => ({
+      ...prev,
+      assessmentType: type,
+      assessmentLevel: defaultLevel
+    }));
+  };
+
+  const handleAssessmentLevelChange = (levelId: string) => {
+    let diff: 'easy' | 'medium' | 'hard' = item.difficulty;
+    let bParam = item.difficultyParameter;
+    let cognitive = item.cognitiveLevel || 'Understanding';
+
+    if (item.assessmentType === 'diagnostic') {
+      if (levelId.startsWith('Level 1')) {
+        diff = 'easy';
+        bParam = -1.0;
+        cognitive = 'Remembering';
+      } else if (levelId.startsWith('Level 2')) {
+        diff = 'medium';
+        bParam = 0.0;
+        cognitive = 'Understanding';
+      } else if (levelId.startsWith('Level 3')) {
+        diff = 'medium';
+        bParam = 0.8;
+        cognitive = 'Applying';
+      } else if (levelId.startsWith('Level 4')) {
+        diff = 'hard';
+        bParam = 1.8;
+        cognitive = 'Analyzing';
+      }
+    } else {
+      if (levelId.startsWith('Level 1')) {
+        diff = 'easy';
+        bParam = -0.8;
+        cognitive = 'Remembering';
+      } else if (levelId.startsWith('Level 2')) {
+        diff = 'medium';
+        bParam = 0.2;
+        cognitive = 'Applying';
+      } else if (levelId.startsWith('Level 3')) {
+        diff = 'medium';
+        bParam = 1.0;
+        cognitive = 'Analyzing';
+      } else if (levelId.startsWith('Level 4')) {
+        diff = 'hard';
+        bParam = 1.9;
+        cognitive = 'Creating';
+      }
+    }
+
+    setItem(prev => ({
+      ...prev,
+      assessmentLevel: levelId,
+      difficulty: diff,
+      difficultyParameter: bParam,
+      cognitiveLevel: cognitive
+    }));
+  };
 
   const handleAddExtraHint = () => {
     setItem(prev => ({
@@ -773,7 +1000,7 @@ function ItemEditorModal({ editingItem, topics, onClose, onSave }: ItemEditorMod
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-white rounded-[32px] p-6 sm:p-8 w-full max-w-3xl shadow-2xl relative my-8 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-[32px] p-6 sm:p-8 w-full max-w-3xl shadow-2xl relative my-8 max-h-[90vh] overflow-y-auto custom-scrollbar"
       >
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
           <div>
@@ -781,18 +1008,122 @@ function ItemEditorModal({ editingItem, topics, onClose, onSave }: ItemEditorMod
               {editingItem.isNew ? 'Create New Assessment Item' : 'Edit Assessment Item'}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Specify competency, psychometric variables, hints, misconceptions, and workflow status.
+              Classify the assessment level (diagnostic vs formative), competency, psychometrics, and hints.
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenAIGenerate && (
+              <button
+                type="button"
+                onClick={onOpenAIGenerate}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black text-xs rounded-xl shadow-md shadow-purple-100 transition-all active:scale-95"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>AI Auto-Fill</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Assessment Type & Evaluation Level Configuration Card */}
+          <div className="p-5 bg-linear-to-r from-indigo-50/70 via-purple-50/50 to-blue-50/70 rounded-3xl border border-indigo-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Compass className="w-5 h-5 text-indigo-600" />
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800">
+                  Assessment Purpose & Evaluation Level *
+                </span>
+              </div>
+              <span className="text-[11px] font-bold text-indigo-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-indigo-200">
+                Determines Question Purpose
+              </span>
+            </div>
+
+            {/* Assessment Type Selector */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleAssessmentTypeChange('diagnostic')}
+                className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${
+                  item.assessmentType === 'diagnostic'
+                    ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-100'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-purple-50/40'
+                }`}
+              >
+                <Stethoscope className={`w-5 h-5 mt-0.5 shrink-0 ${item.assessmentType === 'diagnostic' ? 'text-white' : 'text-purple-600'}`} />
+                <div>
+                  <div className="text-xs font-black">Diagnostic Assessment</div>
+                  <div className={`text-[11px] mt-0.5 ${item.assessmentType === 'diagnostic' ? 'text-purple-100' : 'text-slate-500'}`}>
+                    Baseline evaluation, pre-requisite discovery & knowledge gap diagnosis
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAssessmentTypeChange('formative')}
+                className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${
+                  item.assessmentType === 'formative'
+                    ? 'bg-cyan-700 text-white border-cyan-700 shadow-md shadow-cyan-100'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-cyan-50/40'
+                }`}
+              >
+                <GraduationCap className={`w-5 h-5 mt-0.5 shrink-0 ${item.assessmentType === 'formative' ? 'text-white' : 'text-cyan-700'}`} />
+                <div>
+                  <div className="text-xs font-black">Formative Assessment</div>
+                  <div className={`text-[11px] mt-0.5 ${item.assessmentType === 'formative' ? 'text-cyan-100' : 'text-slate-500'}`}>
+                    Lesson checkpoints, active practice drills & progressive mastery checks
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            {/* Assessment Level Selector */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                {item.assessmentType === 'diagnostic' ? 'Diagnostic Assessment Level *' : 'Formative Assessment Level *'}
+              </label>
+              <select
+                value={item.assessmentLevel || (item.assessmentType === 'diagnostic' ? 'Level 2 - Core Concept Baseline' : 'Level 2 - Guided Skill Application')}
+                onChange={e => handleAssessmentLevelChange(e.target.value)}
+                className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-black text-slate-800 focus:ring-2 focus:ring-indigo-500"
+              >
+                {item.assessmentType === 'diagnostic' ? (
+                  DIAGNOSTIC_LEVELS.map(lvl => (
+                    <option key={lvl.id} value={lvl.id}>
+                      {lvl.title} ({lvl.targetGroup})
+                    </option>
+                  ))
+                ) : (
+                  FORMATIVE_LEVELS.map(lvl => (
+                    <option key={lvl.id} value={lvl.id}>
+                      {lvl.title} ({lvl.targetGroup})
+                    </option>
+                  ))
+                )}
+              </select>
+
+              {/* Dynamic Level Guidance Explainer */}
+              {selectedLevelInfo && (
+                <div className="mt-2.5 p-3 bg-white/90 rounded-2xl border border-indigo-100 text-xs flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
+                  <div>
+                    <span className="font-bold text-slate-800">{selectedLevelInfo.title}: </span>
+                    <span className="text-slate-600">{selectedLevelInfo.description} </span>
+                    <span className="text-indigo-700 font-bold block mt-0.5">Target: {selectedLevelInfo.targetGroup}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Status & Placement */}
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -1197,7 +1528,7 @@ function ItemStatsModal({ item, stats, onClose }: { item: FlatItem; stats: ItemS
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-[32px] p-6 sm:p-8 w-full max-w-2xl shadow-2xl relative my-8"
+        className="bg-white rounded-[32px] p-6 sm:p-8 w-full max-w-2xl shadow-2xl relative my-8 max-h-[90vh] overflow-y-auto custom-scrollbar"
       >
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
           <div>
@@ -1558,7 +1889,7 @@ function ItemImportModal({ topics, onClose, onImport }: ItemImportModalProps) {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-[32px] p-6 sm:p-8 w-full max-w-3xl shadow-2xl relative my-8 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-[32px] p-6 sm:p-8 w-full max-w-3xl shadow-2xl relative my-8 max-h-[90vh] overflow-y-auto custom-scrollbar"
       >
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
           <div>

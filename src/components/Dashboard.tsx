@@ -40,6 +40,7 @@ interface DashboardProps {
   onOpenSprintArena?: () => void;
   onOpenLevelProgression?: () => void;
   onOpenAvatarCustomizer?: () => void;
+  onOpenLeaderboard?: () => void;
   onStartSummativeAssessment?: (assessment: SummativeAssessment) => void;
 }
 
@@ -67,6 +68,7 @@ export default function Dashboard({
   onOpenSprintArena,
   onOpenLevelProgression,
   onOpenAvatarCustomizer,
+  onOpenLeaderboard,
   onStartSummativeAssessment
 }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'competencies' | 'error_diagnosis' | 'completed'>('overview');
@@ -398,6 +400,16 @@ export default function Dashboard({
                   >
                     <Icons.Sparkles className="w-3 h-3 text-purple-300" />
                     <span>Equip Persona</span>
+                  </button>
+                )}
+                {onOpenLeaderboard && (
+                  <button
+                    id="dashboard-leaderboard-trigger"
+                    onClick={onOpenLeaderboard}
+                    className="text-[11px] font-bold bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 px-2.5 py-1 rounded-lg border border-amber-300/30 transition-all flex items-center gap-1.5 active:scale-95"
+                  >
+                    <Icons.Crown className="w-3 h-3 text-amber-400" />
+                    <span>Class Leaderboard</span>
                   </button>
                 )}
               </div>

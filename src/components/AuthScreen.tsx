@@ -10,16 +10,10 @@ import {
   ArrowRight, 
   Sparkles, 
   AlertCircle,
-  ShieldCheck,
-  Check,
   IdCard,
-  Info,
   ExternalLink,
-  Database,
-  ChevronDown
+  Database
 } from 'lucide-react';
-import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
 import { UserProfile } from '../types';
 import { localSignIn, localSignUp, getLocalUsers } from '../lib/localAuth';
 
@@ -36,37 +30,13 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
   const [role, setRole] = useState<'student' | 'faculty'>('student');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showAccountsList, setShowAccountsList] = useState(false);
   const [localAccounts, setLocalAccounts] = useState<UserProfile[]>([]);
-  const [unregisteredEmail, setUnregisteredEmail] = useState<string | null>(null);
-  const [autoCreateNew, setAutoCreateNew] = useState(true);
 
   useEffect(() => {
     setLocalAccounts(getLocalUsers());
   }, [tab]);
 
-  // 1. Google Sign-In (Optional)
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError(null);
-    setUnregisteredEmail(null);
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err: any) {
-      console.error("Google sign-in error:", err);
-      if (err.code === 'auth/popup-blocked') {
-        setError("Sign-in popup was blocked by your browser. Please use Local Database sign-in below.");
-      } else if (err.code === 'auth/unauthorized-domain') {
-        setError("Firebase domain is not authorized. Please use the Local Database sign-in form below.");
-      } else if (err.code !== 'auth/popup-closed-by-user') {
-        setError(err.message || "Failed to sign in with Google.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 2. Local Database Sign In
+  // 1. Local Database Sign In
   const handleLocalSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
@@ -75,62 +45,15 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
     }
     setLoading(true);
     setError(null);
-    setUnregisteredEmail(null);
 
     try {
-      // If autoCreateNew is enabled, pass current role so new accounts enter seamlessly
-      const profile = await localSignIn(email, password, {
-        autoCreateRole: autoCreateNew ? role : undefined
-      });
+      const profile = await localSignIn(email, password);
       if (onProfileCreated && profile.role) {
         await onProfileCreated(profile.role, profile.displayName, profile.lrn, profile.uid);
       }
     } catch (err: any) {
       console.error("Local sign-in error:", err);
-      if (err.code === 'ACCOUNT_NOT_FOUND') {
-        setUnregisteredEmail(err.identifier || email.trim());
-        setError(null);
-      } else {
-        setError(err.message || "Sign-in failed. Please verify your credentials or register a new account.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Quick register for account not found
-  const handleQuickRegister = async (chosenRole: 'student' | 'faculty') => {
-    const target = (unregisteredEmail || email).trim();
-    if (!target || !password) {
-      setError("Please ensure email and password are provided.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    const defaultRawName = target.includes('@') 
-      ? target.split('@')[0].replace(/[._]/g, ' ') 
-      : `Student ${target}`;
-    const capitalizedName = defaultRawName.charAt(0).toUpperCase() + defaultRawName.slice(1);
-
-    try {
-      const newProfile = await localSignUp({
-        displayName: displayName.trim() || capitalizedName,
-        email: target.includes('@') ? target : `${target}@student.mathquest.internal`,
-        lrn: !target.includes('@') ? target : undefined,
-        password: password.trim(),
-        role: chosenRole,
-        grade: chosenRole === 'student' ? 'Grade 11' : undefined,
-        section: chosenRole === 'student' ? 'STEM-A' : undefined
-      });
-
-      setUnregisteredEmail(null);
-      if (onProfileCreated) {
-        await onProfileCreated(chosenRole, newProfile.displayName, newProfile.lrn, newProfile.uid);
-      }
-    } catch (err: any) {
-      console.error("Quick registration error:", err);
-      setError(err.message || "Failed to create account.");
+      setError(err.message || "Sign-in failed. Please verify your credentials or register a new account.");
     } finally {
       setLoading(false);
     }
@@ -170,14 +93,6 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSelectAccount = (account: UserProfile) => {
-    setEmail(account.email || account.lrn || '');
-    if (account.password || account.temporaryPassword) {
-      setPassword(account.password || account.temporaryPassword || '');
-    }
-    setShowAccountsList(false);
   };
 
   return (
@@ -234,63 +149,31 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
           <motion.div 
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-5 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs flex items-start gap-2.5"
+            className="mb-5 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs flex flex-col gap-2"
           >
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-            <span className="leading-relaxed font-medium">{error}</span>
-          </motion.div>
-        )}
-
-        {/* Unregistered Account Quick-Register Banner */}
-        {unregisteredEmail && (
-          <motion.div
-            initial={{ opacity: 0, y: -5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-5 p-4 bg-indigo-50 border border-indigo-200 rounded-2xl text-slate-800 text-xs space-y-3 shadow-xs"
-          >
-            <div className="flex items-center gap-2 font-bold text-indigo-900">
-              <Sparkles className="w-4 h-4 text-indigo-600" />
-              <span>No account found for "{unregisteredEmail}"</span>
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+              <span className="leading-relaxed font-medium">{error}</span>
             </div>
-            <p className="text-slate-600 text-[11px] leading-relaxed">
-              Create this account now using your entered password:
-            </p>
-            <div className="grid grid-cols-2 gap-2 pt-0.5">
-              <button
-                type="button"
-                onClick={() => handleQuickRegister('student')}
-                disabled={loading}
-                className="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs"
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>Register as Student</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickRegister('faculty')}
-                disabled={loading}
-                className="py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Register as Faculty</span>
-              </button>
-            </div>
-            <div className="text-center pt-1 border-t border-indigo-100">
-              <button
-                type="button"
-                onClick={() => {
-                  if (unregisteredEmail.includes('@')) {
-                    const cleanName = unregisteredEmail.split('@')[0].replace(/[._]/g, ' ');
-                    setDisplayName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
-                  }
-                  setTab('signup');
-                  setUnregisteredEmail(null);
-                }}
-                className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold"
-              >
-                Or fill custom profile details in Create Account tab &rarr;
-              </button>
-            </div>
+            {error.includes("No account found") && (
+              <div className="pt-2 border-t border-rose-200/60 flex items-center justify-between">
+                <span className="text-[11px] text-rose-700">Want to register this account?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (email && email.includes('@')) {
+                      const clean = email.split('@')[0].replace(/[._]/g, ' ');
+                      setDisplayName(clean.charAt(0).toUpperCase() + clean.slice(1));
+                    }
+                    setError(null);
+                    setTab('signup');
+                  }}
+                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition-colors"
+                >
+                  Create Account Now
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -342,16 +225,7 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs py-0.5">
-                <label className="flex items-center gap-2 text-slate-600 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={autoCreateNew}
-                    onChange={(e) => setAutoCreateNew(e.target.checked)}
-                    className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
-                  />
-                  <span>Auto-create account if new</span>
-                </label>
+              <div className="flex items-center justify-end text-xs py-0.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -375,6 +249,38 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
                 {loading ? 'Authenticating...' : 'Sign In with Local Database'}
                 <ArrowRight className="w-4 h-4" />
               </button>
+
+              {/* Quick Demo Accounts Helper */}
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
+                  Quick Demo Accounts
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('amora@gmail.com');
+                      setPassword('password123');
+                    }}
+                    className="p-2 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100 rounded-xl text-left transition-colors"
+                  >
+                    <div className="text-xs font-bold text-indigo-950 truncate">Amora (Student)</div>
+                    <div className="text-[10px] text-indigo-600 truncate">amora@gmail.com</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('bobzkie181992@gmail.com');
+                      setPassword('password123');
+                    }}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-left transition-colors"
+                  >
+                    <div className="text-xs font-bold text-slate-900 truncate">Prof. Bob (Faculty)</div>
+                    <div className="text-[10px] text-slate-500 truncate">bobzkie181992...</div>
+                  </button>
+                </div>
+              </div>
             </motion.form>
           ) : (
             <motion.form 
