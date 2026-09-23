@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { useCurriculum, useItemStatistics } from '../hooks/useFirebase';
 import AIGenerateQuestionModal, { GeneratedQuestionPayload } from './AIGenerateQuestionModal';
+import DepEdExcelImporter, { ParsedDepEdQuestion } from './DepEdExcelImporter';
 
 const STATUS_ORDER: ItemStatus[] = ['Draft', 'For Validation', 'Validated', 'Active', 'Inactive'];
 
@@ -82,6 +83,40 @@ export default function ItemBankManager() {
   const [inspectingStatsItem, setInspectingStatsItem] = useState<FlatItem | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
+  const [isDepEdExcelOpen, setIsDepEdExcelOpen] = useState(false);
+
+  const handleImportDepEdExcel = async (imported: ParsedDepEdQuestion[]) => {
+    if (imported.length === 0) return;
+    const defaultTopic = topics[0];
+    if (!defaultTopic) return;
+    const defaultQuiz = defaultTopic.quizzes[0] || { id: 'quiz-1' };
+
+    const newProblems: Problem[] = imported.map((q, idx) => ({
+      id: `deped-excel-${Date.now()}-${idx}`,
+      question: q.question,
+      options: q.options,
+      correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
+      solution: q.correctFeedback || q.incorrectFeedback || '',
+      topic: defaultTopic.title,
+      competency: q.competency,
+      difficulty: q.difficulty,
+      difficultyParameter: q.difficulty === 'easy' ? -0.8 : q.difficulty === 'hard' ? 1.2 : 0.0,
+      discriminationParameter: 1.0,
+      cognitiveLevel: 'Understanding',
+      status: 'Active',
+      assessmentType: 'diagnostic',
+      assessmentLevel: 'Level 1 - Baseline Knowledge Check',
+      misconceptionCategory: 'General Procedural Error',
+      hint1: q.incorrectFeedback || 'Review the given values in the question.',
+      hint2: q.correctFeedback || 'Apply substitution step by step.',
+      hints: [q.incorrectFeedback],
+      explanation: q.correctFeedback || '',
+      remediation: q.incorrectFeedback || ''
+    }));
+
+    await importProblems(defaultTopic.id, defaultQuiz.id, newProblems);
+    alert(`Successfully imported ${imported.length} DepEd Excel questions into Item Bank!`);
+  };
 
   const handleAIGeneratedItem = async (q: GeneratedQuestionPayload) => {
     // Find matching topic or use default
@@ -355,6 +390,14 @@ export default function ItemBankManager() {
           >
             <Download className="w-4 h-4" />
             Export CSV
+          </button>
+          <button
+            onClick={() => setIsDepEdExcelOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl transition-all text-sm cursor-pointer shadow-xs"
+            title="Upload DepEd provided Excel question sheet"
+          >
+            <Upload className="w-4 h-4" />
+            📁 DepEd Excel Import
           </button>
           <button
             onClick={() => setIsImportModalOpen(true)}
@@ -811,7 +854,13 @@ export default function ItemBankManager() {
         )}
       </AnimatePresence>
 
-      {/* IMPORT ITEMS MODAL */}
+      {/* DEPED EXCEL IMPORTER MODAL */}
+      <DepEdExcelImporter
+        isOpen={isDepEdExcelOpen}
+        onClose={() => setIsDepEdExcelOpen(false)}
+        onImportQuestions={handleImportDepEdExcel}
+        mode="diagnostic"
+      />
       <AnimatePresence>
         {isImportModalOpen && (
           <ItemImportModal

@@ -184,17 +184,21 @@ export default function ImportLessonPlanModal({ existingTopics, onImportSuccess,
             learningExperience: {
               primingActivity: ilawData.learningExperience?.primingActivity || 'Real-life situational priming exercise.',
               coreInstruction: ilawData.learningExperience?.coreInstruction || 'Teacher demonstration & worked examples.',
-              guidedExercises: ilawData.learningExperience?.guidedExercises || 'Collaborative group problem-solving worksheets.'
+              guidedExercises: ilawData.learningExperience?.guidedExercises || 'Collaborative group problem-solving worksheets.',
+              keyFormulas: ilawData.learningExperience?.keyFormulas || [
+                { name: `${topicTitle} Formula`, formula: 'f(x) = y', explanation: `Core mathematical relation for ${topicTitle}.` }
+              ]
             },
             assessingLearning: {
               formativeAssessment: ilawData.assessingLearning?.formativeAssessment || 'Formative board work check.',
-              diagnosticQuizPlan: ilawData.assessingLearning?.diagnosticQuizPlan || '5-item practice assessment.',
+              diagnosticQuizPlan: ilawData.assessingLearning?.diagnosticQuizPlan || '5-item practice assessment with progressive hints.',
               successThreshold: ilawData.assessingLearning?.successThreshold || '80% mastery benchmark.'
             },
             waysForward: {
               nextSteps: ilawData.waysForward?.nextSteps || 'Reflection journal entry in logbook.',
               remediationAction: ilawData.waysForward?.remediationAction || 'Scaffolded practice sheets and peer tutoring.',
-              enrichmentChallenge: ilawData.waysForward?.enrichmentChallenge || 'Higher-order contextual modeling problems.'
+              enrichmentChallenge: ilawData.waysForward?.enrichmentChallenge || 'Higher-order contextual modeling problems.',
+              realWorldCareers: ilawData.waysForward?.realWorldCareers || ['Civil Engineering', 'Financial Analysis', 'Data Science', 'Architecture']
             }
           },
           prerequisites: ['Algebraic Equations & Problem Solving'],

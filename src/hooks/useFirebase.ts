@@ -213,7 +213,9 @@ export function useUserProfile(uid: string | undefined) {
     role: 'student' | 'faculty', 
     customDisplayName?: string, 
     lrn?: string,
-    targetUid?: string
+    targetUid?: string,
+    grade?: string,
+    section?: string
   ) => {
     const activeUid = targetUid || uid || auth.currentUser?.uid;
     if (!activeUid) return;
@@ -227,7 +229,11 @@ export function useUserProfile(uid: string | undefined) {
       streak: 0,
       lastActive: new Date().toISOString(),
       badges: [],
-      ...(role === 'student' ? { grade: 'Grade 11', section: 'STEM-A', lrn: lrn || '' } : {})
+      ...(role === 'student' ? { 
+        grade: grade?.trim() || 'Grade 11', 
+        section: section?.trim() || 'STEM-A', 
+        lrn: lrn || '' 
+      } : {})
     };
     saveLocalUser(newProfile);
     setProfile(newProfile);
@@ -921,6 +927,22 @@ export function useCurriculum() {
           }
         }
         data = initialTopics;
+      } else if (data.length > 0) {
+        // Enrich existing topics with latest DepEd ILAW lesson plans and structures if missing
+        data = data.map(topic => {
+          const defaultTopic = initialTopics.find(t => t.id === topic.id);
+          if (!defaultTopic) return topic;
+          const mergedLessonPlan = topic.lessonPlan?.ilaw 
+            ? topic.lessonPlan 
+            : (defaultTopic.lessonPlan || topic.lessonPlan);
+          return {
+            ...defaultTopic,
+            ...topic,
+            lessonPlan: mergedLessonPlan,
+            quizzes: (topic.quizzes && topic.quizzes.length > 0) ? topic.quizzes : defaultTopic.quizzes,
+            summativeAssessment: topic.summativeAssessment || defaultTopic.summativeAssessment
+          };
+        });
       }
       setTopics(data);
     } catch (err) {

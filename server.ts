@@ -17,13 +17,12 @@ function getGeminiClient() {
   return new GoogleGenAI({ apiKey });
 }
 
-// Helper with model fallback for high demand / 503 errors
+// Helper with model fallback for high demand / rate limits
 async function generateWithFallback(ai: GoogleGenAI, prompt: string): Promise<string> {
   const modelsToTry = [
-    'gemini-3.1-flash-lite',
     'gemini-3.8-flash',
-    'gemini-flash-latest',
-    'gemini-3.1-pro-preview'
+    'gemini-3.1-flash-lite',
+    'gemini-flash-latest'
   ];
 
   let lastError: any = null;
@@ -37,7 +36,8 @@ async function generateWithFallback(ai: GoogleGenAI, prompt: string): Promise<st
         return response.text;
       }
     } catch (err: any) {
-      console.log(`[INFO] Model fallback check - ${model} was busy or unavailable. Trying next fallback...`);
+      const isQuota = err?.status === 'RESOURCE_EXHAUSTED' || err?.message?.includes('429');
+      console.log(`[INFO] Model check - ${model} ${isQuota ? 'rate limited (429)' : 'unavailable'}. Trying next model...`);
       lastError = err;
     }
   }
@@ -371,7 +371,7 @@ Return only valid JSON response. Keep descriptions encouraging, supportive, high
       const jsonString = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
       reportNarrative = JSON.parse(jsonString);
     } catch (apiErr: any) {
-      console.warn('Gemini API report fallback triggered.', apiErr);
+      console.warn('[INFO] Using pedagogical report fallback due to API rate limits.');
       
       // Highly context-aware deterministic fallback
       let narrative = '';

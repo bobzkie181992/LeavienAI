@@ -117,7 +117,7 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
-  const [activeTab, setActiveTab] = useState<'do16' | 'ilaw' | 'overview' | 'objectives' | 'concepts' | 'procedures' | 'differentiation'>('do16');
+  const [activeTab, setActiveTab] = useState<'ilaw' | 'do16' | 'overview' | 'objectives' | 'concepts' | 'procedures' | 'differentiation'>('ilaw');
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
   const handlePrint = () => {
@@ -239,6 +239,17 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
         {!isEditing && (
           <div className="flex bg-slate-50 border-b border-slate-200 px-6 overflow-x-auto shrink-0 print:hidden">
             <button
+              onClick={() => setActiveTab('ilaw')}
+              className={`py-3.5 px-4 font-extrabold text-xs transition-all border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                activeTab === 'ilaw'
+                  ? 'border-amber-500 text-amber-700 bg-amber-50/50'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>DepEd ILAW Matrix</span>
+            </button>
+            <button
               onClick={() => setActiveTab('do16')}
               className={`py-3.5 px-4 font-extrabold text-xs transition-all border-b-2 whitespace-nowrap flex items-center gap-2 ${
                 activeTab === 'do16'
@@ -248,17 +259,6 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
             >
               <Table className="w-4 h-4 text-indigo-600" />
               <span>DepEd D.O. 016 Weekly Plan</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('ilaw')}
-              className={`py-3.5 px-4 font-extrabold text-xs transition-all border-b-2 whitespace-nowrap flex items-center gap-2 ${
-                activeTab === 'ilaw'
-                  ? 'border-amber-500 text-amber-700 bg-amber-50/50'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <span>ILAW Matrix</span>
             </button>
             <button
               onClick={() => setActiveTab('overview')}
@@ -599,24 +599,54 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
                           </div>
                           <div>
                             <h4 className="font-black text-amber-950 text-base">INTENTIONS</h4>
-                            <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Layunin at Kompetensya</p>
+                            <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Layunin at Pamantayan</p>
                           </div>
                         </div>
                         <Target className="w-6 h-6 text-amber-600/60" />
                       </div>
 
                       <div className="space-y-3 pt-2 text-xs text-amber-950">
+                        {plan.ilaw?.intentions.learningIntentions && (
+                          <div className="bg-white/90 p-3.5 rounded-2xl border border-amber-200/70 shadow-xs">
+                            <span className="font-extrabold text-amber-900 block mb-1">Core Learning Intention:</span>
+                            <p className="text-slate-800 font-medium leading-relaxed">{plan.ilaw.intentions.learningIntentions}</p>
+                          </div>
+                        )}
+
                         <div className="bg-white/80 p-3.5 rounded-2xl border border-amber-200/60 shadow-xs">
-                          <span className="font-extrabold text-amber-900 block mb-1">Target DepEd Competency:</span>
+                          <span className="font-extrabold text-amber-900 block mb-1">DepEd Learning Competency (MELCs):</span>
                           <ul className="list-disc list-inside space-y-1 text-slate-700 font-medium">
-                            {plan.learningCompetencies.map((comp, i) => (
+                            {(plan.ilaw?.intentions.competencies || plan.learningCompetencies).map((comp, i) => (
                               <li key={i}>{comp}</li>
                             ))}
                           </ul>
                         </div>
 
+                        {plan.ilaw?.intentions.successCriteria && plan.ilaw.intentions.successCriteria.length > 0 && (
+                          <div className="bg-white/80 p-3.5 rounded-2xl border border-amber-200/60">
+                            <span className="font-extrabold text-amber-900 block mb-1">"I Can" Success Criteria:</span>
+                            <ul className="space-y-1.5 text-slate-700">
+                              {plan.ilaw.intentions.successCriteria.map((crit, idx) => (
+                                <li key={idx} className="flex items-start gap-2">
+                                  <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">✓</span>
+                                  <span className="font-medium text-[11px]">{crit}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {(plan.ilaw?.intentions.priorKnowledge || plan.prerequisites.length > 0) && (
+                          <div className="bg-amber-50/80 p-3 rounded-2xl border border-amber-200/60 text-[11px]">
+                            <span className="font-extrabold text-amber-900 block mb-0.5">Prerequisite Knowledge:</span>
+                            <p className="text-amber-950 font-medium">
+                              {plan.ilaw?.intentions.priorKnowledge || plan.prerequisites.join(', ')}
+                            </p>
+                          </div>
+                        )}
+
                         <div className="bg-white/80 p-3.5 rounded-2xl border border-amber-200/60 space-y-2">
-                          <span className="font-extrabold text-amber-900 block">Tri-Domain Learning Intentions:</span>
+                          <span className="font-extrabold text-amber-900 block">Tri-Domain Learning Objectives:</span>
                           <div className="space-y-1.5 text-slate-700">
                             <div><strong className="text-indigo-900">Cognitive:</strong> {plan.objectives.cognitive}</div>
                             <div><strong className="text-emerald-900">Psychomotor:</strong> {plan.objectives.psychomotor}</div>
@@ -642,6 +672,32 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
                       </div>
 
                       <div className="space-y-3 pt-2 text-xs text-indigo-950">
+                        {plan.ilaw?.learningExperience.primingActivity && (
+                          <div className="bg-white/90 p-3.5 rounded-2xl border border-indigo-200/70 shadow-xs">
+                            <span className="font-extrabold text-indigo-900 block mb-1">Real-World Priming Hook:</span>
+                            <p className="text-slate-800 font-medium leading-relaxed">{plan.ilaw.learningExperience.primingActivity}</p>
+                          </div>
+                        )}
+
+                        {plan.ilaw?.learningExperience.keyFormulas && plan.ilaw.learningExperience.keyFormulas.length > 0 && (
+                          <div className="bg-white/80 p-3.5 rounded-2xl border border-indigo-200/60 space-y-2">
+                            <span className="font-extrabold text-indigo-900 block">Core Formulas & Models:</span>
+                            <div className="grid gap-2">
+                              {plan.ilaw.learningExperience.keyFormulas.map((f, i) => (
+                                <div key={i} className="p-2.5 bg-indigo-50/70 rounded-xl border border-indigo-100">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-indigo-950 text-[11px]">{f.name}</span>
+                                    <code className="px-2 py-0.5 bg-white text-indigo-700 font-mono font-bold text-[10px] rounded border border-indigo-200">
+                                      {f.formula}
+                                    </code>
+                                  </div>
+                                  <p className="text-[10px] text-slate-600 mt-1">{f.explanation}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="bg-white/80 p-3.5 rounded-2xl border border-indigo-200/60">
                           <span className="font-extrabold text-indigo-900 block mb-1">Interactive Lesson Sequence:</span>
                           <div className="space-y-2">
@@ -654,10 +710,19 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
                           </div>
                         </div>
 
-                        <div className="bg-white/80 p-3.5 rounded-2xl border border-indigo-200/60">
-                          <span className="font-extrabold text-indigo-900 block mb-1">Worked Problem Example:</span>
-                          <p className="font-semibold text-slate-800 text-[11px]">{plan.workedExamples[0]?.problem || 'Standard step-by-step mathematical demonstration.'}</p>
-                        </div>
+                        {plan.workedExamples && plan.workedExamples.length > 0 && (
+                          <div className="bg-white/80 p-3.5 rounded-2xl border border-indigo-200/60 space-y-1.5">
+                            <span className="font-extrabold text-indigo-900 block mb-1">Worked Problem Demonstration:</span>
+                            <p className="font-semibold text-slate-800 text-[11px]">{plan.workedExamples[0]?.problem}</p>
+                            {plan.workedExamples[0]?.stepByStepSolution && (
+                              <div className="mt-2 space-y-1 pl-2 border-l-2 border-indigo-300">
+                                {plan.workedExamples[0].stepByStepSolution.map((step, sIdx) => (
+                                  <p key={sIdx} className="text-[10px] text-slate-600 font-medium">{step}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -679,8 +744,19 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
                       <div className="space-y-3 pt-2 text-xs text-emerald-950">
                         <div className="bg-white/80 p-3.5 rounded-2xl border border-emerald-200/60">
                           <span className="font-extrabold text-emerald-900 block mb-1">Formative & Classroom Check:</span>
-                          <p className="text-slate-700 font-medium">{plan.assessmentPlan}</p>
+                          <p className="text-slate-700 font-medium">
+                            {plan.ilaw?.assessingLearning.formativeAssessment || plan.assessmentPlan}
+                          </p>
                         </div>
+
+                        {plan.ilaw?.assessingLearning.diagnosticQuizPlan && (
+                          <div className="bg-white/80 p-3.5 rounded-2xl border border-emerald-200/60">
+                            <span className="font-extrabold text-emerald-900 block mb-1">Diagnostic Scaffolding Plan:</span>
+                            <p className="text-slate-700 font-medium leading-relaxed">
+                              {plan.ilaw.assessingLearning.diagnosticQuizPlan}
+                            </p>
+                          </div>
+                        )}
 
                         {topic.summativeAssessment && (
                           <div className="bg-white/90 p-4 rounded-2xl border border-emerald-300 shadow-sm space-y-2.5">
@@ -710,10 +786,12 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
                         <div className="bg-white/80 p-3.5 rounded-2xl border border-emerald-200/60 flex items-center justify-between">
                           <div>
                             <span className="font-extrabold text-emerald-900 block">Assessment Target:</span>
-                            <span className="text-slate-600 text-[11px]">Diagnostic, Formative & Outcome-Aligned Summative Exam</span>
+                            <span className="text-slate-600 text-[11px]">
+                              {plan.ilaw?.assessingLearning.successThreshold || 'Diagnostic, Formative & Outcome-Aligned Summative Exam'}
+                            </span>
                           </div>
                           <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-lg text-[10px]">
-                            80% Mastery Benchmark
+                            75%-80% Benchmark
                           </span>
                         </div>
                       </div>
@@ -735,17 +813,44 @@ export default function LessonPlanModal({ topic, isFaculty = false, onSaveLesson
                       </div>
 
                       <div className="space-y-3 pt-2 text-xs text-purple-950">
+                        {plan.ilaw?.waysForward.nextSteps && (
+                          <div className="bg-white/90 p-3.5 rounded-2xl border border-purple-200/70">
+                            <span className="font-extrabold text-purple-900 block mb-1">Synthesis & Reflection Prompt:</span>
+                            <p className="text-slate-700 font-medium leading-relaxed">{plan.ilaw.waysForward.nextSteps}</p>
+                          </div>
+                        )}
+
                         <div className="bg-white/80 p-3.5 rounded-2xl border border-purple-200/60 space-y-1.5">
                           <span className="font-extrabold text-purple-900 block">Differentiated Growth Pathways:</span>
                           <div>
-                            <strong className="text-amber-800">Remediation:</strong>
-                            <p className="text-slate-700 font-medium mt-0.5">{plan.differentiation.remediation}</p>
+                            <strong className="text-amber-800">Remediation Action:</strong>
+                            <p className="text-slate-700 font-medium mt-0.5">
+                              {plan.ilaw?.waysForward.remediationAction || plan.differentiation.remediation}
+                            </p>
                           </div>
                           <div className="pt-1">
-                            <strong className="text-indigo-800">Enrichment:</strong>
-                            <p className="text-slate-700 font-medium mt-0.5">{plan.differentiation.enrichment}</p>
+                            <strong className="text-indigo-800">Enrichment Challenge:</strong>
+                            <p className="text-slate-700 font-medium mt-0.5">
+                              {plan.ilaw?.waysForward.enrichmentChallenge || plan.differentiation.enrichment}
+                            </p>
                           </div>
                         </div>
+
+                        {plan.ilaw?.waysForward.realWorldCareers && plan.ilaw.waysForward.realWorldCareers.length > 0 && (
+                          <div className="bg-white/80 p-3.5 rounded-2xl border border-purple-200/60">
+                            <span className="font-extrabold text-purple-900 block mb-1.5">Philippine Career Applications:</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {plan.ilaw.waysForward.realWorldCareers.map((career, cIdx) => (
+                                <span
+                                  key={cIdx}
+                                  className="px-2.5 py-1 bg-purple-100 text-purple-900 font-bold rounded-lg text-[10px]"
+                                >
+                                  {career}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

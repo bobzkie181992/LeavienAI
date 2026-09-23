@@ -698,6 +698,7 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                     >
                       <option value="Grade 11">Grade 11</option>
                       <option value="Grade 12">Grade 12</option>
+                      <option value="Grade 10">Grade 10</option>
                     </select>
                   </div>
                   <div>
@@ -712,6 +713,10 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                     />
                   </div>
                 </div>
+                <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                  <Icons.Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  <span>Student Choice: Students can choose and update what section and grade they are upon registration or in their profile.</span>
+                </p>
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5 ml-1">

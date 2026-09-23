@@ -1,7 +1,8 @@
 import { Topic } from '../types';
 import { SUMMATIVE_ASSESSMENTS } from './summativeAssessments';
+import { ILAW_LESSON_PLANS } from './ilawLessons';
 
-export const topics: Topic[] = [
+const baseTopics: Topic[] = [
   {
     id: 'functions',
     title: 'Functions & Relations',
@@ -1151,6 +1152,11 @@ export const topics: Topic[] = [
     }
   }
 ];
+
+export const topics: Topic[] = baseTopics.map(t => ({
+  ...t,
+  lessonPlan: ILAW_LESSON_PLANS[t.id] || t.lessonPlan
+}));
 
 export const achievements = [
   {

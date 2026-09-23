@@ -301,11 +301,13 @@ export interface ILAWFramework {
     learningIntentions: string;
     successCriteria: string[];
     competencies: string[];
+    priorKnowledge?: string;
   };
   learningExperience: {
     primingActivity: string;
     coreInstruction: string;
     guidedExercises: string;
+    keyFormulas?: { name: string; formula: string; explanation: string }[];
   };
   assessingLearning: {
     formativeAssessment: string;
@@ -317,6 +319,7 @@ export interface ILAWFramework {
     nextSteps: string;
     remediationAction: string;
     enrichmentChallenge: string;
+    realWorldCareers?: string[];
   };
 }
 
@@ -663,13 +666,36 @@ export interface PresentationViewRecord {
   quizScore?: number;
 }
 
+export type DiagnosticQuestionType = 'multiple-choice' | 'true-false' | 'matching' | 'short-answer';
+
+export interface MatchingPair {
+  left: string;
+  right: string;
+}
+
+export interface DiagnosticItemRecord {
+  questionId: string;
+  questionText: string;
+  questionType: DiagnosticQuestionType;
+  competency: string;
+  competencyTitle?: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  studentAnswer: string;
+  correctAnswer: string;
+  isCorrect: boolean;
+}
+
 export interface DiagnosticQuestion {
   id: string;
   question: string;
-  options: string[];
-  correct: number;
+  questionType?: DiagnosticQuestionType;
+  options?: string[];
+  correct?: number;
+  correctText?: string;
+  matchingPairs?: MatchingPair[];
   topic: string;
   competency: string;
+  competencyTitle?: string;
   explanation: string;
   hint1?: string;
   hint2?: string;

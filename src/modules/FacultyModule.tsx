@@ -1,449 +1,331 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  BookOpen, 
   Users, 
   LogOut, 
   Zap, 
-  Database, 
-  Video, 
-  Layers, 
-  HelpCircle, 
-  Trophy, 
   FileText,
   Menu,
-  X,
-  ChevronRight,
-  ChevronDown,
-  FolderOpen,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Bell,
+  Sparkles,
+  Trophy,
+  ClipboardList,
+  Edit3,
+  BookOpen,
+  ArrowRight,
+  Target
 } from 'lucide-react';
 import { UserProfile } from '../types';
-
-import FacultyDashboard from '../components/FacultyDashboard';
-import FacultyRankingsView from '../components/FacultyRankingsView';
-import FacultyReportsManager from '../components/FacultyReportsManager';
-import CurriculumManager from '../components/CurriculumManager';
-import ItemBankManager from '../components/ItemBankManager';
-import FacultyVideoManager from '../components/FacultyVideoManager';
-import FacultyPresentationManager from '../components/FacultyPresentationManager';
-import DiagnosticManager from '../components/DiagnosticManager';
 import { topics } from '../data/curriculum';
 import { useAllStudents, useTeacherReports } from '../hooks/useFirebase';
 
+import TeacherSidebar, { TeacherNavSection } from '../components/TeacherSidebar';
+import TopNavHeader from '../components/TopNavHeader';
+import TeacherCurriculumView from '../components/teacher-views/TeacherCurriculumView';
+import TeacherLessonManagerView from '../components/teacher-views/TeacherLessonManagerView';
+import TeacherActivitiesView from '../components/teacher-views/TeacherActivitiesView';
+import TeacherAssessmentsView from '../components/teacher-views/TeacherAssessmentsView';
+import TeacherClassesView from '../components/teacher-views/TeacherClassesView';
+import TeacherAnalyticsView from '../components/teacher-views/TeacherAnalyticsView';
+import TeacherResourcesView from '../components/teacher-views/TeacherResourcesView';
+import TeacherNotificationsView from '../components/teacher-views/TeacherNotificationsView';
+import TeacherSettingsView from '../components/teacher-views/TeacherSettingsView';
+
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
+import ModernTeacherDashboard from '../components/ModernTeacherDashboard';
 
 interface FacultyModuleProps {
   profile: UserProfile;
   onLogout: () => void;
 }
 
-type TabType = 'faculty' | 'rankings' | 'reports' | 'materials' | 'curriculum' | 'items' | 'diagnostic';
-type MaterialSubTab = 'presentations' | 'videos';
-
-interface NavItem {
-  id: TabType;
-  label: string;
-  icon: React.ReactNode;
-  badge?: string;
-  description: string;
-}
-
 export default function FacultyModule({ profile, onLogout }: FacultyModuleProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('faculty');
-  const [materialSubTab, setMaterialSubTab] = useState<MaterialSubTab>('presentations');
+  const [currentSection, setCurrentSection] = useState<TeacherNavSection>('dashboard');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [reportPreselectedStudent, setReportPreselectedStudent] = useState<UserProfile | null>(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const { students, loading: studentsLoading } = useAllStudents();
   const { reports, loading: reportsLoading, saveReport, deleteReport } = useTeacherReports();
 
   const handleOpenAddReportForStudent = (student?: UserProfile) => {
     setReportPreselectedStudent(student || null);
-    setActiveTab('reports');
-    setIsMobileMenuOpen(false);
+    setCurrentSection('analytics-reports');
   };
 
-  const navItems: NavItem[] = [
-    {
-      id: 'faculty',
-      label: 'Students',
-      icon: <Users className="w-4 h-4" />,
-      badge: students.length > 0 ? `${students.length}` : undefined,
-      description: 'Manage profiles, LRNs, and progress'
-    },
-    {
-      id: 'rankings',
-      label: 'Rankings',
-      icon: <Trophy className="w-4 h-4 text-amber-400" />,
-      description: 'Leaderboard, badges, and oral points'
-    },
-    {
-      id: 'reports',
-      label: 'Reports',
-      icon: <FileText className="w-4 h-4 text-indigo-400" />,
-      badge: reports.length > 0 ? `${reports.length}` : undefined,
-      description: 'Student progress & narrative reports'
-    },
-    {
-      id: 'materials',
-      label: 'Learning Materials',
-      icon: <FolderOpen className="w-4 h-4 text-emerald-400" />,
-      description: 'Slide decks & video lectures'
-    },
-    {
-      id: 'curriculum',
-      label: 'Curriculum',
-      icon: <BookOpen className="w-4 h-4 text-sky-400" />,
-      description: 'Topics, quizzes & learning pathways'
-    },
-    {
-      id: 'items',
-      label: 'Item Bank',
-      icon: <Database className="w-4 h-4 text-violet-400" />,
-      description: 'Question items & psychometrics'
-    },
-    {
-      id: 'diagnostic',
-      label: 'Diagnostic',
-      icon: <HelpCircle className="w-4 h-4 text-cyan-400" />,
-      description: 'Adaptive diagnostic assessments'
-    }
-  ];
-
-  const getActiveTabTitle = () => {
-    switch (activeTab) {
-      case 'faculty': return { title: 'Student Management', subtitle: 'View learner records, credentials, and progress tracking' };
-      case 'rankings': return { title: 'Class Rankings & Leaderboard', subtitle: 'XP standings, achievements, and oral recitation awards' };
-      case 'reports': return { title: 'Narrative Reports & Feedback', subtitle: 'Generate, edit, and export personalized student evaluations' };
-      case 'materials':
-        return materialSubTab === 'presentations'
-          ? { title: 'Learning Materials — Slide Decks', subtitle: 'Manage slide presentations and view student viewing analytics' }
-          : { title: 'Learning Materials — Video Lectures', subtitle: 'Curate video lessons and YouTube lecture resources' };
-      case 'curriculum': return { title: 'Curriculum & Topics', subtitle: 'Manage Grade 11 Mathematics modules and quizzes' };
-      case 'items': return { title: 'Question Item Bank', subtitle: 'Create, author, and calibrate assessment questions' };
-      case 'diagnostic': return { title: 'Diagnostic Assessment Manager', subtitle: 'Configure diagnostic tests and misconception rules' };
-      default: return { title: 'Faculty Dashboard', subtitle: 'MathQuest Admin Portal' };
+  const getSectionTitle = (sec: TeacherNavSection) => {
+    switch (sec) {
+      case 'dashboard': return { title: 'Faculty Dashboard', subtitle: 'Academic Command & Monitoring Overview' };
+      // Curriculum
+      case 'curriculum-overview': return { title: 'Curriculum • Overview', subtitle: 'Master course outline across all Grade 11 terms' };
+      case 'curriculum-ilaw': return { title: 'Curriculum • DepEd ILAW Lessons', subtitle: 'DepEd Order No. 016, s. 2024 four-pillar lesson frameworks' };
+      case 'curriculum-competencies': return { title: 'Curriculum • Learning Competencies', subtitle: 'Most Essential Learning Competencies (MELCs) directory' };
+      case 'curriculum-map': return { title: 'Curriculum • Course Map & Pacing', subtitle: 'Sequential progression and 18-week term distribution' };
+      // Lesson Management
+      case 'lessons-my': return { title: 'Lesson Management • My Lessons', subtitle: 'Teacher-authored Daily Lesson Plans (DLP)' };
+      case 'lessons-create': return { title: 'Lesson Management • Create Lesson', subtitle: 'Author new DepEd ILAW lesson plan and link diagnostics' };
+      case 'lessons-drafts': return { title: 'Lesson Management • Drafts', subtitle: 'Work-in-progress lesson plans' };
+      case 'lessons-published': return { title: 'Lesson Management • Published Lessons', subtitle: 'Active lessons available to students' };
+      case 'lessons-templates': return { title: 'Lesson Management • Lesson Templates', subtitle: 'Standard DepEd DLP, DLL, and 4-A templates' };
+      // Activities
+      case 'activities-create': return { title: 'Activities • Create Activity', subtitle: 'Assign performance tasks, case studies, or worksheets' };
+      case 'activities-active': return { title: 'Activities • Active Activities', subtitle: 'Class activities and submission deadlines' };
+      case 'activities-submissions': return { title: 'Activities • Submissions & Grading', subtitle: 'Evaluate student work and assign rubric grades' };
+      // Assessments
+      case 'assessments-diagnostic': return { title: 'Assessments • Diagnostic Assessments', subtitle: 'Pre-learning baseline checks to measure prior student knowledge' };
+      case 'assessments-formative': return { title: 'Assessments • Formative Assessments', subtitle: 'In-lesson continuous learning and immediate feedback checks' };
+      case 'assessments-bank': return { title: 'Assessments • Question Bank', subtitle: 'Author, search, filter, and calibrate assessment items' };
+      case 'assessments-create': return { title: 'Assessments • Create Assessment', subtitle: 'Author new Diagnostic or Formative assessments' };
+      case 'assessments-results': return { title: 'Assessments • Assessment Results', subtitle: 'Class performance analytics, diagnostic baselines, and learning gaps' };
+      case 'assessments-quizzes': return { title: 'Assessments • Quizzes', subtitle: 'Formative unit assessment modules' };
+      case 'assessments-exams': return { title: 'Assessments • Summative Exams', subtitle: 'Table of Specifications (TOS) examination blueprints' };
+      // My Classes
+      case 'classes-grade11': return { title: 'My Classes • Grade 11 Overview', subtitle: 'Senior High School cohort analytics' };
+      case 'classes-sections': return { title: 'My Classes • Sections & Strands', subtitle: 'STEM, ABM, HUMSS, TVL section distribution' };
+      case 'classes-students': return { title: 'My Classes • Student Directory', subtitle: 'Manage student records, LRNs, and login PINs' };
+      // Analytics
+      case 'analytics-class': return { title: 'Analytics • Class Performance', subtitle: 'Leaderboard, achievements, and oral recitation awards' };
+      case 'analytics-progress': return { title: 'Analytics • Student Progress', subtitle: 'Detailed student learning trajectories' };
+      case 'analytics-competency': return { title: 'Analytics • Competency Tracking', subtitle: 'MELCs heatmaps and mastery benchmark coverage' };
+      case 'analytics-reports': return { title: 'Analytics • Assessment Reports', subtitle: 'Personalized narrative progress reports' };
+      // Resources
+      case 'resources-materials': return { title: 'Resources • Teaching Materials', subtitle: 'Interactive slide decks and video lecture library' };
+      case 'resources-worksheets': return { title: 'Resources • Printable Worksheets', subtitle: 'Downloadable practice problem sheets and answer keys' };
+      case 'resources-shared': return { title: 'Resources • Shared Department Drive', subtitle: 'Collaborative curriculum guides and syllabi' };
+      // General
+      case 'notifications': return { title: 'Notifications & Alerts', subtitle: 'Real-time student task activity and intervention notices' };
+      case 'settings': return { title: 'Faculty Settings', subtitle: 'DepEd D.O. 8 grading weights & academic preferences' };
+      default: return { title: 'Faculty Management Portal', subtitle: 'MathQuest Grade 11' };
     }
   };
 
-  const activeTabMeta = getActiveTabTitle();
+  const activeMeta = getSectionTitle(currentSection);
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row font-sans">
-      {/* ================= DESKTOP SIDEBAR ================= */}
-      <aside className="w-72 bg-slate-900 text-slate-100 flex-col h-screen sticky top-0 border-r border-slate-800 z-30 hidden lg:flex shrink-0 shadow-2xl">
-        {/* Brand Header */}
-        <div className="p-6 border-b border-slate-800/80 flex items-center gap-3.5 bg-slate-950/40">
-          <div className="w-11 h-11 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-900/40 ring-1 ring-indigo-400/30 shrink-0">
-            <Zap className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-black text-white tracking-tight leading-tight">Faculty Hub</h1>
-            <p className="text-[11px] text-slate-400 font-medium">MathQuest Grade 11 Admin</p>
-          </div>
-        </div>
+    <div className="min-h-screen bg-slate-100 flex font-sans">
+      {/* 1. TEACHER SIDEBAR */}
+      <TeacherSidebar
+        currentSection={currentSection}
+        onNavigate={(sec) => {
+          setCurrentSection(sec);
+          setIsMobileSidebarOpen(false);
+        }}
+        profile={profile}
+        studentsCount={students.length}
+        pendingSubmissionsCount={2}
+        unreadNotificationsCount={2}
+        isOpenMobile={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        onLogout={() => setShowLogoutConfirm(true)}
+      />
 
-        {/* Profile Card */}
-        <div className="px-5 py-4 border-b border-slate-800/60 bg-slate-900/80">
-          <div className="flex items-center gap-3 p-2.5 bg-slate-800/60 rounded-2xl border border-slate-700/50">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-300 font-black text-sm shrink-0">
-              {profile.displayName?.charAt(0).toUpperCase() || 'F'}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold text-slate-100 truncate flex items-center gap-1.5">
-                <span className="truncate">{profile.displayName}</span>
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-              </div>
-              <div className="text-[10px] font-semibold text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded-full inline-block mt-0.5 border border-indigo-800/50">
-                Faculty Admin
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar Navigation */}
-        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto custom-scrollbar">
-          <div className="px-3 pt-2 pb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400/90">
-            Management Navigation
-          </div>
-          {navItems.map((item) => {
-            const isActive = activeTab === item.id;
-
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center justify-between p-3 rounded-2xl text-xs font-bold transition-all relative group text-left ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-950/50 ring-1 ring-indigo-400/30'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/70'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`p-1.5 rounded-xl transition-colors shrink-0 ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300 group-hover:text-white group-hover:bg-slate-700'
-                  }`}>
-                    {item.icon}
-                  </div>
-                  <div className="truncate">
-                    <span className="block truncate">{item.label}</span>
-                    <span className={`block text-[10px] font-normal truncate ${isActive ? 'text-indigo-100/80' : 'text-slate-400'}`}>
-                      {item.description}
-                    </span>
-                  </div>
-                </div>
-
-                {item.badge && (
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ml-1 ${
-                    isActive 
-                      ? 'bg-white text-indigo-700' 
-                      : 'bg-slate-800 text-slate-300 group-hover:bg-slate-700'
-                  }`}>
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Sidebar Footer / Sign Out */}
-        <div className="p-4 border-t border-slate-800/80 bg-slate-950/40">
-          <button
-            onClick={() => setShowLogoutConfirm(true)}
-            className="w-full flex items-center justify-between p-3 bg-slate-800/80 hover:bg-rose-950/50 hover:border-rose-800/60 text-slate-300 hover:text-rose-200 rounded-2xl border border-slate-700/50 text-xs font-bold transition-all group"
-          >
-            <div className="flex items-center gap-2.5">
-              <LogOut className="w-4 h-4 text-slate-400 group-hover:text-rose-400 transition-colors" />
-              <span>Sign Out</span>
-            </div>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-rose-400 transition-colors" />
-          </button>
-        </div>
-      </aside>
-
-      {/* ================= MOBILE HEADER ================= */}
-      <div className="lg:hidden bg-slate-900 text-slate-100 border-b border-slate-800 sticky top-0 z-30 px-4 py-3 flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center shadow-sm shrink-0">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-white tracking-tight">Faculty Hub</h1>
-            <p className="text-[10px] text-slate-400">MathQuest Grade 11 Admin</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 bg-slate-800 text-slate-200 hover:text-white rounded-xl border border-slate-700 transition-colors flex items-center justify-center"
-            aria-label="Toggle menu"
-          >
-            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Drawer Overlay */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 lg:hidden"
-            onClick={() => setIsMobileMenuOpen(false)}
-          >
-            <motion.div
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="w-72 bg-slate-900 text-slate-100 h-full flex flex-col p-4 shadow-2xl border-r border-slate-800"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                    <Zap className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="font-extrabold text-sm text-white">Sidebar Menu</span>
-                </div>
-                <button
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-lg bg-slate-800"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Profile in Drawer */}
-              <div className="mb-4 p-3 bg-slate-800/80 rounded-xl border border-slate-700/50 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-indigo-600/30 flex items-center justify-center text-indigo-300 font-bold text-xs">
-                  {profile.displayName?.charAt(0).toUpperCase() || 'F'}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-white truncate">{profile.displayName}</div>
-                  <div className="text-[10px] text-indigo-300">Faculty Admin</div>
-                </div>
-              </div>
-
-              {/* Drawer Links */}
-              <div className="flex-1 space-y-1.5 overflow-y-auto custom-scrollbar">
-                {navItems.map((item) => {
-                  const isActive = activeTab === item.id;
-
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setActiveTab(item.id);
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-bold transition-all text-left ${
-                        isActive
-                          ? 'bg-indigo-600 text-white shadow-md'
-                          : 'text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {item.icon}
-                        <span>{item.label}</span>
-                      </div>
-                      {item.badge && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-300">
-                          {item.badge}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="pt-4 border-t border-slate-800 mt-2">
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    setShowLogoutConfirm(true);
-                  }}
-                  className="w-full flex items-center gap-2.5 p-3 text-rose-300 bg-rose-950/40 border border-rose-900/50 rounded-xl text-xs font-bold"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Sign Out</span>
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ================= MAIN CONTENT AREA ================= */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-        {/* Top Header Bar for Active Tab Title */}
-        <header className="bg-white border-b border-slate-200/80 px-6 py-4 sticky top-0 z-20 shadow-xs hidden lg:block">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-black text-slate-900 tracking-tight">{activeTabMeta.title}</h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">{activeTabMeta.subtitle}</p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700">
-                <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
-                <span>{profile.displayName}</span>
-              </div>
-              <button
-                onClick={() => setShowLogoutConfirm(true)}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-                title="Log Out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </header>
+      {/* 2. MAIN CONTENT AREA */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top Header */}
+        <TopNavHeader
+          role="faculty"
+          profile={profile}
+          currentSectionTitle={activeMeta.title}
+          breadcrumbPath={[
+            { label: 'Faculty Console', action: () => setCurrentSection('dashboard') },
+            { label: activeMeta.title }
+          ]}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          onNavigateNotifications={() => setCurrentSection('notifications')}
+          onNavigateSettings={() => setCurrentSection('settings')}
+          onLogout={() => setShowLogoutConfirm(true)}
+          topics={topics}
+        />
 
         {/* Content Body */}
         <main className="p-4 sm:p-6 lg:p-8 flex-1 max-w-7xl w-full mx-auto">
           <AnimatePresence mode="wait">
-            {activeTab === 'rankings' ? (
-              <motion.div key="rankings" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
-                <FacultyRankingsView 
+            {currentSection === 'dashboard' ? (
+              <motion.div
+                key="sec-dashboard"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+                className="space-y-6"
+              >
+                <ModernTeacherDashboard
+                  profile={profile}
                   students={students}
-                  loading={studentsLoading}
-                  onOpenAddReport={(student) => handleOpenAddReportForStudent(student)}
+                  topics={topics}
+                  onNavigateSection={(sec) => setCurrentSection(sec as TeacherNavSection)}
+                  onOpenClass={(classId) => setCurrentSection('classes-students')}
+                  onOpenLesson={(lessonId) => setCurrentSection('lessons-my')}
                 />
               </motion.div>
-            ) : activeTab === 'reports' ? (
-              <motion.div key="reports" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
-                <FacultyReportsManager 
+            ) : currentSection.startsWith('curriculum') ? (
+              <motion.div
+                key={`curriculum-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TeacherCurriculumView
+                  topics={topics}
+                  initialSubTab={
+                    currentSection === 'curriculum-ilaw' ? 'ilaw' :
+                    currentSection === 'curriculum-competencies' ? 'competencies' :
+                    currentSection === 'curriculum-map' ? 'map' :
+                    'overview'
+                  }
+                  onSelectTopicForEdit={(topic) => {
+                    setCurrentSection('lessons-create');
+                  }}
+                />
+              </motion.div>
+            ) : currentSection.startsWith('lessons') ? (
+              <motion.div
+                key={`lessons-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TeacherLessonManagerView
+                  topics={topics}
+                  initialSubTab={
+                    currentSection === 'lessons-create' ? 'create' :
+                    currentSection === 'lessons-drafts' ? 'drafts' :
+                    currentSection === 'lessons-published' ? 'published' :
+                    currentSection === 'lessons-templates' ? 'templates' :
+                    'my'
+                  }
+                />
+              </motion.div>
+            ) : currentSection.startsWith('activities') ? (
+              <motion.div
+                key={`activities-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TeacherActivitiesView
+                  topics={topics}
                   students={students}
+                  initialSubTab={
+                    currentSection === 'activities-create' ? 'create' :
+                    currentSection === 'activities-submissions' ? 'submissions' :
+                    'active'
+                  }
+                />
+              </motion.div>
+            ) : currentSection.startsWith('assessments') ? (
+              <motion.div
+                key={`assessments-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TeacherAssessmentsView
+                  topics={topics}
+                  initialSubTab={
+                    currentSection === 'assessments-diagnostic' ? 'diagnostic' :
+                    currentSection === 'assessments-formative' ? 'formative' :
+                    currentSection === 'assessments-create' ? 'create' :
+                    currentSection === 'assessments-bank' ? 'bank' :
+                    currentSection === 'assessments-results' ? 'results' :
+                    currentSection === 'assessments-exams' ? 'exams' :
+                    'quizzes'
+                  }
+                />
+              </motion.div>
+            ) : currentSection.startsWith('classes') ? (
+              <motion.div
+                key={`classes-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TeacherClassesView
+                  students={students}
+                  profile={profile}
+                  initialSubTab={
+                    currentSection === 'classes-grade11' ? 'grade11' :
+                    currentSection === 'classes-sections' ? 'sections' :
+                    'students'
+                  }
+                  onAddReportForStudent={handleOpenAddReportForStudent}
+                />
+              </motion.div>
+            ) : currentSection.startsWith('analytics') ? (
+              <motion.div
+                key={`analytics-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TeacherAnalyticsView
+                  students={students}
+                  topics={topics}
+                  profile={profile}
                   reports={reports}
-                  loading={reportsLoading}
-                  facultyProfile={profile}
-                  onSaveReport={saveReport}
-                  onDeleteReport={deleteReport}
-                  preselectedStudent={reportPreselectedStudent}
+                  reportsLoading={reportsLoading}
+                  saveReport={saveReport}
+                  deleteReport={deleteReport}
+                  studentsLoading={studentsLoading}
+                  initialSubTab={
+                    currentSection === 'analytics-progress' ? 'progress' :
+                    currentSection === 'analytics-competency' ? 'competency' :
+                    currentSection === 'analytics-reports' ? 'reports' :
+                    'class'
+                  }
+                  preselectedStudentForReport={reportPreselectedStudent}
                   onClearPreselectedStudent={() => setReportPreselectedStudent(null)}
                 />
               </motion.div>
-            ) : activeTab === 'materials' ? (
-              <motion.div key="materials" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }} className="space-y-6">
-                {/* Learning Materials Sub-Navigation Switcher */}
-                <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setMaterialSubTab('presentations')}
-                    className={`flex-1 min-w-[180px] flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl font-bold text-xs transition-all ${
-                      materialSubTab === 'presentations'
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 ring-1 ring-indigo-500'
-                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
-                    }`}
-                  >
-                    <Layers className={`w-4 h-4 ${materialSubTab === 'presentations' ? 'text-white' : 'text-emerald-500'}`} />
-                    <span>Slide Presentations</span>
-                  </button>
-
-                  <button
-                    onClick={() => setMaterialSubTab('videos')}
-                    className={`flex-1 min-w-[180px] flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl font-bold text-xs transition-all ${
-                      materialSubTab === 'videos'
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 ring-1 ring-indigo-500'
-                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/60'
-                    }`}
-                  >
-                    <Video className={`w-4 h-4 ${materialSubTab === 'videos' ? 'text-white' : 'text-rose-500'}`} />
-                    <span>Video Lectures</span>
-                  </button>
-                </div>
-
-                {/* Selected Learning Material Manager */}
-                {materialSubTab === 'presentations' ? (
-                  <FacultyPresentationManager topics={topics} facultyName={profile.displayName} facultyUid={profile.uid} />
-                ) : (
-                  <FacultyVideoManager topics={topics} />
-                )}
+            ) : currentSection.startsWith('resources') ? (
+              <motion.div
+                key={`resources-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TeacherResourcesView
+                  topics={topics}
+                  profile={profile}
+                  initialSubTab={
+                    currentSection === 'resources-worksheets' ? 'worksheets' :
+                    currentSection === 'resources-shared' ? 'shared' :
+                    'materials'
+                  }
+                />
               </motion.div>
-            ) : activeTab === 'curriculum' ? (
-              <motion.div key="curriculum" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
-                <CurriculumManager />
+            ) : currentSection === 'notifications' ? (
+              <motion.div
+                key="sec-notifications"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TeacherNotificationsView
+                  onNavigateToSection={(sec) => setCurrentSection(sec)}
+                />
               </motion.div>
-            ) : activeTab === 'items' ? (
-              <motion.div key="items" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
-                <ItemBankManager />
+            ) : currentSection === 'settings' ? (
+              <motion.div
+                key="sec-settings"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TeacherSettingsView profile={profile} />
               </motion.div>
-            ) : activeTab === 'diagnostic' ? (
-              <motion.div key="diagnostic" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
-                <DiagnosticManager />
-              </motion.div>
-            ) : (
-              <motion.div key="faculty" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }}>
-                <FacultyDashboard facultyProfile={profile} />
-              </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
         </main>
       </div>

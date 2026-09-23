@@ -1532,13 +1532,20 @@ export default function Dashboard({
             {topicMastery.map(({ topic, percentage, completedQuizzes, totalQuizzes }, index) => {
               const IconComponent = (Icons as any)[topic.icon] || Icons.Book;
               return (
-                <motion.button
+                <motion.div
                   key={topic.id}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      onSelectTopic(topic);
+                    }
+                  }}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   onClick={() => onSelectTopic(topic)}
-                  className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all text-left group"
+                  className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all text-left group cursor-pointer"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-indigo-50 text-indigo-600 group-hover:scale-110 transition-transform`}>
@@ -1555,10 +1562,11 @@ export default function Dashboard({
                   <h3 className="text-lg font-bold text-slate-900 mb-2">{topic.title}</h3>
                   <div className="h-2 bg-slate-100 rounded-full mb-3 overflow-hidden">
                     <div 
-                      className={`h-full rounded-full ${
-                        percentage >= 80 ? 'bg-emerald-500' : percentage >= 50 ? 'bg-amber-400' : 'bg-indigo-600'
-                      }`}
-                      style={{ width: `${percentage}%` }}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ 
+                        width: `${percentage}%`,
+                        backgroundColor: percentage >= 80 ? '#10b981' : percentage >= 50 ? '#fbbf24' : '#4f46e5'
+                      }}
                     />
                   </div>
                   <div className="flex items-center justify-between">
@@ -1585,7 +1593,7 @@ export default function Dashboard({
                       </button>
                     </div>
                   )}
-                </motion.button>
+                </motion.div>
               );
             })}
           </div>

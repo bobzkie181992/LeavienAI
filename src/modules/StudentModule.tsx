@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
+  Menu,
   BookOpen, 
   Trophy, 
   User, 
@@ -18,7 +19,13 @@ import {
   Crown,
   Flame,
   Swords,
-  AlertCircle
+  AlertCircle,
+  Home,
+  CheckSquare,
+  BarChart3,
+  FolderOpen,
+  Bell,
+  Settings
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -31,6 +38,19 @@ import {
   isValidatedOrActive,
   SummativeAssessment 
 } from '../types';
+
+import StudentSidebar, { StudentNavSection } from '../components/StudentSidebar';
+import TopNavHeader from '../components/TopNavHeader';
+import StudentDiagnosticAssessmentPage from '../components/StudentDiagnosticAssessmentPage';
+import StudentFormativeAssessmentPage from '../components/StudentFormativeAssessmentPage';
+import CurriculumView from '../components/student-views/CurriculumView';
+import ActivitiesView from '../components/student-views/ActivitiesView';
+import AssessmentsView from '../components/student-views/AssessmentsView';
+import LearningResourcesView from '../components/student-views/LearningResourcesView';
+import ProgressView from '../components/student-views/ProgressView';
+import StudentProgressView from '../components/student-views/StudentProgressView';
+import NotificationsView from '../components/student-views/NotificationsView';
+import SettingsView from '../components/student-views/SettingsView';
 
 import Dashboard from '../components/Dashboard';
 import QuizEngine from '../components/QuizEngine';
@@ -56,6 +76,7 @@ import AvatarCustomizerModal from '../components/AvatarCustomizerModal';
 import LevelUpCelebrationModal from '../components/LevelUpCelebrationModal';
 import SummativeAssessmentModal from '../components/SummativeAssessmentModal';
 import WeeklyStudySummary from '../components/WeeklyStudySummary';
+import ModernStudentDashboard from '../components/ModernStudentDashboard';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { usePeers } from '../hooks/useFirebase';
 import { usePeerChat } from '../hooks/usePeerChat';
@@ -106,7 +127,10 @@ export default function StudentModule({
   checkAchievements, 
   onLogout 
 }: StudentModuleProps) {
-  const [activeTab, setActiveTab] = useState<'learn' | 'presentations' | 'explainers' | 'flashcards' | 'reports' | 'profile' | 'leaderboard'>('learn');
+  // Navigation Section State
+  const [currentSection, setCurrentSection] = useState<StudentNavSection>('dashboard');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<TopicType | null>(null);
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
@@ -193,7 +217,6 @@ export default function StudentModule({
     };
   }, [activeQuiz, isTakingDiagnostic, activeSummativeAssessment, isSprintArenaOpen, isDailyChallengeOpen]);
 
-
   const currentRank = useMemo(() => {
     return getRankByLevel(profile.level);
   }, [profile.level]);
@@ -271,19 +294,15 @@ export default function StudentModule({
 
   // Handler for Retaking a Quiz
   const handleRetakeQuiz = (quizId: string) => {
-    // Check if it's an adaptive session
     if (quizId.startsWith('adaptive-')) {
       handleStartAdaptivePractice();
       return;
     }
 
-    // Otherwise find the quiz in topics
     for (const topic of topics) {
       const q = topic.quizzes.find(quiz => quiz.id === quizId);
       if (q) {
         const activeProblems = q.problems.filter(isValidatedOrActive);
-        
-        // Use consistent item bank supplementation
         let problemsToRun = [...activeProblems];
         if (problemsToRun.length < 5) {
           const supplement = allProblemsPool
@@ -302,7 +321,6 @@ export default function StudentModule({
       }
     }
 
-    // Fallback if not found: start adaptive practice
     handleStartAdaptivePractice();
   };
 
@@ -355,7 +373,7 @@ export default function StudentModule({
     });
   };
 
-  // Helper to determine the next level quiz in sequence for competency progression
+  // Helper for sequential progression
   const getNextLevelQuiz = (currentQuiz: Quiz | null): Quiz | null => {
     if (!currentQuiz) return null;
     const currentTopic = topics.find(t => t.id === currentQuiz.topicId || t.quizzes.some(q => q.id === currentQuiz.id));
@@ -374,7 +392,6 @@ export default function StudentModule({
       return { ...candidate, problems: activeProblems };
     }
 
-    // If last quiz in current topic, check first quiz of next topic
     const currentTopicIndex = topics.findIndex(t => t.id === currentTopic.id);
     if (currentTopicIndex !== -1 && currentTopicIndex < topics.length - 1) {
       const nextTopic = topics[currentTopicIndex + 1];
@@ -394,39 +411,108 @@ export default function StudentModule({
     return null;
   };
 
-  return (
-    <>
-      {/* Top Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 sm:px-6 py-3.5">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-md shadow-indigo-100">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-black text-slate-900 tracking-tight">LeavienAI</h1>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block -mt-1 hidden sm:block">
-                Grade 11 Adaptive Learning
-              </span>
-            </div>
-          </div>
+  // Compute section breadcrumb label
+  const getSectionTitle = (sec: StudentNavSection) => {
+    switch (sec) {
+      case 'dashboard': return 'Dashboard';
+      case 'curriculum':
+      case 'curriculum-hierarchy': return 'Curriculum • 8-Level Hierarchy';
+      case 'curriculum-overview': return 'Curriculum • Overview';
+      case 'curriculum-ilaw': return 'Curriculum • DepEd ILAW Lessons';
+      case 'curriculum-subjects': return 'Curriculum • My Subjects';
+      case 'curriculum-competencies': return 'Curriculum • Learning Competencies';
+      case 'activities':
+      case 'activities-todo': return 'Activities • To Do';
+      case 'activities-in-progress': return 'Activities • In Progress';
+      case 'activities-completed': return 'Activities • Completed Archive';
+      case 'assessments':
+      case 'assessments-diagnostic': return 'Assessments • Diagnostic Assessment';
+      case 'assessments-formative': return 'Assessments • Formative Assessment';
+      case 'assessments-quizzes': return 'Assessments • Quizzes';
+      case 'assessments-exams': return 'Assessments • Summative Exams (TOS)';
+      case 'assessments-results': return 'Assessments • My Results';
+      case 'resources':
+      case 'resources-modules': return 'Learning Resources • Modules & Slides';
+      case 'resources-worksheets': return 'Learning Resources • Worksheets & Flashcards';
+      case 'resources-videos': return 'Learning Resources • Videos';
+      case 'resources-references': return 'Learning Resources • References & Formulas';
+      case 'progress':
+      case 'progress-subject': return 'My Progress • Subject Progress';
+      case 'progress-competency': return 'My Progress • Competency Progress';
+      case 'progress-grades': return 'My Progress • Grades & Transcript';
+      case 'notifications': return 'Notifications';
+      case 'settings': return 'Settings & Preferences';
+      default: return 'Student Portal';
+    }
+  };
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* PWA Install Button */}
+  return (
+    <div className="min-h-screen bg-slate-50 flex">
+      {/* 1. Left Sidebar Component */}
+      <StudentSidebar
+        currentSection={currentSection}
+        onNavigate={(sec) => {
+          setCurrentSection(sec);
+          setSelectedTopic(null);
+          setActiveQuiz(null);
+          setIsTakingDiagnostic(false);
+          setIsViewingPathway(false);
+          setActiveSummativeAssessment(null);
+        }}
+        profile={profile}
+        unreadNotificationsCount={3}
+        pendingActivitiesCount={topics.flatMap(t => t.quizzes).filter(q => !results.some(r => r.quizId === q.id)).length}
+        isOpenMobile={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        onLogout={() => setShowLogoutConfirm(true)}
+        onOpenLevelProgression={() => {
+          playPopSound();
+          setIsLevelProgressionOpen(true);
+        }}
+        onOpenQuests={() => {
+          playPopSound();
+          setIsDailyQuestsOpen(true);
+        }}
+      />
+
+      {/* 2. Main Content Wrapper */}
+      <div className="flex-1 flex flex-col min-w-0 lg:pl-72">
+        {/* Top Navigation Header */}
+        <TopNavHeader
+          role="student"
+          profile={profile}
+          currentSectionTitle={getSectionTitle(currentSection)}
+          breadcrumbPath={[
+            { label: 'Student Portal', action: () => setCurrentSection('dashboard') },
+            { label: getSectionTitle(currentSection).split('•')[0].trim() },
+            ...(selectedTopic ? [{ label: selectedTopic.title }] : [])
+          ]}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          onNavigateNotifications={() => setCurrentSection('notifications')}
+          onNavigateSettings={() => setCurrentSection('settings')}
+          onLogout={() => setShowLogoutConfirm(true)}
+          topics={topics}
+          onSelectTopic={(t) => setSelectedTopic(t)}
+          isMuted={isMuted}
+          onToggleSound={toggleSound}
+        />
+
+        {/* Secondary Sub-Bar: Quick Gamification Metrics */}
+        <div className="bg-slate-100/80 border-b border-slate-200/80 px-4 sm:px-6 py-1.5 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none text-xs">
+          <div className="flex items-center gap-2">
             <PWAInstallButton />
 
-            {/* Daily Quests Trigger Button */}
+            {/* Quests Button */}
             <button
-              id="header-daily-quests-trigger"
               onClick={() => {
                 playPopSound();
                 setIsDailyQuestsOpen(true);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-amber-200 bg-amber-50 hover:bg-amber-100/90 text-amber-900 transition-all font-bold text-xs relative active:scale-95 shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50 hover:bg-amber-100/90 text-amber-900 transition-all font-bold text-[11px] relative active:scale-95 cursor-pointer shrink-0"
               title="Daily Quests & Check-In Bounty"
             >
               <Gift className="w-3.5 h-3.5 text-amber-600" />
-              <span className="hidden sm:inline">Quests</span>
+              <span>Quests</span>
               {pendingQuestsToClaim > 0 && (
                 <span className="w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-bounce">
                   {pendingQuestsToClaim}
@@ -434,353 +520,440 @@ export default function StudentModule({
               )}
             </button>
 
-            {/* Rapid Math Blitz Trigger */}
+            {/* Blitz Arena */}
             <button
-              id="header-sprint-arena-trigger"
               onClick={() => {
                 playPopSound();
                 setIsSprintArenaOpen(true);
               }}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-orange-900 transition-all font-bold text-xs active:scale-95 shadow-sm"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-orange-900 transition-all font-bold text-[11px] active:scale-95 cursor-pointer shrink-0"
               title="60-Second Math Blitz Arena"
             >
               <Zap className="w-3.5 h-3.5 text-orange-600 fill-orange-500" />
-              <span>Blitz</span>
+              <span>Blitz Arena</span>
             </button>
+          </div>
 
-            {/* Streak Counter */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Streak */}
             <div 
-              className="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 cursor-pointer hover:bg-orange-100 transition-colors"
+              className="flex items-center gap-1.5 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200/80 cursor-pointer hover:bg-orange-100 transition-colors"
               onClick={() => setIsDailyQuestsOpen(true)}
               title={`${profile.streak} day streak! Click to view daily bonuses`}
             >
               <Flame className="w-3.5 h-3.5 text-orange-600 fill-orange-500" />
-              <span className="text-xs font-bold text-orange-700">{profile.streak}d</span>
+              <span className="text-[11px] font-black text-orange-800">{profile.streak}d Streak</span>
             </div>
 
-            {/* Total XP */}
-            <div className="flex items-center gap-1.5 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100">
+            {/* XP */}
+            <div className="flex items-center gap-1.5 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200/80">
               <Trophy className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="text-xs font-bold text-indigo-700">{profile.xp} XP</span>
+              <span className="text-[11px] font-black text-indigo-800">{profile.xp} XP</span>
             </div>
 
-            {/* Level Crest Trigger */}
+            {/* Level Progression */}
             <button
-              id="header-level-crest-trigger"
               onClick={() => {
                 playPopSound();
                 setIsLevelProgressionOpen(true);
               }}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 px-3 py-1.5 rounded-full border border-indigo-200 text-indigo-900 font-bold text-xs transition-all active:scale-95 shadow-sm"
-              title="View Level Progression & Unlocked Perks"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 px-2.5 py-1 rounded-full border border-indigo-200 text-indigo-900 font-black text-[11px] transition-all active:scale-95 cursor-pointer"
+              title="View Level Progression"
             >
               <Crown className="w-3.5 h-3.5 text-amber-500" />
-              <span>Lvl {profile.level}</span>
-              <span className="hidden lg:inline text-[10px] text-indigo-600 font-black uppercase">
-                {currentRank.tierName}
-              </span>
-            </button>
-
-            {/* Audio Mute Toggle */}
-            <button
-              onClick={toggleSound}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-              title={isMuted ? "Unmute Game Audio" : "Mute Game Audio"}
-            >
-              {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-500" />}
-            </button>
-
-            <button
-              onClick={() => setShowLogoutConfirm(true)}
-              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors ml-0.5"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
+              <span>Level {profile.level}</span>
             </button>
           </div>
         </div>
-      </header>
 
-      {/* Main View Container */}
-      <main className="max-w-5xl mx-auto p-4 sm:p-6 pb-28">
-        <AnimatePresence mode="wait">
-          {isViewingPathway && profile.activePathway ? (
-            <motion.div
-              key="pathway"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <PathwayEngine
-                pathway={profile.activePathway}
-                topic={topics.find(t => t.id === profile.activePathway!.topicId) || topics[0]}
-                allTopics={topics}
-                profile={profile}
-                onUpdatePathway={savePathwayProgress}
-                onClose={() => setIsViewingPathway(false)}
-                addXP={addXP}
-                saveResult={(result) => saveResult({ ...result, userId: userUid })}
-              />
-            </motion.div>
-          ) : activeQuiz ? (
-            <motion.div
-              key={`quiz-${activeQuiz.id}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <QuizEngine 
-                quiz={activeQuiz} 
-                availablePool={allProblemsPool}
-                initialMode={quizInitialMode}
-                nextQuiz={getNextLevelQuiz(activeQuiz)}
-                onProceedNextLevel={(nextQuiz) => {
-                  setActiveQuiz(nextQuiz);
-                  setQuizInitialMode('assessment');
-                }}
-                onSuggestAIQuiz={() => {
-                  setActiveQuiz(null);
-                  setIsAIQuizModalOpen(true);
-                }}
-                onClose={() => {
-                  setActiveQuiz(null);
-                  setQuizInitialMode(undefined);
-                }}
-                onComplete={(xp, score, total, itemResponses, abilityEstimate, mathAbilityDiagnosis, violations, isCompetent, modeUsed) => {
-                  addXP(xp);
-                  saveResult({
-                    userId: userUid,
-                    quizId: activeQuiz.id,
-                    score,
-                    total,
-                    itemResponses,
-                    abilityEstimate,
-                    mathAbilityDiagnosis,
-                    violations,
-                    isCompetent,
-                    quizMode: (modeUsed as any) || quizInitialMode
-                  });
-                  checkAchievements(xp, score, total, activeQuiz.topicId);
+        {/* Main View Port */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl w-full mx-auto">
+          <AnimatePresence mode="wait">
+            {/* Interactive Testing/Study Modes Take Priority */}
+            {isViewingPathway && profile.activePathway ? (
+              <motion.div
+                key="pathway"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <PathwayEngine
+                  pathway={profile.activePathway}
+                  topic={topics.find(t => t.id === profile.activePathway!.topicId) || topics[0]}
+                  allTopics={topics}
+                  profile={profile}
+                  onUpdatePathway={savePathwayProgress}
+                  onClose={() => setIsViewingPathway(false)}
+                  addXP={addXP}
+                  saveResult={(result) => saveResult({ ...result, userId: userUid })}
+                />
+              </motion.div>
+            ) : activeQuiz ? (
+              <motion.div
+                key={`quiz-${activeQuiz.id}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <QuizEngine 
+                  quiz={activeQuiz} 
+                  availablePool={allProblemsPool}
+                  initialMode={quizInitialMode}
+                  nextQuiz={getNextLevelQuiz(activeQuiz)}
+                  onProceedNextLevel={(nextQuiz) => {
+                    setActiveQuiz(nextQuiz);
+                    setQuizInitialMode('assessment');
+                  }}
+                  onSuggestAIQuiz={() => {
+                    setActiveQuiz(null);
+                    setIsAIQuizModalOpen(true);
+                  }}
+                  onClose={() => {
+                    setActiveQuiz(null);
+                    setQuizInitialMode(undefined);
+                  }}
+                  onComplete={(xp, score, total, itemResponses, abilityEstimate, mathAbilityDiagnosis, violations, isCompetent, modeUsed) => {
+                    addXP(xp);
+                    saveResult({
+                      userId: userUid,
+                      quizId: activeQuiz.id,
+                      score,
+                      total,
+                      itemResponses,
+                      abilityEstimate,
+                      mathAbilityDiagnosis,
+                      violations,
+                      isCompetent,
+                      quizMode: (modeUsed as any) || quizInitialMode
+                    });
+                    checkAchievements(xp, score, total, activeQuiz.topicId);
 
-                  // Gamification: Trigger confetti celebration on victory
-                  if (score > 0) {
-                    try {
-                      confetti({
-                        particleCount: 90,
-                        spread: 70,
-                        origin: { y: 0.6 }
-                      });
-                    } catch (e) {
-                      // ignore in iframe if canvas blocked
+                    if (score > 0) {
+                      try {
+                        confetti({
+                          particleCount: 90,
+                          spread: 70,
+                          origin: { y: 0.6 }
+                        });
+                      } catch (e) {}
+                      playCorrectSound();
                     }
-                    playCorrectSound();
-                  }
 
-                  // Gamification: Update daily quest metrics
-                  trackQuestProgress(currentUserId, 'answer_problems', score);
-                  trackQuestProgress(currentUserId, 'complete_quiz', 1);
-                  handleGamifiedRewardXP(xp, `Quiz Complete! +${xp} XP`);
+                    trackQuestProgress(currentUserId, 'answer_problems', score);
+                    trackQuestProgress(currentUserId, 'complete_quiz', 1);
+                    handleGamifiedRewardXP(xp, `Quiz Complete! +${xp} XP`);
 
-                  setLatestQuizDetails({ xp, score, total });
-                  setIsPerformanceModalOpen(true);
-                  setActiveQuiz(null);
-                  setQuizInitialMode(undefined);
-                }}
-              />
-            </motion.div>
-          ) : selectedTopic ? (
-            <motion.div
-              key={`topic-${selectedTopic.id}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <TopicDetail 
-                topic={selectedTopic} 
-                onBack={() => setSelectedTopic(null)}
-                isSummativeCompleted={results.some(r => r.quizId === selectedTopic.summativeAssessment?.id)}
-                onStartSummativeAssessment={(summative) => {
-                  setActiveSummativeAssessment(summative);
-                }}
-                onStartQuiz={(quiz, preferredMode) => {
-                  let activeProblems = quiz.problems.filter(isValidatedOrActive);
-                  
-                  // Supplement with item bank if fewer than 5 active problems
-                  if (activeProblems.length < 5) {
-                    const supplement = allProblemsPool
-                      .filter(p => p.topic === quiz.topicId && !activeProblems.some(ap => ap.id === p.id))
-                      .slice(0, 5 - activeProblems.length);
-                    activeProblems = [...activeProblems, ...supplement];
-                  }
+                    setLatestQuizDetails({ xp, score, total });
+                    setIsPerformanceModalOpen(true);
+                    setActiveQuiz(null);
+                    setQuizInitialMode(undefined);
+                  }}
+                />
+              </motion.div>
+            ) : selectedTopic ? (
+              <motion.div
+                key={`topic-${selectedTopic.id}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <TopicDetail 
+                  topic={selectedTopic} 
+                  profile={profile}
+                  onBack={() => setSelectedTopic(null)}
+                  isSummativeCompleted={results.some(r => r.quizId === selectedTopic.summativeAssessment?.id)}
+                  onSaveQuizResult={saveResult}
+                  onAddXP={addXP}
+                  onStartSummativeAssessment={(summative) => {
+                    setActiveSummativeAssessment(summative);
+                  }}
+                  onStartQuiz={(quiz, preferredMode) => {
+                    let activeProblems = quiz.problems.filter(isValidatedOrActive);
+                    if (activeProblems.length < 5) {
+                      const supplement = allProblemsPool
+                        .filter(p => p.topic === quiz.topicId && !activeProblems.some(ap => ap.id === p.id))
+                        .slice(0, 5 - activeProblems.length);
+                      activeProblems = [...activeProblems, ...supplement];
+                    }
 
-                  if (activeProblems.length === 0) {
-                    alert("No active items are currently available in this quiz.");
-                    return;
+                    if (activeProblems.length === 0) {
+                      alert("No active items are currently available in this quiz.");
+                      return;
+                    }
+                    setQuizInitialMode(preferredMode || 'diagnostic');
+                    setActiveQuiz({ ...quiz, problems: activeProblems });
+                  }}
+                />
+              </motion.div>
+            ) : isTakingDiagnostic && topics.some(t => t.quizzes.some(q => q.problems.some(isValidatedOrActive))) ? (
+              <motion.div
+                key="diagnostic"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <DiagnosticAssessment 
+                  topics={topics}
+                  onComplete={(ability, scores, pathway, violations) => {
+                    saveDiagnosticResult(ability, scores, pathway, violations);
+                    setIsTakingDiagnostic(false);
+                    if (pathway) {
+                      setIsViewingPathway(true);
+                    }
+                  }}
+                  onCancel={() => setIsTakingDiagnostic(false)}
+                />
+              </motion.div>
+            ) : currentSection.startsWith('curriculum') ? (
+              <motion.div
+                key={`sec-curriculum-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <CurriculumView
+                  topics={topics}
+                  results={results}
+                  profile={profile}
+                  initialTab={
+                    currentSection === 'curriculum-ilaw' ? 'ilaw' :
+                    currentSection === 'curriculum-subjects' ? 'subjects' :
+                    currentSection === 'curriculum-competencies' ? 'competencies' :
+                    currentSection === 'curriculum-overview' ? 'overview' :
+                    'hierarchy'
                   }
-                  setQuizInitialMode(preferredMode || 'diagnostic');
-                  setActiveQuiz({ ...quiz, problems: activeProblems });
-                }}
-              />
-            </motion.div>
-          ) : isTakingDiagnostic && topics.some(t => t.quizzes.some(q => q.problems.some(isValidatedOrActive))) ? (
-            <motion.div
-              key="diagnostic"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <DiagnosticAssessment 
-                topics={topics}
-                onComplete={(ability, scores, pathway, violations) => {
-                  saveDiagnosticResult(ability, scores, pathway, violations);
-                  setIsTakingDiagnostic(false);
-                  if (pathway) {
-                    setIsViewingPathway(true);
+                  onSelectTopic={setSelectedTopic}
+                  onOpenTopicDLP={setSelectedTopic}
+                  onStartCompetencyPractice={handleStartAdaptivePractice}
+                  onSaveQuizResult={saveResult}
+                  onAddXP={addXP}
+                />
+              </motion.div>
+            ) : currentSection.startsWith('activities') ? (
+              <motion.div
+                key={`sec-activities-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <ActivitiesView
+                  topics={topics}
+                  results={results}
+                  profile={profile}
+                  initialTab={
+                    currentSection === 'activities-in-progress' ? 'in-progress' :
+                    currentSection === 'activities-completed' ? 'completed' :
+                    'todo'
                   }
-                }}
-                onCancel={() => setIsTakingDiagnostic(false)}
-              />
-            </motion.div>
-          ) : activeTab === 'learn' ? (
-            <motion.div
-              key="dashboard"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <WeeklyStudySummary
-                topics={topics}
-                results={results}
-                profile={profile}
-                onSelectTopic={setSelectedTopic}
-              />
-              <Dashboard 
-                topics={topics}
-                profile={profile}
-                results={results}
-                onSelectTopic={setSelectedTopic} 
-                onStartChallenge={handleStartChallenge}
-                onStartPathway={() => setIsViewingPathway(true)}
-                onStartCompetencyPractice={(quiz) => {
-                  setSelectedTopic(null);
-                  setQuizInitialMode('adaptive');
-                  setActiveQuiz(quiz);
-                }}
-                onStartAdaptivePractice={handleStartAdaptivePractice}
-                onRetakeQuiz={handleRetakeQuiz}
-                onRetakeDiagnostic={handleRetakeDiagnostic}
-                onOpenAIQuizModal={() => setIsAIQuizModalOpen(true)}
-                onOpenAIMathSolver={(query) => {
-                  setSolverInitialQuery(query || '');
-                  setIsAISolverModalOpen(true);
-                }}
-                onOpenFormulaHub={() => setIsFormulaHubOpen(true)}
-                onOpenDailyChallenge={() => setIsDailyChallengeOpen(true)}
-                onOpenExplainerLibrary={() => setActiveTab('explainers')}
-                onOpenReports={() => setActiveTab('reports')}
-                onOpenPresentations={() => setActiveTab('presentations')}
-                onOpenDailyQuests={() => {
-                  playPopSound();
-                  setIsDailyQuestsOpen(true);
-                }}
-                onOpenSprintArena={() => {
-                  playPopSound();
-                  setIsSprintArenaOpen(true);
-                }}
-                onOpenLevelProgression={() => {
-                  playPopSound();
-                  setIsLevelProgressionOpen(true);
-                }}
-                onOpenAvatarCustomizer={() => {
-                  playPopSound();
-                  setIsAvatarCustomizerOpen(true);
-                }}
-                onStartSummativeAssessment={(summative) => {
-                  setActiveSummativeAssessment(summative);
-                }}
-              />
-            </motion.div>
-          ) : activeTab === 'presentations' ? (
-            <motion.div
-              key="presentations"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <StudentPresentationHub
-                topics={topics}
-                profile={profile}
-                addXP={addXP}
-                onStartQuiz={handleStartQuizFromPresentation}
-                onStartDiagnostic={handleRetakeDiagnostic}
-              />
-            </motion.div>
-          ) : activeTab === 'explainers' ? (
-            <motion.div
-              key="explainers"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <ExplainerLibrary
-                topics={topics}
-                results={results}
-                profile={profile}
-              />
-            </motion.div>
-          ) : activeTab === 'flashcards' ? (
-            <motion.div
-              key="flashcards"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <InteractiveFlashcards
-                profile={profile}
-                onRewardXP={addXP}
-              />
-            </motion.div>
-          ) : activeTab === 'reports' ? (
-            <motion.div
-              key="reports"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <LearningReports
-                profile={profile}
-                results={results}
-                onTakeDiagnostic={() => setIsTakingDiagnostic(true)}
-              />
-            </motion.div>
-          ) : activeTab === 'leaderboard' ? (
-            <motion.div
-              key="leaderboard"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <Leaderboard />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="profile"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <ProfileView 
-                profile={profile}
-                results={results}
-                onUpdateDisplayName={updateDisplayName}
-                onUpdateProfileDetails={updateProfileDetails}
-                onRetakeDiagnostic={handleRetakeDiagnostic}
-                onRetakeQuiz={handleRetakeQuiz}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
+                  onStartQuiz={(quiz, mode) => {
+                    setQuizInitialMode(mode || 'standard');
+                    setActiveQuiz(quiz);
+                  }}
+                  onStartPathway={() => setIsViewingPathway(true)}
+                  onStartChallenge={handleStartChallenge}
+                  onRetakeDiagnostic={handleRetakeDiagnostic}
+                  onSelectTopic={setSelectedTopic}
+                />
+              </motion.div>
+            ) : currentSection === 'assessments-diagnostic' ? (
+              <motion.div
+                key="sec-assessments-diagnostic"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <StudentDiagnosticAssessmentPage
+                  topics={topics}
+                  profile={profile}
+                  onStartDiagnosticTest={() => setIsTakingDiagnostic(true)}
+                  onSaveDiagnosticResult={saveDiagnosticResult}
+                  onBackToOverview={() => setCurrentSection('dashboard')}
+                />
+              </motion.div>
+            ) : currentSection === 'assessments-formative' ? (
+              <motion.div
+                key="sec-assessments-formative"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <StudentFormativeAssessmentPage
+                  topics={topics}
+                  profile={profile}
+                  onBackToOverview={() => setCurrentSection('dashboard')}
+                />
+              </motion.div>
+            ) : currentSection.startsWith('assessments') ? (
+              <motion.div
+                key={`sec-assessments-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <AssessmentsView
+                  topics={topics}
+                  results={results}
+                  profile={profile}
+                  initialTab={
+                    currentSection === 'assessments-exams' ? 'exams' :
+                    currentSection === 'assessments-results' ? 'results' :
+                    'quizzes'
+                  }
+                  onStartQuiz={(quiz, mode) => {
+                    setQuizInitialMode(mode || 'standard');
+                    setActiveQuiz(quiz);
+                  }}
+                  onStartSummativeAssessment={(summative) => {
+                    setActiveSummativeAssessment(summative);
+                  }}
+                  onOpenPerformanceModal={() => setIsPerformanceModalOpen(true)}
+                />
+              </motion.div>
+            ) : currentSection.startsWith('resources') ? (
+              <motion.div
+                key={`sec-resources-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <LearningResourcesView
+                  topics={topics}
+                  profile={profile}
+                  results={results}
+                  initialTab={
+                    currentSection === 'resources-worksheets' ? 'worksheets' :
+                    currentSection === 'resources-videos' ? 'videos' :
+                    currentSection === 'resources-references' ? 'references' :
+                    'modules'
+                  }
+                  addXP={addXP}
+                  onStartQuizFromPresentation={handleStartQuizFromPresentation}
+                  onOpenFormulaHub={() => setIsFormulaHubOpen(true)}
+                />
+              </motion.div>
+            ) : currentSection.startsWith('progress') ? (
+              <motion.div
+                key={`sec-progress-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <StudentProgressView
+                  topics={topics}
+                  results={results}
+                  profile={profile}
+                  initialTab={
+                    currentSection === 'progress-subject' ? 'subjects' :
+                    currentSection === 'progress-competency' ? 'competencies' :
+                    currentSection === 'progress-grades' ? 'quarters' :
+                    'overview'
+                  }
+                  onRetakeDiagnostic={handleRetakeDiagnostic}
+                />
+              </motion.div>
+            ) : currentSection === 'notifications' ? (
+              <motion.div
+                key="sec-notifications"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <NotificationsView
+                  profile={profile}
+                  onOpenQuests={() => setIsDailyQuestsOpen(true)}
+                  onNavigateToCurriculum={() => setCurrentSection('curriculum-ilaw')}
+                  onNavigateToExams={() => setCurrentSection('assessments-exams')}
+                />
+              </motion.div>
+            ) : currentSection === 'settings' ? (
+              <motion.div
+                key="sec-settings"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <SettingsView
+                  profile={profile}
+                  onUpdateProfileDetails={updateProfileDetails}
+                  onOpenAvatarCustomizer={() => setIsAvatarCustomizerOpen(true)}
+                />
+              </motion.div>
+            ) : (
+              /* Default: Dashboard */
+              <motion.div
+                key="dashboard"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-8"
+              >
+                <ModernStudentDashboard
+                  topics={topics}
+                  profile={profile}
+                  results={results}
+                  onSelectTopic={setSelectedTopic}
+                  onStartDiagnostic={handleRetakeDiagnostic}
+                  onOpenActivities={() => setCurrentSection('activities-todo')}
+                  onOpenCurriculum={() => setCurrentSection('curriculum-hierarchy')}
+                  onOpenProgress={() => setCurrentSection('progress')}
+                />
+
+                <WeeklyStudySummary
+                  topics={topics}
+                  results={results}
+                  profile={profile}
+                  onSelectTopic={setSelectedTopic}
+                />
+                <Dashboard 
+                  topics={topics}
+                  profile={profile}
+                  results={results}
+                  onSelectTopic={setSelectedTopic} 
+                  onStartChallenge={handleStartChallenge}
+                  onStartPathway={() => setIsViewingPathway(true)}
+                  onStartCompetencyPractice={(quiz) => {
+                    setSelectedTopic(null);
+                    setQuizInitialMode('adaptive');
+                    setActiveQuiz(quiz);
+                  }}
+                  onStartAdaptivePractice={handleStartAdaptivePractice}
+                  onRetakeQuiz={handleRetakeQuiz}
+                  onRetakeDiagnostic={handleRetakeDiagnostic}
+                  onOpenAIQuizModal={() => setIsAIQuizModalOpen(true)}
+                  onOpenAIMathSolver={(query) => {
+                    setSolverInitialQuery(query || '');
+                    setIsAISolverModalOpen(true);
+                  }}
+                  onOpenFormulaHub={() => setIsFormulaHubOpen(true)}
+                  onOpenDailyChallenge={() => setIsDailyChallengeOpen(true)}
+                  onOpenExplainerLibrary={() => setCurrentSection('resources-videos')}
+                  onOpenReports={() => setCurrentSection('progress-competency')}
+                  onOpenPresentations={() => setCurrentSection('resources-modules')}
+                  onOpenDailyQuests={() => {
+                    playPopSound();
+                    setIsDailyQuestsOpen(true);
+                  }}
+                  onOpenSprintArena={() => {
+                    playPopSound();
+                    setIsSprintArenaOpen(true);
+                  }}
+                  onOpenLevelProgression={() => {
+                    playPopSound();
+                    setIsLevelProgressionOpen(true);
+                  }}
+                  onOpenAvatarCustomizer={() => {
+                    playPopSound();
+                    setIsAvatarCustomizerOpen(true);
+                  }}
+                  onStartSummativeAssessment={(summative) => {
+                    setActiveSummativeAssessment(summative);
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+      </div>
 
       {/* Smart AI Quiz Generator Modal */}
       <SmartAIQuizModal
@@ -821,7 +994,7 @@ export default function StudentModule({
         onRewardXP={(xp) => addXP(xp)}
       />
 
-      {/* Cumulative Performance & Performance Diagnosis Modal */}
+      {/* Cumulative Performance Modal */}
       <CumulativePerformanceModal
         isOpen={isPerformanceModalOpen}
         onClose={() => {
@@ -835,7 +1008,7 @@ export default function StudentModule({
         latestTotal={latestQuizDetails?.total}
       />
 
-      {/* Gamification: Daily Quests & Check-In Modal */}
+      {/* Daily Quests & Check-In Modal */}
       <DailyQuestsModal
         isOpen={isDailyQuestsOpen}
         onClose={() => setIsDailyQuestsOpen(false)}
@@ -845,7 +1018,7 @@ export default function StudentModule({
         onRewardXP={(amount) => handleGamifiedRewardXP(amount, 'Daily Quest Reward!')}
       />
 
-      {/* Gamification: 60s Math Sprint Blitz Arena */}
+      {/* 60s Math Sprint Blitz Arena */}
       <MathSprintArena
         isOpen={isSprintArenaOpen}
         onClose={() => setIsSprintArenaOpen(false)}
@@ -853,7 +1026,7 @@ export default function StudentModule({
         onRewardXP={(amount) => handleGamifiedRewardXP(amount, 'Sprint Blitz Victory!')}
       />
 
-      {/* Gamification: RPG Level Progression & Perks Roadmap */}
+      {/* RPG Level Progression & Perks Roadmap */}
       <LevelProgressionModal
         isOpen={isLevelProgressionOpen}
         onClose={() => setIsLevelProgressionOpen(false)}
@@ -865,7 +1038,7 @@ export default function StudentModule({
         }}
       />
 
-      {/* Gamification: Avatar Archetype Customizer */}
+      {/* Avatar Archetype Customizer */}
       <AvatarCustomizerModal
         isOpen={isAvatarCustomizerOpen}
         onClose={() => setIsAvatarCustomizerOpen(false)}
@@ -876,7 +1049,7 @@ export default function StudentModule({
         }}
       />
 
-      {/* Gamification: Level-Up Celebration Fanfare Modal */}
+      {/* Level-Up Celebration Fanfare Modal */}
       {levelUpCelebration && (
         <LevelUpCelebrationModal
           isOpen={levelUpCelebration.isOpen}
@@ -911,54 +1084,7 @@ export default function StudentModule({
         )}
       </AnimatePresence>
 
-      {/* Bottom Floating Navigation Bar */}
-      {!activeQuiz && !isTakingDiagnostic && (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2 flex justify-around items-center z-20 shadow-lg sm:max-w-lg sm:mx-auto sm:mb-6 sm:rounded-2xl sm:border">
-          <NavButton 
-            active={activeTab === 'learn'} 
-            onClick={() => { setActiveTab('learn'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
-            icon={<BookOpen className="w-5 h-5" />}
-            label="Dashboard"
-          />
-          <NavButton 
-            active={activeTab === 'presentations'} 
-            onClick={() => { setActiveTab('presentations'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
-            icon={<Layers className="w-5 h-5" />}
-            label="Slides"
-          />
-          <NavButton 
-            active={activeTab === 'explainers'} 
-            onClick={() => { setActiveTab('explainers'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
-            icon={<Video className="w-5 h-5" />}
-            label="Explainers"
-          />
-          <NavButton 
-            active={activeTab === 'flashcards'} 
-            onClick={() => { setActiveTab('flashcards'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
-            icon={<Zap className="w-5 h-5" />}
-            label="Cards"
-          />
-          <NavButton 
-            active={activeTab === 'reports'} 
-            onClick={() => { setActiveTab('reports'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
-            icon={<TrendingUp className="w-5 h-5" />}
-            label="Reports"
-          />
-          <NavButton 
-            active={activeTab === 'leaderboard'} 
-            onClick={() => { setActiveTab('leaderboard'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
-            icon={<Trophy className="w-5 h-5" />}
-            label="Rankings"
-          />
-          <NavButton 
-            active={activeTab === 'profile'} 
-            onClick={() => { setActiveTab('profile'); setSelectedTopic(null); setActiveQuiz(null); setIsTakingDiagnostic(false); }}
-            icon={<User className="w-5 h-5" />}
-            label="Profile"
-          />
-        </nav>
-      )}
-
+      {/* Summative Assessment Fullscreen Modal */}
       {activeSummativeAssessment && (
         <SummativeAssessmentModal
           isOpen={!!activeSummativeAssessment}
@@ -1018,14 +1144,14 @@ export default function StudentModule({
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping shrink-0" />
                   <span className="text-xs font-black uppercase text-rose-800 tracking-wider">
-                    Violation Warning Roster
+                    Focus Integrity Log
                   </span>
                 </div>
                 <p className="text-xs text-rose-700 font-semibold leading-relaxed">
                   Focus Warning Counter: <strong className="text-rose-900 text-sm font-extrabold">{tabOutCount}</strong>
                 </p>
                 <p className="text-[10px] text-rose-600/90 leading-tight">
-                  Please stay focused on your test questions. Navigating away during formal classroom assessments is strictly logged by your subject teacher.
+                  Please stay focused on your test questions. Navigating away during formal classroom assessments is logged for subject teachers.
                 </p>
               </div>
 
@@ -1035,7 +1161,7 @@ export default function StudentModule({
                   playPopSound();
                   setShowAltTabWarning(false);
                 }}
-                className="w-full py-4 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-black rounded-2xl shadow-lg shadow-rose-100 transition-all text-xs tracking-wider uppercase"
+                className="w-full py-4 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-black rounded-2xl shadow-lg shadow-rose-100 transition-all text-xs tracking-wider uppercase cursor-pointer"
               >
                 I understand, return to exam
               </button>
@@ -1046,7 +1172,7 @@ export default function StudentModule({
 
       <ConfirmDeleteModal
         isOpen={showLogoutConfirm}
-        title="Sign Out of MathAdapt AI"
+        title="Sign Out of LeavienAI"
         message="Are you sure you want to log out? Your progress, XP, and badges are securely saved."
         confirmText="Sign Out"
         cancelText="Cancel"
@@ -1057,32 +1183,6 @@ export default function StudentModule({
         }}
         onClose={() => setShowLogoutConfirm(false)}
       />
-    </>
-  );
-}
-
-function NavButton({ 
-  active, 
-  onClick, 
-  icon, 
-  label 
-}: { 
-  active: boolean; 
-  onClick: () => void; 
-  icon: React.ReactNode; 
-  label: string; 
-}) {
-  return (
-    <button 
-      onClick={onClick}
-      className={`flex flex-col items-center gap-1 px-2 py-1 rounded-xl transition-all ${
-        active ? 'text-indigo-600 font-bold' : 'text-slate-400 hover:text-slate-600 font-medium'
-      }`}
-    >
-      <div className={`p-1 rounded-lg transition-colors ${active ? 'bg-indigo-50 text-indigo-600' : ''}`}>
-        {icon}
-      </div>
-      <span className="text-[10px] sm:text-[11px] whitespace-nowrap">{label}</span>
-    </button>
+    </div>
   );
 }

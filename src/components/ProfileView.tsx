@@ -231,8 +231,27 @@ export default function ProfileView({
                       className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       placeholder="e.g. STEM-A"
                     />
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {['STEM-A', 'STEM-B', 'ABM-A', 'HUMSS-A', 'GAS-A', 'TVL-A'].map((sec) => (
+                        <button
+                          key={sec}
+                          type="button"
+                          onClick={() => setSectionInput(sec)}
+                          className={`text-[9px] px-1.5 py-0.5 rounded font-bold transition-colors ${
+                            sectionInput === sec
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                          }`}
+                        >
+                          {sec}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
+                <p className="text-[10px] text-slate-400 text-left">
+                  🎓 As a student, only you can choose what section and grade you belong to.
+                </p>
                 <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/60">
                   <button
                     onClick={() => setIsEditingName(false)}

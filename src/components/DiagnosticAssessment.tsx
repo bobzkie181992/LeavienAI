@@ -794,36 +794,169 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
       >
         <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-100">
           {/* Header */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
               <Icons.Target className="w-8 h-8" />
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-1">
-              Diagnostic Assessment Results
+              DIAGNOSTIC RESULTS
             </h2>
             <p className="text-slate-500 text-sm max-w-lg mx-auto">
-              Evaluation of mathematical proficiency and identification of competencies requiring targeted learning support.
+              Evaluation of prior knowledge and skill gaps for General Mathematics.
             </p>
           </div>
 
-          {/* ========================================================================= */}
-          {/* MATHEMATICS ABILITY ESTIMATE BOX                                          */}
-          {/* ========================================================================= */}
-          <div className="bg-slate-50 rounded-3xl p-6 sm:p-8 mb-8 border border-slate-200/80 text-center">
-            <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">
-              Mathematics Ability:
-            </span>
-            <div className={`text-4xl sm:text-5xl font-black tracking-tight ${
-              estimatedAbility === 'Expert' ? 'text-violet-600' :
-              estimatedAbility === 'Advanced' ? 'text-emerald-600' :
-              estimatedAbility === 'Proficient' ? 'text-blue-600' :
-              estimatedAbility === 'Developing' ? 'text-amber-600' : 'text-rose-600'
-            }`}>
-              {estimatedAbility}
+          {/* Formative Notice Banner */}
+          <div className="p-4 bg-indigo-50/80 border border-indigo-100 rounded-2xl text-xs text-indigo-900 mb-6 flex items-start gap-3">
+            <Icons.Info className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-black uppercase tracking-wider block text-indigo-950">Diagnostic Purpose Notice:</span>
+              <span>This diagnostic assessment is primarily used to identify learning needs and build your personalized study pathway. It is <strong>NOT automatically treated as a final grade</strong>.</span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 mt-2 font-medium">
-              Overall Diagnostic First-Attempt Baseline: {overallPercentage}% accuracy across Grade 11 domains
+          </div>
+
+          {/* ========================================================================= */}
+          {/* OVERALL RESULT SCORE BOX                                                  */}
+          {/* ========================================================================= */}
+          <div className="bg-slate-50 rounded-3xl p-6 sm:p-8 mb-8 border border-slate-200/80 text-center space-y-2">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
+              Overall Result:
+            </span>
+            <div className="text-5xl sm:text-6xl font-black tracking-tight text-indigo-600">
+              {overallPercentage}%
+            </div>
+            <div className="inline-block px-3 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-700 shadow-2xs">
+              Math Ability Placement: <strong className="text-indigo-600 font-black">{estimatedAbility}</strong>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* STRENGTHS & NEEDS IMPROVEMENT DUAL CARDS                                  */}
+          {/* ========================================================================= */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            {/* Strengths Card */}
+            <div className="p-5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 font-black text-emerald-950 text-sm uppercase tracking-wider">
+                <Icons.CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Strengths</span>
+              </div>
+              <ul className="space-y-2 text-xs font-semibold text-emerald-900">
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-600 font-black">✓</span>
+                  <span>Basic understanding of functions & relations</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-600 font-black">✓</span>
+                  <span>Identifying vertical line test relationships</span>
+                </li>
+                {competencyReportItems.filter(c => c.status === 'Mastered').map((c, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <span className="text-emerald-600 font-black">✓</span>
+                    <span>{c.competencyName}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Needs Improvement Card */}
+            <div className="p-5 bg-amber-50/70 border border-amber-200/80 rounded-2xl space-y-3">
+              <div className="flex items-center gap-2 font-black text-amber-950 text-sm uppercase tracking-wider">
+                <Icons.AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Needs Improvement</span>
+              </div>
+              <ul className="space-y-2 text-xs font-semibold text-amber-900">
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-600 font-black">⚠</span>
+                  <span>Function notation & f(x) substitution</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-600 font-black">⚠</span>
+                  <span>Evaluating piecewise functions at critical points</span>
+                </li>
+                {needsInterventionList.map((c, i) => (
+                  <li key={i} className="flex items-center gap-2">
+                    <span className="text-amber-600 font-black">⚠</span>
+                    <span>{c.competencyName}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* COMPETENCY PROGRESS VISUALIZATION BARS                                   */}
+          {/* ========================================================================= */}
+          <div className="space-y-4 mb-8">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-wider">
+                Competency Progress
+              </h3>
+              <span className="text-xs text-slate-400 font-medium">
+                {competencyReportItems.length} Core Domains
+              </span>
+            </div>
+
+            <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+              {competencyReportItems.map((comp) => (
+                <div key={comp.competencyIndex} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-slate-800">{comp.competencyName}</span>
+                    <span className="text-indigo-600 font-mono font-black">{comp.percentage}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        comp.percentage >= 80 ? 'bg-emerald-500' : comp.percentage >= 50 ? 'bg-indigo-600' : 'bg-amber-500'
+                      }`}
+                      style={{ width: `${comp.percentage}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* RECOMMENDED LEARNING ILAW LESSONS                                          */}
+          {/* ========================================================================= */}
+          <div className="p-6 bg-gradient-to-r from-indigo-900 to-slate-900 rounded-3xl text-white space-y-4 mb-8 shadow-md">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300 block">
+                  Customized Learning Plan
+                </span>
+                <h3 className="text-lg font-black text-white">Recommended ILAW Lessons</h3>
+              </div>
+              <Icons.Sparkles className="w-6 h-6 text-amber-400" />
+            </div>
+
+            <p className="text-xs text-indigo-100 leading-relaxed">
+              Based on your diagnostic results, review these specific ILAW modules to strengthen function notation and evaluation skills:
             </p>
+
+            <ul className="space-y-2 text-xs font-bold text-slate-200">
+              <li className="flex items-center gap-2 p-2.5 bg-white/10 rounded-xl border border-white/10">
+                <Icons.ArrowRight className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Introduction to Function Notation & Representations</span>
+              </li>
+              <li className="flex items-center gap-2 p-2.5 bg-white/10 rounded-xl border border-white/10">
+                <Icons.ArrowRight className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Evaluating Functions & Piecewise Expressions</span>
+              </li>
+              <li className="flex items-center gap-2 p-2.5 bg-white/10 rounded-xl border border-white/10">
+                <Icons.ArrowRight className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Practice Arena: Operations & Composition of Functions</span>
+              </li>
+            </ul>
+
+            <button
+              onClick={() => onComplete(estimatedAbility, finalScores, generatedPathway, violationCount)}
+              className="w-full py-3.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            >
+              <Icons.BookOpen className="w-4 h-4" />
+              <span>Start Recommended Lesson</span>
+              <Icons.ChevronRight className="w-4 h-4" />
+            </button>
           </div>
 
           {/* ========================================================================= */}
