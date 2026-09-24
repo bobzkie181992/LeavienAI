@@ -118,6 +118,196 @@ export default function DepEdExcelImporter({
   };
 
   // Robust Excel Parsing Pipeline with Item Bank worksheet & Dynamic Header detection
+  const parseWorkbookSheet = (workbook: XLSX.WorkBook, sheetName: string) => {
+    const sheetNames = workbook.SheetNames || [];
+    const diag: DiagnosticInfo = {
+      workbookLoaded: sheetNames.length > 0,
+      sheetNames,
+      itemBankSheetFound: sheetName,
+      headerRowDetected: null,
+      questionColumnDetected: null,
+      totalDataRows: 0,
+      validQuestionsCount: 0,
+      skippedRowsCount: 0,
+      skipReasons: []
+    };
+
+    const worksheet = workbook.Sheets[sheetName];
+    if (!worksheet) {
+      setErrorMsg(`Worksheet "${sheetName}" not found in workbook.`);
+      setDiagnostics(diag);
+      setIsProcessing(false);
+      return;
+    }
+
+    // Read worksheet as array of arrays to find header row dynamically
+    const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+    if (!rows || rows.length === 0) {
+      setErrorMsg(`Worksheet "${sheetName}" is empty.`);
+      setDiagnostics(diag);
+      setIsProcessing(false);
+      return;
+    }
+
+    // 2. Detect header row by finding the row containing the "Question" / "Item" header
+    let headerRowIndex = -1;
+    let questionColIndex = -1;
+    let headers: string[] = [];
+
+    const questionKeywords = ['question', 'item statement', 'statement', 'item', 'problem', 'prompt', 'stem', 'question text', 'tanong'];
+
+    for (let r = 0; r < Math.min(rows.length, 25); r++) {
+      const row = rows[r];
+      if (!row) continue;
+      for (let c = 0; c < row.length; c++) {
+        const cellVal = String(row[c] || '').trim().toLowerCase();
+        if (questionKeywords.some(kw => cellVal === kw || cellVal.includes(kw))) {
+          headerRowIndex = r;
+          questionColIndex = c;
+          headers = row.map(cell => String(cell || '').trim());
+          break;
+        }
+      }
+      if (headerRowIndex !== -1) break;
+    }
+
+    if (headerRowIndex === -1) {
+      setErrorMsg(`Selected sheet "${sheetName}", but no "Question" column header was detected. Please verify sheet headers or select the "ITEM BANK" sheet.`);
+      diag.skipReasons.push('Error: Could not locate "Question" / "Item" header row.');
+      setDiagnostics(diag);
+      setIsProcessing(false);
+      return;
+    }
+
+    diag.headerRowDetected = headerRowIndex + 1; // 1-indexed for display
+    diag.questionColumnDetected = headers[questionColIndex] || 'Question';
+
+    // 3. Map columns & extract data rows
+    const dataRows = rows.slice(headerRowIndex + 1);
+    diag.totalDataRows = dataRows.length;
+
+    const extractedQuestions: ParsedDepEdQuestion[] = [];
+    const seenItemIds = new Set<string>();
+
+    dataRows.forEach((row, rIdx) => {
+      const rowNum = headerRowIndex + 2 + rIdx;
+      
+      // Helper to match column headers by exact name or keywords
+      const getColValue = (exactNames: string[], keywords: string[]): string => {
+        // First try exact match
+        for (let c = 0; c < headers.length; c++) {
+          const h = headers[c].trim().toLowerCase();
+          if (exactNames.some(en => h === en.toLowerCase())) {
+            const val = row[c];
+            return String(val !== undefined && val !== null ? val : '').trim();
+          }
+        }
+        // Then try keyword partial match
+        for (let c = 0; c < headers.length; c++) {
+          const h = headers[c].trim().toLowerCase();
+          if (keywords.some(kw => h.includes(kw.toLowerCase()))) {
+            const val = row[c];
+            return String(val !== undefined && val !== null ? val : '').trim();
+          }
+        }
+        return '';
+      };
+
+      const questionText = getColValue(['question', 'item statement', 'statement', 'item', 'prompt', 'stem'], ['question', 'statement', 'item', 'prompt', 'stem']);
+      if (!questionText || questionText.toLowerCase() === 'question' || questionText.toLowerCase() === 'item') {
+        diag.skippedRowsCount++;
+        if (questionText) {
+          diag.skipReasons.push(`Row ${rowNum}: Skipped (Header duplicate)`);
+        } else {
+          diag.skipReasons.push(`Row ${rowNum}: Skipped (Empty Question field)`);
+        }
+        return;
+      }
+
+      const itemId = getColValue(['item id', 'item_id', 'id', 'item no', 'item no.', 'code'], ['item id', 'item_id', 'id', 'item no', 'code']) || `W1D1-${rIdx + 1 < 10 ? '0' + (rIdx + 1) : rIdx + 1}`;
+      const day = getColValue(['day', 'session', 'day of week'], ['day', 'session']) || 'Monday';
+      const pptSlide = getColValue(['ppt slide', 'slide', 'ppt', 'slide no', 'powerpoint slide'], ['ppt slide', 'slide', 'ppt']) || 'Slide 1';
+      const competency = getColValue(['competency', 'learning competency', 'melc', 'standard', 'topic'], ['competency', 'melc', 'standard', 'topic']) || 'M11GM-DepEd-MELC';
+      const cognitiveLevel = getColValue(['cognitive level', 'cognition', 'level', 'bloom', 'dok'], ['cognitive', 'cognition', 'bloom', 'dok']) || 'Understand';
+      const tierVal = getColValue(['tier', 'tier level'], ['tier']) || '1';
+      const difficultyRaw = getColValue(['difficulty', 'diff', 'level of difficulty'], ['diff']).toLowerCase();
+      const difficulty = (difficultyRaw === 'easy' || difficultyRaw === 'medium' || difficultyRaw === 'hard') ? difficultyRaw : 'medium';
+
+      // Preserve options / choices (A, B, C, D)
+      let optA = getColValue(['choice a', 'option a', 'a.', 'opt a', 'a)', '(a)', 'choice 1', 'option 1', 'a', 'choice_a'], ['choice a', 'option a', 'opt a', 'choice 1', 'option 1']);
+      let optB = getColValue(['choice b', 'option b', 'b.', 'opt b', 'b)', '(b)', 'choice 2', 'option 2', 'b', 'choice_b'], ['choice b', 'option b', 'opt b', 'choice 2', 'option 2']);
+      let optC = getColValue(['choice c', 'option c', 'c.', 'opt c', 'c)', '(c)', 'choice 3', 'option 3', 'c', 'choice_c'], ['choice c', 'option c', 'opt c', 'choice 3', 'option 3']);
+      let optD = getColValue(['choice d', 'option d', 'd.', 'opt d', 'd)', '(d)', 'choice 4', 'option 4', 'd', 'choice_d'], ['choice d', 'option d', 'opt d', 'choice 4', 'option 4']);
+
+      // Positional fallback if headers are not explicitly labeled
+      if (!optA && row[questionColIndex + 1]) optA = String(row[questionColIndex + 1]).trim();
+      if (!optB && row[questionColIndex + 2]) optB = String(row[questionColIndex + 2]).trim();
+      if (!optC && row[questionColIndex + 3]) optC = String(row[questionColIndex + 3]).trim();
+      if (!optD && row[questionColIndex + 4]) optD = String(row[questionColIndex + 4]).trim();
+
+      const options = [optA, optB, optC, optD].filter(o => o !== '').map(String);
+      if (options.length === 0) {
+        options.push('Option A', 'Option B', 'Option C', 'Option D');
+      }
+
+      // Parse correct answer
+      const rawAns = getColValue(['correct answer', 'answer', 'key', 'correct', 'correct choice', 'ans', 'tamang sagot'], ['correct', 'answer', 'key', 'ans']).toUpperCase();
+      let correctAnswerIdx = 0;
+      if (rawAns === 'A' || rawAns === '1' || rawAns === 'OPTION A' || rawAns === 'CHOICE A') correctAnswerIdx = 0;
+      else if (rawAns === 'B' || rawAns === '2' || rawAns === 'OPTION B' || rawAns === 'CHOICE B') correctAnswerIdx = 1;
+      else if (rawAns === 'C' || rawAns === '3' || rawAns === 'OPTION C' || rawAns === 'CHOICE C') correctAnswerIdx = 2;
+      else if (rawAns === 'D' || rawAns === '4' || rawAns === 'OPTION D' || rawAns === 'CHOICE D') correctAnswerIdx = 3;
+      else {
+        const num = parseInt(rawAns, 10);
+        if (!isNaN(num) && num >= 0 && num < options.length) {
+          correctAnswerIdx = num;
+        } else {
+          const found = options.findIndex(o => o.trim().toLowerCase() === rawAns.toLowerCase());
+          if (found !== -1) correctAnswerIdx = found;
+        }
+      }
+
+      const correctFeedback = getColValue(['correct feedback', 'feedback', 'solution', 'explanation', 'rationale', 'correct explanation'], ['correct feedback', 'feedback', 'solution', 'explanation', 'rationale']) || '✓ Correct! Well done evaluating this step.';
+      const incorrectFeedback = getColValue(['incorrect feedback', 'explanation', 'remediation', 'hint', 'distractor rationale', 'incorrect explanation'], ['incorrect feedback', 'remediation', 'hint']) || '✗ Review the key formula in the ILAW lesson discussion.';
+
+      if (seenItemIds.has(itemId)) {
+        diag.skipReasons.push(`Row ${rowNum}: Warning - Duplicate Item ID "${itemId}". Appending suffix.`);
+      }
+      seenItemIds.add(itemId);
+
+      extractedQuestions.push({
+        id: `deped-item-${Date.now()}-${rIdx}`,
+        itemId,
+        day,
+        pptSlide,
+        question: questionText,
+        questionType: 'multiple-choice',
+        options,
+        correctAnswer: correctAnswerIdx,
+        competency,
+        cognitiveLevel,
+        tier: isNaN(Number(tierVal)) ? tierVal : Number(tierVal),
+        difficulty,
+        correctFeedback,
+        incorrectFeedback
+      });
+    });
+
+    diag.validQuestionsCount = extractedQuestions.length;
+    setDiagnostics(diag);
+
+    if (extractedQuestions.length === 0) {
+      setErrorMsg(`Worksheet "${sheetName}" found, but no valid questions were detected. Please check the Question column.`);
+      setIsProcessing(false);
+      return;
+    }
+
+    setParsedQuestions(extractedQuestions);
+    setShowPreview(true);
+    setIsProcessing(false);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
     if (!uploadedFile) return;
@@ -135,29 +325,22 @@ export default function DepEdExcelImporter({
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetNames = workbook.SheetNames || [];
 
-        const diag: DiagnosticInfo = {
-          workbookLoaded: sheetNames.length > 0,
-          sheetNames,
-          itemBankSheetFound: null,
-          headerRowDetected: null,
-          questionColumnDetected: null,
-          totalDataRows: 0,
-          validQuestionsCount: 0,
-          skippedRowsCount: 0,
-          skipReasons: []
-        };
-
         if (sheetNames.length === 0) {
           setErrorMsg('Invalid Excel file: Workbook contains no worksheets.');
-          setDiagnostics(diag);
           setIsProcessing(false);
           return;
         }
 
-        // 1. Find worksheet named "Item Bank" (case-insensitive, trimming whitespace)
+        // 1. Find worksheet named "ITEM BANK" (case-insensitive, trimming whitespace, underscores, hyphens)
         let targetSheetName = sheetNames.find(
-          name => name.trim().toLowerCase() === 'item bank'
+          name => name.trim().toUpperCase().replace(/[\s_-]+/g, '') === 'ITEMBANK'
         );
+
+        if (!targetSheetName) {
+          targetSheetName = sheetNames.find(
+            name => name.trim().toLowerCase() === 'item bank' || name.trim().toUpperCase() === 'ITEM BANK'
+          );
+        }
 
         if (!targetSheetName) {
           // Fallback search for any sheet containing "item" or "bank"
@@ -169,156 +352,9 @@ export default function DepEdExcelImporter({
         if (!targetSheetName) {
           // If still not found, fallback to first worksheet with warning
           targetSheetName = sheetNames[0];
-          diag.skipReasons.push(`Warning: "Item Bank" sheet not found. Falling back to sheet: "${targetSheetName}".`);
         }
 
-        diag.itemBankSheetFound = targetSheetName;
-        const worksheet = workbook.Sheets[targetSheetName];
-
-        // Read worksheet as array of arrays to find header row dynamically
-        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-
-        if (!rows || rows.length === 0) {
-          setErrorMsg(`Worksheet "${targetSheetName}" is empty.`);
-          setDiagnostics(diag);
-          setIsProcessing(false);
-          return;
-        }
-
-        // 2. Detect header row by finding the row containing the "Question" header
-        let headerRowIndex = -1;
-        let questionColIndex = -1;
-        let headers: string[] = [];
-
-        for (let r = 0; r < Math.min(rows.length, 15); r++) {
-          const row = rows[r];
-          if (!row) continue;
-          for (let c = 0; c < row.length; c++) {
-            const cellVal = String(row[c] || '').trim().toLowerCase();
-            if (cellVal === 'question' || cellVal === 'item statement') {
-              headerRowIndex = r;
-              questionColIndex = c;
-              headers = row.map(cell => String(cell || '').trim());
-              break;
-            }
-          }
-          if (headerRowIndex !== -1) break;
-        }
-
-        if (headerRowIndex === -1) {
-          setErrorMsg(`Item Bank sheet found ("${targetSheetName}"), but no "Question" column header was detected. Please verify column headers.`);
-          diag.skipReasons.push('Error: Could not locate "Question" header row.');
-          setDiagnostics(diag);
-          setIsProcessing(false);
-          return;
-        }
-
-        diag.headerRowDetected = headerRowIndex + 1; // 1-indexed for display
-        diag.questionColumnDetected = headers[questionColIndex] || 'Question';
-
-        // 3. Map columns & extract data rows
-        const dataRows = rows.slice(headerRowIndex + 1);
-        diag.totalDataRows = dataRows.length;
-
-        const extractedQuestions: ParsedDepEdQuestion[] = [];
-        const seenItemIds = new Set<string>();
-
-        dataRows.forEach((row, rIdx) => {
-          const rowNum = headerRowIndex + 2 + rIdx;
-          
-          // Map column indices by header name (case-insensitive)
-          const getColValue = (headerKeywords: string[]): string => {
-            for (let c = 0; c < headers.length; c++) {
-              const h = headers[c].toLowerCase();
-              if (headerKeywords.some(kw => h.includes(kw))) {
-                return String(row[c] !== undefined && row[c] !== null ? row[c] : '').trim();
-              }
-            }
-            return '';
-          };
-
-          const questionText = getColValue(['question', 'item statement', 'statement']);
-          if (!questionText) {
-            diag.skippedRowsCount++;
-            diag.skipReasons.push(`Row ${rowNum}: Skipped (Empty Question field)`);
-            return;
-          }
-
-          const itemId = getColValue(['item id', 'item_id', 'id']) || `W1D1-${rIdx + 1 < 10 ? '0' + (rIdx + 1) : rIdx + 1}`;
-          const day = getColValue(['day']) || 'Monday';
-          const pptSlide = getColValue(['ppt slide', 'slide', 'ppt']) || 'Slide 1';
-          const competency = getColValue(['competency', 'learning competency', 'melc']) || 'M11GM-DepEd-MELC';
-          const cognitiveLevel = getColValue(['cognitive level', 'cognition', 'level']) || 'Understand';
-          const tierVal = getColValue(['tier']) || '1';
-          const difficultyRaw = getColValue(['difficulty']).toLowerCase();
-          const difficulty = (difficultyRaw === 'easy' || difficultyRaw === 'medium' || difficultyRaw === 'hard') ? difficultyRaw : 'medium';
-
-          // Preserve options / choices (scan columns for Choice A, B, C, D, Option A, B, C, D, A, B, C, D)
-          const optA = getColValue(['choice a', 'option a', 'a.']) || String(row[questionColIndex + 1] || '');
-          const optB = getColValue(['choice b', 'option b', 'b.']) || String(row[questionColIndex + 2] || '');
-          const optC = getColValue(['choice c', 'option c', 'c.']) || String(row[questionColIndex + 3] || '');
-          const optD = getColValue(['choice d', 'option d', 'd.']) || String(row[questionColIndex + 4] || '');
-
-          const options = [optA, optB, optC, optD].filter(o => o !== '').map(String);
-          if (options.length === 0) {
-            options.push('Option A', 'Option B', 'Option C', 'Option D');
-          }
-
-          // Parse correct answer
-          const rawAns = getColValue(['correct answer', 'answer', 'key', 'correct']).toUpperCase();
-          let correctAnswerIdx = 0;
-          if (rawAns === 'A' || rawAns === '1' || rawAns === 'OPTION A') correctAnswerIdx = 0;
-          else if (rawAns === 'B' || rawAns === '2' || rawAns === 'OPTION B') correctAnswerIdx = 1;
-          else if (rawAns === 'C' || rawAns === '3' || rawAns === 'OPTION C') correctAnswerIdx = 2;
-          else if (rawAns === 'D' || rawAns === '4' || rawAns === 'OPTION D') correctAnswerIdx = 3;
-          else {
-            const num = parseInt(rawAns, 10);
-            if (!isNaN(num) && num >= 0 && num < options.length) {
-              correctAnswerIdx = num;
-            } else {
-              const found = options.findIndex(o => o.trim().toLowerCase() === rawAns.toLowerCase());
-              if (found !== -1) correctAnswerIdx = found;
-            }
-          }
-
-          const correctFeedback = getColValue(['correct feedback', 'feedback']) || '✓ Correct! Well done.';
-          const incorrectFeedback = getColValue(['incorrect feedback', 'explanation']) || '✗ Review the lesson concepts.';
-
-          if (seenItemIds.has(itemId)) {
-            diag.skipReasons.push(`Row ${rowNum}: Warning - Duplicate Item ID "${itemId}". Appending suffix.`);
-          }
-          seenItemIds.add(itemId);
-
-          extractedQuestions.push({
-            id: `deped-item-${Date.now()}-${rIdx}`,
-            itemId,
-            day,
-            pptSlide,
-            question: questionText,
-            questionType: 'multiple-choice',
-            options,
-            correctAnswer: correctAnswerIdx,
-            competency,
-            cognitiveLevel,
-            tier: isNaN(Number(tierVal)) ? tierVal : Number(tierVal),
-            difficulty,
-            correctFeedback,
-            incorrectFeedback
-          });
-        });
-
-        diag.validQuestionsCount = extractedQuestions.length;
-        setDiagnostics(diag);
-
-        if (extractedQuestions.length === 0) {
-          setErrorMsg('Item Bank sheet found, but no valid questions were detected. Please check the Question column and header row.');
-          setIsProcessing(false);
-          return;
-        }
-
-        setParsedQuestions(extractedQuestions);
-        setShowPreview(true);
-        setIsProcessing(false);
+        parseWorkbookSheet(workbook, targetSheetName);
       } catch (err: any) {
         console.error('Excel Import Error:', err);
         setErrorMsg(`Failed to parse Excel file: ${err.message || 'Unknown error'}. Ensure the file is a valid .xlsx or .csv workbook.`);
