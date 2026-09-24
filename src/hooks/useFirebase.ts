@@ -2023,6 +2023,38 @@ export function useDiagnosticExam() {
     }
   };
 
+  // 7. Batch Import diagnostic questions (e.g. from Excel Item Bank)
+  const importDiagnosticQuestions = async (newQuestions: DiagnosticQuestion[]): Promise<boolean> => {
+    if (!newQuestions || newQuestions.length === 0) return true;
+    try {
+      // 1. Immediate local update
+      setQuestions(prev => {
+        const map = new Map<string, DiagnosticQuestion>();
+        prev.forEach(q => map.set(q.id, q));
+        newQuestions.forEach(q => map.set(q.id, q));
+        return Array.from(map.values());
+      });
+
+      // 2. Background chunked batch write to Firestore
+      const chunkSize = 30;
+      for (let i = 0; i < newQuestions.length; i += chunkSize) {
+        const chunk = newQuestions.slice(i, i + chunkSize);
+        const batch = writeBatch(db);
+        for (const dq of chunk) {
+          const docRef = doc(db, 'diagnostic_questions', dq.id);
+          batch.set(docRef, sanitizeForFirestore({ ...dq, id: dq.id }), { merge: true });
+        }
+        await batch.commit().catch(err => {
+          console.warn("Firestore batch write diagnostic questions skipped:", err);
+        });
+      }
+      return true;
+    } catch (err) {
+      console.warn("Error batch importing diagnostic questions:", err);
+      return false;
+    }
+  };
+
   return {
     questions,
     settings,
@@ -2030,7 +2062,8 @@ export function useDiagnosticExam() {
     saveQuestion,
     deleteQuestion,
     saveSettings,
-    seedAllCurriculumDiagnosticQuestions
+    seedAllCurriculumDiagnosticQuestions,
+    importDiagnosticQuestions
   };
 }
 

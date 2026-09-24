@@ -40,9 +40,29 @@ export default function TeacherAssessmentsView({
   const { importProblems } = useCurriculum();
   const [subTab, setSubTab] = useState<'diagnostic' | 'formative' | 'bank' | 'create' | 'results' | 'quizzes' | 'exams'>(initialSubTab);
   const [isDiagnosticModalOpen, setIsDiagnosticModalOpen] = useState(false);
+  const [isDiagnosticExcelOpen, setIsDiagnosticExcelOpen] = useState(false);
   const [isFormativeModalOpen, setIsFormativeModalOpen] = useState(false);
   const [isFormativeExcelOpen, setIsFormativeExcelOpen] = useState(false);
   const [excelSuccessNotification, setExcelSuccessNotification] = useState<string | null>(null);
+
+  // Custom Diagnostic Assessments List (persisted in local storage)
+  const [customDiagnosticList, setCustomDiagnosticList] = useState<Array<{
+    id: string;
+    title: string;
+    topicTitle: string;
+    targetSection: string;
+    questionsCount: number;
+    accessCode: string;
+    schedule: string;
+    questions: ParsedDepEdQuestion[];
+    createdAt: string;
+  }>>(() => {
+    try {
+      const cached = localStorage.getItem('mathquest_diagnostic_assessments');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return [];
+  });
 
   // Custom Formative Assessments List (persisted in local storage)
   const [customFormativeList, setCustomFormativeList] = useState<Array<{
@@ -129,6 +149,77 @@ export default function TeacherAssessmentsView({
 
     // 4. Show success banner
     setExcelSuccessNotification(`✅ Extracted ${imported.length} questions from "ITEM BANK" worksheet and saved to Formative Assessments & Item Bank!`);
+    setTimeout(() => {
+      setExcelSuccessNotification(null);
+    }, 6000);
+  };
+
+  const handleImportDiagnosticExcel = async (imported: ParsedDepEdQuestion[]) => {
+    if (imported.length === 0) return;
+
+    // 1. Convert to Problem format and save to central Item Bank
+    const defaultTopic = topics[0];
+    const newProblems: Problem[] = imported.map((q, idx) => ({
+      id: q.itemId ? `diagnostic-item-${q.itemId}` : `diagnostic-item-${Date.now()}-${idx}`,
+      itemId: q.itemId || `W1D1-${idx + 1}`,
+      day: q.day || 'Monday',
+      pptSlide: q.pptSlide || 'Slide 1',
+      tier: q.tier || 1,
+      question: q.question,
+      options: q.options,
+      correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
+      solution: q.correctFeedback || q.incorrectFeedback || '',
+      topic: defaultTopic?.title || 'General Mathematics',
+      competency: q.competency || 'M11GM-DepEd-MELC',
+      difficulty: q.difficulty,
+      difficultyParameter: q.difficulty === 'easy' ? -0.8 : q.difficulty === 'hard' ? 1.2 : 0.0,
+      discriminationParameter: 1.0,
+      cognitiveLevel: q.cognitiveLevel || 'Understanding',
+      status: 'Active',
+      assessmentType: 'diagnostic',
+      assessmentLevel: 'Level 1 - Diagnostic baseline Check',
+      misconceptionCategory: 'General Procedural Error',
+      hint1: q.incorrectFeedback || 'Review key principles in the ILAW presentation.',
+      hint2: q.correctFeedback || 'Apply standard formula step-by-step.',
+      hints: [q.incorrectFeedback],
+      explanation: q.correctFeedback || '',
+      remediation: q.incorrectFeedback || ''
+    }));
+
+    if (defaultTopic && defaultTopic.quizzes && defaultTopic.quizzes.length > 0 && importProblems) {
+      try {
+        await importProblems(defaultTopic.id, defaultTopic.quizzes[0].id, newProblems);
+      } catch (err) {
+        console.warn("Could not batch import to topic quiz:", err);
+      }
+    }
+
+    // 2. Create a new Diagnostic Assessment entry
+    const newDiagId = `diag-excel-${Date.now()}`;
+    const newEntry = {
+      id: newDiagId,
+      title: `Diagnostic Assessment: Item Bank (${imported.length} Items)`,
+      topicTitle: imported[0]?.competency ? `MELC: ${imported[0].competency.slice(0, 45)}...` : 'Grade 11 General Mathematics',
+      targetSection: 'Grade 11 - STEM A',
+      questionsCount: imported.length,
+      accessCode: 'DIAG' + Math.floor(10 + Math.random() * 90),
+      schedule: 'Today (08:00 AM - 05:00 PM)',
+      questions: imported,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedList = [newEntry, ...customDiagnosticList];
+    setCustomDiagnosticList(updatedList);
+    try {
+      localStorage.setItem('mathquest_diagnostic_assessments', JSON.stringify(updatedList));
+    } catch (e) {}
+
+    // 3. Set unlocked status and access code
+    setUnlockedAssessments(prev => ({ ...prev, [newDiagId]: true }));
+    setAccessCodes(prev => ({ ...prev, [newDiagId]: newEntry.accessCode }));
+
+    // 4. Show success banner
+    setExcelSuccessNotification(`✅ Extracted ${imported.length} questions from "ITEM BANK" worksheet and saved to Diagnostic Assessments & Item Bank!`);
     setTimeout(() => {
       setExcelSuccessNotification(null);
     }, 6000);
@@ -372,6 +463,21 @@ export default function TeacherAssessmentsView({
       {/* 1. DIAGNOSTIC ASSESSMENTS */}
       {subTab === 'diagnostic' && (
         <div className="space-y-4">
+          {excelSuccessNotification && (
+            <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center justify-between text-xs text-emerald-900 font-bold shadow-sm animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2">
+                <Check className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>{excelSuccessNotification}</span>
+              </div>
+              <button
+                onClick={() => setExcelSuccessNotification(null)}
+                className="text-emerald-700 hover:text-emerald-950 text-sm font-black cursor-pointer px-2"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start justify-between gap-3 text-xs text-amber-900 flex-wrap">
             <div className="flex items-start gap-3">
               <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -380,7 +486,7 @@ export default function TeacherAssessmentsView({
                   DIAGNOSTIC ASSESSMENT PURPOSE:
                 </span>
                 <span>
-                  "Find out what the student already knows before or at the beginning of learning." Output includes prior knowledge baseline, learning gaps, and recommended ILAW lessons.
+                  "Find out what the student already knows before or at the beginning of learning." Output includes prior knowledge baseline, learning gaps, and recommended ILAW lessons. You can upload DepEd Excel files containing the <strong>"ITEM BANK"</strong> sheet to auto-extract diagnostic items!
                 </span>
               </div>
             </div>
@@ -398,20 +504,107 @@ export default function TeacherAssessmentsView({
             )}
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">
-              Active Diagnostic Assessments
+              Active Diagnostic Assessments ({1 + customDiagnosticList.length})
             </h3>
-            <button
-              onClick={() => setIsDiagnosticModalOpen(true)}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Create Diagnostic Assessment</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setIsDiagnosticExcelOpen(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Upload Excel (ITEM BANK)</span>
+              </button>
+
+              <button
+                onClick={() => setIsDiagnosticModalOpen(true)}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Create Diagnostic Assessment</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-4">
+            {/* Custom Imported Diagnostic Assessments from Excel */}
+            {customDiagnosticList.map((cd) => (
+              <div key={cd.id} className="p-5 bg-white rounded-3xl border-2 border-emerald-300 shadow-sm hover:border-emerald-500 transition-all space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded flex items-center gap-1">
+                        <FileSpreadsheet className="w-3 h-3" />
+                        Excel Item Bank Import
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-500">{cd.topicTitle}</span>
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                        Target: {cd.targetSection}
+                      </span>
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                        {cd.questionsCount} Questions
+                      </span>
+                    </div>
+                    <h4 className="font-black text-slate-900 text-base">{cd.title}</h4>
+                    <p className="text-xs text-slate-500">
+                      Imported from DepEd Excel "ITEM BANK" worksheet. Stored in Diagnostic Assessments and centralized Item Bank.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span className="px-3 py-1 bg-emerald-100 text-emerald-800 font-extrabold text-xs rounded-lg">Published</span>
+                    
+                    <button
+                      onClick={() => {
+                        setPrintableData({
+                          title: cd.title,
+                          targetSection: cd.targetSection,
+                          questions: cd.questions.map(q => ({
+                            id: q.id,
+                            question: q.question,
+                            options: q.options,
+                            correctAnswer: q.correctAnswer,
+                            competency: q.competency
+                          }))
+                        });
+                      }}
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                    >
+                      <span>🖨️ Print Test Sheet</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Schedule & Passcode Live Bar */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-4 flex-wrap text-slate-700 font-bold">
+                    <div className="flex items-center gap-1.5 text-slate-900">
+                      <Clock className="w-4 h-4 text-emerald-600" />
+                      <span>Schedule: <strong>{cd.schedule}</strong></span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-900">
+                      <Award className="w-4 h-4 text-amber-600" />
+                      <span>Passcode: <strong className="bg-white px-2 py-0.5 rounded border border-slate-300 tracking-wider font-mono text-indigo-900">{accessCodes[cd.id] || cd.accessCode}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => toggleUnlockStatus(cd.id)}
+                      className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                        unlockedAssessments[cd.id]
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-rose-600 text-white shadow-xs'
+                      }`}
+                    >
+                      <span>{unlockedAssessments[cd.id] ? '🔓 Unlocked for Class' : '🔒 Locked (Permission Required)'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
             <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:border-amber-400 transition-all space-y-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
@@ -935,6 +1128,14 @@ export default function TeacherAssessmentsView({
         onClose={() => setIsFormativeExcelOpen(false)}
         onImportQuestions={handleImportFormativeExcel}
         mode="formative"
+      />
+
+      {/* Diagnostic DepEd Excel Importer Modal */}
+      <DepEdExcelImporter
+        isOpen={isDiagnosticExcelOpen}
+        onClose={() => setIsDiagnosticExcelOpen(false)}
+        onImportQuestions={handleImportDiagnosticExcel}
+        mode="diagnostic"
       />
 
       {/* Student Permission Requests Modal */}

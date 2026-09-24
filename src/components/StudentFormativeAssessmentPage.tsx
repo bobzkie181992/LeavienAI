@@ -111,7 +111,43 @@ export default function StudentFormativeAssessmentPage({
   topics,
   onBackToOverview
 }: StudentFormativeAssessmentPageProps) {
-  const [assessments, setAssessments] = useState<FormativeAssessmentItem[]>(SAMPLE_FORMATIVE_ASSESSMENTS);
+  const [assessments, setAssessments] = useState<FormativeAssessmentItem[]>(() => {
+    const list = [...SAMPLE_FORMATIVE_ASSESSMENTS];
+    try {
+      const cached = localStorage.getItem('mathquest_formative_assessments');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((cf: any) => {
+            // Check if already in list to avoid duplicates
+            if (!list.some(item => item.id === cf.id)) {
+              list.unshift({
+                id: cf.id,
+                title: cf.title,
+                type: 'Knowledge Check',
+                ilawLesson: cf.topicTitle,
+                subject: 'General Mathematics',
+                competency: cf.topicTitle,
+                targetSection: cf.targetSection,
+                scheduleWindow: cf.schedule,
+                status: 'assigned',
+                questions: cf.questions.map((q: any, idx: number) => ({
+                  id: q.id || `q-excel-${idx}`,
+                  question: q.question,
+                  options: q.options,
+                  correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
+                  explanation: q.correctFeedback || '✓ Correct! Well done evaluating this step.',
+                  remediationHint: q.incorrectFeedback || '✗ Review the key formula in the ILAW lesson discussion.',
+                  competency: q.competency || 'M11GM-DepEd-MELC'
+                }))
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {}
+    return list;
+  });
   const [selectedAssessment, setSelectedAssessment] = useState<FormativeAssessmentItem | null>(null);
 
   // Passcode & Permission Gate
@@ -129,7 +165,25 @@ export default function StudentFormativeAssessmentPage({
   };
 
   const handleVerifyPasscode = () => {
-    if (passcode.trim().toUpperCase() === 'FORM11' || passcode.trim() === '8492' || passcode.trim().toUpperCase() === 'MATH11') {
+    const entered = passcode.trim().toUpperCase();
+    
+    // Check standard hardcoded passcodes
+    const isStandardMatch = entered === 'FORM11' || entered === '8492' || entered === 'MATH11';
+    
+    // Check dynamic local storage passcode for this assessment if applicable
+    let isCustomMatch = false;
+    try {
+      const cached = localStorage.getItem('mathquest_formative_assessments');
+      if (cached && selectedAssessment) {
+        const parsed = JSON.parse(cached);
+        const match = parsed.find((p: any) => p.id === selectedAssessment.id);
+        if (match && match.accessCode && entered === match.accessCode.toUpperCase()) {
+          isCustomMatch = true;
+        }
+      }
+    } catch (e) {}
+
+    if (isStandardMatch || isCustomMatch) {
       setIsUnlocked(true);
       setPasscodeError(false);
     } else {
