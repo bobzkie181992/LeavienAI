@@ -20,7 +20,6 @@ export const db = initializeFirestore(
   app,
   {
     localCache: memoryLocalCache(),
-    experimentalForceLongPolling: true,
   },
   firebaseAppletConfig.firestoreDatabaseId || "ai-studio-mathquestgrade11-4fec97b8-2c8c-4029-81d1-2c083144f31d"
 );
@@ -75,26 +74,27 @@ export async function createStudentAuthAccount(
  * "Function addDoc() / setDoc() / updateDoc() called with invalid data. Unsupported field value: undefined" errors.
  */
 export function sanitizeForFirestore<T>(val: T): T {
-  if (val === null || val === undefined) {
+  if (val === undefined) {
     return null as any;
+  }
+  if (val === null || typeof val !== 'object') {
+    return val;
   }
   if (Array.isArray(val)) {
     return val
       .filter(item => item !== undefined)
       .map(item => sanitizeForFirestore(item)) as any;
   }
-  if (typeof val === 'object') {
-    if (val.constructor && val.constructor.name !== 'Object') {
-      return val;
-    }
-    const cleaned: Record<string, any> = {};
-    for (const [k, v] of Object.entries(val)) {
-      if (v !== undefined) {
-        cleaned[k] = sanitizeForFirestore(v);
-      }
-    }
-    return cleaned as T;
+  // Allow Firestore FieldValue / Timestamp instances to pass through
+  if (val.constructor && val.constructor.name !== 'Object' && val.constructor.name !== '') {
+    return val;
   }
-  return val;
+  const cleaned: Record<string, any> = {};
+  for (const [k, v] of Object.entries(val)) {
+    if (v !== undefined) {
+      cleaned[k] = sanitizeForFirestore(v);
+    }
+  }
+  return cleaned as T;
 }
 

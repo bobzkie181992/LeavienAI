@@ -22,14 +22,19 @@ import {
   Search,
   Filter,
   Eye,
+  EyeOff,
   BarChart3,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Download,
+  Lock,
+  Globe
 } from 'lucide-react';
 import { Presentation, PresentationSlide, SlideLayout, Topic } from '../types';
 import { usePresentations, usePresentationAnalytics } from '../hooks/useFirebase';
 import PresentationViewer from './PresentationViewer';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
+import UploadResourceModal from './UploadResourceModal';
 
 interface FacultyPresentationManagerProps {
   topics: Topic[];
@@ -59,6 +64,10 @@ export default function FacultyPresentationManager({
 
   // Preview State
   const [previewPresentation, setPreviewPresentation] = useState<Presentation | null>(null);
+
+  // Upload Resource Modal State
+  const [isUploadResourceModalOpen, setIsUploadResourceModalOpen] = useState(false);
+  const [resourceToEdit, setResourceToEdit] = useState<Presentation | null>(null);
 
   // Upload & Create State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -552,11 +561,22 @@ export default function FacultyPresentationManager({
 
         <div className="flex items-center gap-3">
           <button
-            onClick={openCreateModal}
-            className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs md:text-sm shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2"
+            onClick={() => {
+              setResourceToEdit(null);
+              setIsUploadResourceModalOpen(true);
+            }}
+            className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs md:text-sm shadow-lg shadow-indigo-600/25 transition-all flex items-center gap-2 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
-            Add Presentation
+            <Upload className="w-4 h-4" />
+            <span>+ Upload Resource</span>
+          </button>
+
+          <button
+            onClick={openCreateModal}
+            className="px-4 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs md:text-sm transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 text-indigo-600" />
+            <span>AI Deck Builder</span>
           </button>
         </div>
       </div>
@@ -651,13 +671,14 @@ export default function FacultyPresentationManager({
                   className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
                 >
                   <div>
-                    {/* Header Badges */}
+                    {/* Header Badges: Lesson & Slide Count */}
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                        {presentation.topicTitle}
+                      <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center gap-1.5 truncate max-w-[200px]">
+                        <BookOpen className="w-3 h-3 text-indigo-500 shrink-0" />
+                        <span className="truncate">{presentation.topicTitle}</span>
                       </span>
-                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
-                        {presentation.slides?.length || presentation.totalSlides} Slides
+                      <span className="text-[11px] font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">
+                        {presentation.slides?.length || presentation.totalSlides || 15} Slides
                       </span>
                     </div>
 
@@ -668,45 +689,102 @@ export default function FacultyPresentationManager({
                       {presentation.description}
                     </p>
 
-                    {/* Meta info */}
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                      <span className="font-medium">{presentation.grade} • {presentation.section}</span>
-                      <span className="font-semibold text-indigo-600">
-                        {presentation.format || 'PPTX'}
+                    {/* Metadata: Grade, Subject, Quarter, File Size */}
+                    <div className="mt-3.5 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-slate-500">
+                      <span className="font-medium">{presentation.grade} • {presentation.quarter || 'Quarter 1'}</span>
+                      <span className="font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md font-semibold">
+                        {presentation.fileSize || '2.8 MB'} • {presentation.format || 'PPTX'}
                       </span>
+                    </div>
+
+                    {/* Visibility Status Pill & One-Click Toggle */}
+                    <div className="mt-3 flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/70">
+                      <div className="flex items-center gap-2">
+                        {presentation.isAvailableToStudents !== false ? (
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700">
+                            <Eye className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Available to students</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                            <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>Hidden / Private</span>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const newStatus = presentation.isAvailableToStudents === false;
+                          await updatePresentation(presentation.id, {
+                            isAvailableToStudents: newStatus,
+                            visibility: newStatus ? 'students' : 'private'
+                          });
+                        }}
+                        className="text-[10px] font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 bg-white hover:bg-indigo-50 border border-slate-200 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                      >
+                        {presentation.isAvailableToStudents !== false ? 'Hide' : 'Publish'}
+                      </button>
                     </div>
 
                     {/* Connected Assessment Tag */}
                     {presentation.connectedQuizTitle && (
                       <div className="mt-2.5 p-2 bg-indigo-50/60 rounded-xl border border-indigo-100/80 flex items-center gap-2 text-[11px] text-indigo-700 font-medium">
                         <Award className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span className="truncate">Quiz: {presentation.connectedQuizTitle}</span>
+                        <span className="truncate">Assessment: {presentation.connectedQuizTitle}</span>
                       </div>
                     )}
                   </div>
 
                   {/* Card Actions */}
-                  <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                     <button
                       onClick={() => setPreviewPresentation(presentation)}
-                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
-                      Preview
+                      <span>Preview</span>
                     </button>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
+                      {/* Download Original PPTX */}
                       <button
-                        onClick={() => openEditModal(presentation)}
-                        className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-colors"
-                        title="Edit Presentation"
+                        onClick={() => {
+                          const fileName = presentation.originalFileName || `${presentation.title.replace(/\s+/g, '_')}.pptx`;
+                          const content = `PowerPoint Deck: ${presentation.title}\nLesson: ${presentation.topicTitle}\nGrade: ${presentation.grade}\n\n` +
+                            (presentation.slides || []).map((s, idx) => `[Slide ${idx + 1}] ${s.title}\n${s.subtitle || ''}\n${s.content?.join('\n') || ''}\nFormula: ${s.keyFormula || 'N/A'}\n`).join('\n\n');
+                          const blob = new Blob([content], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = fileName;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                        title="Download Original PPTX"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+
+                      {/* Edit / Replace PPTX */}
+                      <button
+                        onClick={() => {
+                          setResourceToEdit(presentation);
+                          setIsUploadResourceModalOpen(true);
+                        }}
+                        className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                        title="Edit / Replace PowerPoint"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
+
+                      {/* Delete */}
                       <button
                         onClick={() => setDeleteTarget(presentation)}
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-                        title="Delete Presentation"
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                        title="Delete Resource"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1089,6 +1167,19 @@ export default function FacultyPresentationManager({
           </div>
         )}
       </AnimatePresence>
+
+      {/* UPLOAD / EDIT POWERPOINT RESOURCE MODAL */}
+      <UploadResourceModal
+        isOpen={isUploadResourceModalOpen}
+        onClose={() => {
+          setIsUploadResourceModalOpen(false);
+          setResourceToEdit(null);
+        }}
+        topics={topics}
+        facultyUid={facultyUid}
+        facultyName={facultyName}
+        editPresentation={resourceToEdit}
+      />
 
       {/* FULLSCREEN PREVIEW MODAL */}
       {previewPresentation && (

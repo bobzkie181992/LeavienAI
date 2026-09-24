@@ -432,10 +432,10 @@ export default function StudentModule({
       case 'assessments-exams': return 'Assessments • Summative Exams (TOS)';
       case 'assessments-results': return 'Assessments • My Results';
       case 'resources':
-      case 'resources-modules': return 'Learning Resources • Modules & Slides';
-      case 'resources-worksheets': return 'Learning Resources • Worksheets & Flashcards';
+      case 'resources-modules': return 'Learning Resources • Modules';
+      case 'resources-worksheets': return 'Learning Resources • Worksheets';
       case 'resources-videos': return 'Learning Resources • Videos';
-      case 'resources-references': return 'Learning Resources • References & Formulas';
+      case 'resources-references': return 'Learning Resources • References';
       case 'progress':
       case 'progress-subject': return 'My Progress • Subject Progress';
       case 'progress-competency': return 'My Progress • Competency Progress';

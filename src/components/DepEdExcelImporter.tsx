@@ -11,17 +11,24 @@ import {
   Sparkles,
   HelpCircle,
   Table,
-  Plus
+  Plus,
+  Info,
+  Bug
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export interface ParsedDepEdQuestion {
   id: string;
+  itemId?: string;
+  day?: string;
+  pptSlide?: string;
   question: string;
   questionType: 'multiple-choice' | 'short-answer' | 'true-false';
   options: string[];
   correctAnswer: number | string;
   competency: string;
+  cognitiveLevel?: string;
+  tier?: string | number;
   difficulty: 'easy' | 'medium' | 'hard';
   correctFeedback: string;
   incorrectFeedback: string;
@@ -34,47 +41,17 @@ interface DepEdExcelImporterProps {
   mode: 'diagnostic' | 'formative';
 }
 
-const SAMPLE_DEPED_QUESTIONS = [
-  {
-    'Question': 'Which of the following relations represents a function?',
-    'Question Type': 'multiple-choice',
-    'Option A': '{(1, 2), (2, 3), (3, 4)}',
-    'Option B': '{(1, 5), (1, 6), (2, 7)}',
-    'Option C': '{(0, 0), (0, 1), (0, 2)}',
-    'Option D': '{(3, 1), (3, 2), (4, 5)}',
-    'Correct Answer': 'A',
-    'Learning Competency': 'M11GM-Ia-1: Represents real-life situations using functions',
-    'Difficulty': 'easy',
-    'Correct Feedback': '✓ Correct! Each domain value is paired with exactly one range value.',
-    'Incorrect Feedback': '✗ Remember: A relation is NOT a function if an x-value repeats with different y-values.'
-  },
-  {
-    'Question': 'Evaluate f(3) if f(x) = 2x + 1.',
-    'Question Type': 'multiple-choice',
-    'Option A': '5',
-    'Option B': '6',
-    'Option C': '7',
-    'Option D': '8',
-    'Correct Answer': 'C',
-    'Learning Competency': 'M11GM-Ia-2: Evaluates functions accurately',
-    'Difficulty': 'medium',
-    'Correct Feedback': '✓ Correct! f(3) = 2(3) + 1 = 6 + 1 = 7.',
-    'Incorrect Feedback': '✗ Review function evaluation by substituting x = 3 into f(x) = 2x + 1.'
-  },
-  {
-    'Question': 'Given f(x) = x + 3 and g(x) = 2x, find (f + g)(x).',
-    'Question Type': 'multiple-choice',
-    'Option A': '3x + 3',
-    'Option B': '2x + 3',
-    'Option C': '3x + 6',
-    'Option D': 'x + 6',
-    'Correct Answer': 'A',
-    'Learning Competency': 'M11GM-Ia-3: Performs addition and composition of functions',
-    'Difficulty': 'medium',
-    'Correct Feedback': '✓ Correct! (f + g)(x) = (x + 3) + (2x) = 3x + 3.',
-    'Incorrect Feedback': '✗ Combine like terms: x + 2x = 3x, then add the constant 3.'
-  }
-];
+interface DiagnosticInfo {
+  workbookLoaded: boolean;
+  sheetNames: string[];
+  itemBankSheetFound: string | null;
+  headerRowDetected: number | null;
+  questionColumnDetected: string | null;
+  totalDataRows: number;
+  validQuestionsCount: number;
+  skippedRowsCount: number;
+  skipReasons: string[];
+}
 
 export default function DepEdExcelImporter({
   isOpen,
@@ -85,99 +62,266 @@ export default function DepEdExcelImporter({
   const [file, setFile] = useState<File | null>(null);
   const [parsedQuestions, setParsedQuestions] = useState<ParsedDepEdQuestion[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticInfo | null>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
   // Download DepEd Template Excel file
   const handleDownloadTemplate = () => {
-    const ws = XLSX.utils.json_to_sheet(SAMPLE_DEPED_QUESTIONS);
+    const templateData = [
+      {
+        'Item ID': 'W1D1-01',
+        'Day': 'Monday',
+        'PPT Slide': 'Slides 5-6 (Concept)',
+        'Competency': 'Illustrate a piecewise function in practical contexts',
+        'Cognitive Level': 'Understand',
+        'Tier': 1,
+        'Question': 'What makes a function piecewise?',
+        'Choice A': 'It has different rules for different parts of its domain',
+        'Choice B': 'It is always a straight line',
+        'Choice C': 'It cannot be evaluated at negative numbers',
+        'Choice D': 'It has no graph',
+        'Correct Answer': 'A',
+        'Difficulty': 'easy',
+        'Correct Feedback': '✓ Correct! Piecewise functions are defined by different expressions over different intervals.',
+        'Incorrect Feedback': '✗ Review the definition of piecewise functions.'
+      },
+      {
+        'Item ID': 'W1D1-02',
+        'Day': 'Monday',
+        'PPT Slide': 'Slide 7-8 (Worked Example)',
+        'Competency': 'Illustrate a piecewise function in practical contexts',
+        'Cognitive Level': 'Apply',
+        'Tier': 1,
+        'Question': 'A jeepney charges ₱13 for the first 4 km, then ₱2 for every additional km. What is the fare for a 3 km ride?',
+        'Choice A': '₱13',
+        'Choice B': '₱15',
+        'Choice C': '₱11',
+        'Choice D': '₱26',
+        'Correct Answer': 'A',
+        'Difficulty': 'medium',
+        'Correct Feedback': '✓ Correct! Since 3 km is less than or equal to the first 4 km, the flat fare is ₱13.',
+        'Incorrect Feedback': '✗ Read the problem carefully: 3 km is within the first 4 km.'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'DepEd_Questions');
-    XLSX.writeFile(wb, `DepEd_${mode.toUpperCase()}_Assessment_Questions_Template.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Item Bank');
+    XLSX.writeFile(wb, `DepEd_Item_Bank_Template_${mode.toUpperCase()}.xlsx`);
   };
 
-  // Parse Excel or CSV File
+  // Robust Excel Parsing Pipeline with Item Bank worksheet & Dynamic Header detection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
     if (!uploadedFile) return;
 
     setFile(uploadedFile);
     setErrorMsg(null);
+    setSuccessMsg(null);
     setIsProcessing(true);
+    setShowPreview(false);
 
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet);
+        const sheetNames = workbook.SheetNames || [];
 
-        if (!rawJson || rawJson.length === 0) {
-          setErrorMsg('The uploaded file contains no row data. Please use the DepEd Excel Template format.');
+        const diag: DiagnosticInfo = {
+          workbookLoaded: sheetNames.length > 0,
+          sheetNames,
+          itemBankSheetFound: null,
+          headerRowDetected: null,
+          questionColumnDetected: null,
+          totalDataRows: 0,
+          validQuestionsCount: 0,
+          skippedRowsCount: 0,
+          skipReasons: []
+        };
+
+        if (sheetNames.length === 0) {
+          setErrorMsg('Invalid Excel file: Workbook contains no worksheets.');
+          setDiagnostics(diag);
           setIsProcessing(false);
           return;
         }
 
-        const extracted: ParsedDepEdQuestion[] = rawJson.map((row, idx) => {
-          // Flexible Header Normalization
-          const questionText = row['Question'] || row['question'] || row['Item'] || row['Item Statement'] || `DepEd Question #${idx + 1}`;
-          const qType = (row['Question Type'] || row['Type'] || 'multiple-choice').toString().toLowerCase().includes('short') ? 'short-answer' : 'multiple-choice';
+        // 1. Find worksheet named "Item Bank" (case-insensitive, trimming whitespace)
+        let targetSheetName = sheetNames.find(
+          name => name.trim().toLowerCase() === 'item bank'
+        );
+
+        if (!targetSheetName) {
+          // Fallback search for any sheet containing "item" or "bank"
+          targetSheetName = sheetNames.find(
+            name => name.toLowerCase().includes('item') || name.toLowerCase().includes('bank')
+          );
+        }
+
+        if (!targetSheetName) {
+          // If still not found, fallback to first worksheet with warning
+          targetSheetName = sheetNames[0];
+          diag.skipReasons.push(`Warning: "Item Bank" sheet not found. Falling back to sheet: "${targetSheetName}".`);
+        }
+
+        diag.itemBankSheetFound = targetSheetName;
+        const worksheet = workbook.Sheets[targetSheetName];
+
+        // Read worksheet as array of arrays to find header row dynamically
+        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+        if (!rows || rows.length === 0) {
+          setErrorMsg(`Worksheet "${targetSheetName}" is empty.`);
+          setDiagnostics(diag);
+          setIsProcessing(false);
+          return;
+        }
+
+        // 2. Detect header row by finding the row containing the "Question" header
+        let headerRowIndex = -1;
+        let questionColIndex = -1;
+        let headers: string[] = [];
+
+        for (let r = 0; r < Math.min(rows.length, 15); r++) {
+          const row = rows[r];
+          if (!row) continue;
+          for (let c = 0; c < row.length; c++) {
+            const cellVal = String(row[c] || '').trim().toLowerCase();
+            if (cellVal === 'question' || cellVal === 'item statement') {
+              headerRowIndex = r;
+              questionColIndex = c;
+              headers = row.map(cell => String(cell || '').trim());
+              break;
+            }
+          }
+          if (headerRowIndex !== -1) break;
+        }
+
+        if (headerRowIndex === -1) {
+          setErrorMsg(`Item Bank sheet found ("${targetSheetName}"), but no "Question" column header was detected. Please verify column headers.`);
+          diag.skipReasons.push('Error: Could not locate "Question" header row.');
+          setDiagnostics(diag);
+          setIsProcessing(false);
+          return;
+        }
+
+        diag.headerRowDetected = headerRowIndex + 1; // 1-indexed for display
+        diag.questionColumnDetected = headers[questionColIndex] || 'Question';
+
+        // 3. Map columns & extract data rows
+        const dataRows = rows.slice(headerRowIndex + 1);
+        diag.totalDataRows = dataRows.length;
+
+        const extractedQuestions: ParsedDepEdQuestion[] = [];
+        const seenItemIds = new Set<string>();
+
+        dataRows.forEach((row, rIdx) => {
+          const rowNum = headerRowIndex + 2 + rIdx;
           
-          const optA = row['Option A'] || row['Option 1'] || row['A'] || '';
-          const optB = row['Option B'] || row['Option 2'] || row['B'] || '';
-          const optC = row['Option C'] || row['Option 3'] || row['C'] || '';
-          const optD = row['Option D'] || row['Option 4'] || row['D'] || '';
+          // Map column indices by header name (case-insensitive)
+          const getColValue = (headerKeywords: string[]): string => {
+            for (let c = 0; c < headers.length; c++) {
+              const h = headers[c].toLowerCase();
+              if (headerKeywords.some(kw => h.includes(kw))) {
+                return String(row[c] !== undefined && row[c] !== null ? row[c] : '').trim();
+              }
+            }
+            return '';
+          };
+
+          const questionText = getColValue(['question', 'item statement', 'statement']);
+          if (!questionText) {
+            diag.skippedRowsCount++;
+            diag.skipReasons.push(`Row ${rowNum}: Skipped (Empty Question field)`);
+            return;
+          }
+
+          const itemId = getColValue(['item id', 'item_id', 'id']) || `W1D1-${rIdx + 1 < 10 ? '0' + (rIdx + 1) : rIdx + 1}`;
+          const day = getColValue(['day']) || 'Monday';
+          const pptSlide = getColValue(['ppt slide', 'slide', 'ppt']) || 'Slide 1';
+          const competency = getColValue(['competency', 'learning competency', 'melc']) || 'M11GM-DepEd-MELC';
+          const cognitiveLevel = getColValue(['cognitive level', 'cognition', 'level']) || 'Understand';
+          const tierVal = getColValue(['tier']) || '1';
+          const difficultyRaw = getColValue(['difficulty']).toLowerCase();
+          const difficulty = (difficultyRaw === 'easy' || difficultyRaw === 'medium' || difficultyRaw === 'hard') ? difficultyRaw : 'medium';
+
+          // Preserve options / choices (scan columns for Choice A, B, C, D, Option A, B, C, D, A, B, C, D)
+          const optA = getColValue(['choice a', 'option a', 'a.']) || String(row[questionColIndex + 1] || '');
+          const optB = getColValue(['choice b', 'option b', 'b.']) || String(row[questionColIndex + 2] || '');
+          const optC = getColValue(['choice c', 'option c', 'c.']) || String(row[questionColIndex + 3] || '');
+          const optD = getColValue(['choice d', 'option d', 'd.']) || String(row[questionColIndex + 4] || '');
 
           const options = [optA, optB, optC, optD].filter(o => o !== '').map(String);
           if (options.length === 0) {
             options.push('Option A', 'Option B', 'Option C', 'Option D');
           }
 
-          // Parse correct answer (could be "A", "B", "C", "D" or index 0..3 or exact answer text)
-          let rawAns = (row['Correct Answer'] || row['Answer'] || row['Key'] || '0').toString().trim().toUpperCase();
+          // Parse correct answer
+          const rawAns = getColValue(['correct answer', 'answer', 'key', 'correct']).toUpperCase();
           let correctAnswerIdx = 0;
-
           if (rawAns === 'A' || rawAns === '1' || rawAns === 'OPTION A') correctAnswerIdx = 0;
           else if (rawAns === 'B' || rawAns === '2' || rawAns === 'OPTION B') correctAnswerIdx = 1;
           else if (rawAns === 'C' || rawAns === '3' || rawAns === 'OPTION C') correctAnswerIdx = 2;
           else if (rawAns === 'D' || rawAns === '4' || rawAns === 'OPTION D') correctAnswerIdx = 3;
           else {
-            const numVal = parseInt(rawAns, 10);
-            if (!isNaN(numVal) && numVal >= 0 && numVal < options.length) {
-              correctAnswerIdx = numVal;
+            const num = parseInt(rawAns, 10);
+            if (!isNaN(num) && num >= 0 && num < options.length) {
+              correctAnswerIdx = num;
             } else {
-              // try to match text
-              const foundIdx = options.findIndex(o => o.trim().toLowerCase() === rawAns.toLowerCase());
-              if (foundIdx !== -1) correctAnswerIdx = foundIdx;
+              const found = options.findIndex(o => o.trim().toLowerCase() === rawAns.toLowerCase());
+              if (found !== -1) correctAnswerIdx = found;
             }
           }
 
-          const competency = row['Learning Competency'] || row['Competency'] || row['MELC Code'] || 'M11GM-DepEd-MELC';
-          const difficulty = (row['Difficulty'] || 'medium').toString().toLowerCase() as 'easy' | 'medium' | 'hard';
-          const correctFeedback = row['Correct Feedback'] || row['Explanation'] || `✓ Correct! Well done.`;
-          const incorrectFeedback = row['Incorrect Feedback'] || row['Remediation'] || `✗ Review the concept in the ILAW lesson discussion.`;
+          const correctFeedback = getColValue(['correct feedback', 'feedback']) || '✓ Correct! Well done.';
+          const incorrectFeedback = getColValue(['incorrect feedback', 'explanation']) || '✗ Review the lesson concepts.';
 
-          return {
-            id: `excel-q-${Date.now()}-${idx}`,
+          if (seenItemIds.has(itemId)) {
+            diag.skipReasons.push(`Row ${rowNum}: Warning - Duplicate Item ID "${itemId}". Appending suffix.`);
+          }
+          seenItemIds.add(itemId);
+
+          extractedQuestions.push({
+            id: `deped-item-${Date.now()}-${rIdx}`,
+            itemId,
+            day,
+            pptSlide,
             question: questionText,
-            questionType: qType,
+            questionType: 'multiple-choice',
             options,
             correctAnswer: correctAnswerIdx,
             competency,
+            cognitiveLevel,
+            tier: isNaN(Number(tierVal)) ? tierVal : Number(tierVal),
             difficulty,
             correctFeedback,
             incorrectFeedback
-          };
+          });
         });
 
-        setParsedQuestions(extracted);
+        diag.validQuestionsCount = extractedQuestions.length;
+        setDiagnostics(diag);
+
+        if (extractedQuestions.length === 0) {
+          setErrorMsg('Item Bank sheet found, but no valid questions were detected. Please check the Question column and header row.');
+          setIsProcessing(false);
+          return;
+        }
+
+        setParsedQuestions(extractedQuestions);
+        setShowPreview(true);
         setIsProcessing(false);
       } catch (err: any) {
-        setErrorMsg(`Failed to parse Excel file: ${err.message || 'Invalid format'}`);
+        console.error('Excel Import Error:', err);
+        setErrorMsg(`Failed to parse Excel file: ${err.message || 'Unknown error'}. Ensure the file is a valid .xlsx or .csv workbook.`);
         setIsProcessing(false);
       }
     };
@@ -186,38 +330,37 @@ export default function DepEdExcelImporter({
   };
 
   const handleConfirmImport = () => {
-    if (parsedQuestions.length > 0) {
-      onImportQuestions(parsedQuestions);
+    if (parsedQuestions.length === 0) return;
+    onImportQuestions(parsedQuestions);
+    setSuccessMsg(`Successfully imported ${parsedQuestions.length} questions from Item Bank.`);
+    setTimeout(() => {
       onClose();
-    }
+    }, 1500);
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-6"
+        className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden my-6"
       >
-        {/* Modal Header */}
-        <div className="bg-gradient-to-r from-emerald-700 via-teal-800 to-slate-900 p-6 text-white flex items-center justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="bg-emerald-400 text-slate-950 font-black text-[10px] uppercase px-2.5 py-0.5 rounded-full tracking-wider flex items-center gap-1">
-                <FileSpreadsheet className="w-3 h-3" />
-                <span>DepEd Question Importer</span>
-              </span>
-              <span className="bg-white/20 text-emerald-100 font-bold text-[10px] uppercase px-2 py-0.5 rounded-full">
-                {mode.toUpperCase()} MODE
-              </span>
+        {/* Header Bar */}
+        <div className="bg-slate-900 text-white p-4 sm:p-6 flex items-center justify-between border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-md">
+              <FileSpreadsheet className="w-5 h-5" />
             </div>
-            <h2 className="text-xl font-black uppercase tracking-tight text-white">
-              UPLOAD DEPED EXCEL QUESTIONS
-            </h2>
-            <p className="text-xs text-emerald-200">
-              Bulk import DepEd-format test items from Excel spreadsheets (.xlsx, .xls, .csv).
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-emerald-400 text-slate-950 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
+                  DepEd Item Bank Importer
+                </span>
+                <span className="text-xs text-slate-400 font-bold">SheetJS Powered</span>
+              </div>
+              <h2 className="text-base font-black text-white">Import DepEd Excel Item Bank</h2>
+            </div>
           </div>
 
           <button
@@ -229,144 +372,186 @@ export default function DepEdExcelImporter({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-          {/* Action Row: Download Template & File Drag Zone */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Step 1: Download Official Template */}
-            <div className="p-5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3">
-              <div className="flex items-center gap-2 text-emerald-950 font-black text-xs uppercase tracking-wider">
-                <Download className="w-4 h-4 text-emerald-600" />
-                <span>1. Download DepEd Template</span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Download the standardized DepEd Excel sheet structure with pre-formatted column headers for Questions, Options (A-D), Correct Answer, Competency, and Feedback.
+        <div className="p-6 sm:p-8 space-y-6">
+          {/* Download Template Banner */}
+          <div className="p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border border-emerald-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="space-y-1 text-center sm:text-left">
+              <span className="text-xs font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5 justify-center sm:justify-start">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span>DepEd Excel Format Requirement</span>
+              </span>
+              <p className="text-xs text-slate-700 leading-relaxed max-w-lg">
+                Your Excel workbook must contain an <strong className="text-slate-900">"Item Bank"</strong> worksheet with a header row containing <strong className="text-slate-900">"Item ID", "Day", "PPT Slide", "Competency", "Cognitive Level", "Tier", "Question"</strong>, and answer columns.
               </p>
-              <button
-                onClick={handleDownloadTemplate}
-                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>Download DepEd Excel Template (.xlsx)</span>
-              </button>
             </div>
 
-            {/* Step 2: Upload Excel File */}
-            <div className="p-5 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-3">
-              <div className="flex items-center gap-2 text-indigo-950 font-black text-xs uppercase tracking-wider">
-                <UploadCloud className="w-4 h-4 text-indigo-600" />
-                <span>2. Upload DepEd Excel File</span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Select your completed DepEd assessment spreadsheet. The system will automatically parse and validate all questions.
-              </p>
-
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept=".xlsx, .xls, .csv"
-                className="hidden"
-              />
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                <UploadCloud className="w-4 h-4" />
-                <span>{file ? file.name : 'Choose Excel or CSV File'}</span>
-              </button>
-            </div>
+            <button
+              onClick={handleDownloadTemplate}
+              className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer shrink-0 active:scale-95"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download Excel Template</span>
+            </button>
           </div>
 
-          {/* Processing Indicator */}
-          {isProcessing && (
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
-              <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs font-bold text-slate-700">Reading and parsing DepEd Excel question sheet...</p>
-            </div>
-          )}
-
-          {/* Error Banner */}
-          {errorMsg && (
-            <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-xs text-rose-900">
-              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold block text-rose-950">Excel Parsing Error</span>
-                <span>{errorMsg}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Parsed Preview Table */}
-          {parsedQuestions.length > 0 && (
-            <div className="space-y-3 border-t border-slate-200 pt-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                  <span className="text-xs font-black uppercase text-slate-900 tracking-wider">
-                    DepEd Excel Questions Detected ({parsedQuestions.length} Items)
-                  </span>
+          {/* Upload Area */}
+          {!showPreview ? (
+            <div className="space-y-4">
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-3xl p-8 sm:p-12 text-center cursor-pointer bg-slate-50 hover:bg-emerald-50/30 transition-all space-y-3"
+              >
+                <div className="w-14 h-14 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-700 mx-auto shadow-sm">
+                  <UploadCloud className="w-7 h-7" />
                 </div>
-                <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                  Ready to Import
-                </span>
+                <div className="space-y-1">
+                  <h3 className="text-base font-black text-slate-900">
+                    {file ? file.name : 'Click to Upload DepEd Excel Workbook (.xlsx / .csv)'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Automatically detects "Item Bank" sheet, header row, question column, and answer choices.
+                  </p>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx, .xls, .csv"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
               </div>
 
-              <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-60 overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 text-slate-700 uppercase font-black text-[10px]">
+              {isProcessing && (
+                <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-2xl text-center text-xs font-bold text-indigo-900 animate-pulse">
+                  Parsing workbook, searching for "Item Bank" sheet, and validating questions...
+                </div>
+              )}
+
+              {errorMsg && (
+                <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-900 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-black">Import Error Detected</p>
+                    <p className="font-normal">{errorMsg}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* PREVIEW TABLE VIEW */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+                    Previewing {parsedQuestions.length} Valid Items
+                  </span>
+                  <h3 className="text-base font-black text-slate-900">Extracted from "Item Bank" Worksheet</h3>
+                </div>
+
+                <button
+                  onClick={() => setShowPreview(false)}
+                  className="text-xs font-bold text-slate-600 hover:text-slate-900 underline cursor-pointer"
+                >
+                  Upload Different File
+                </button>
+              </div>
+
+              {/* Scrollable Preview Table */}
+              <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-96 overflow-y-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-900 text-white sticky top-0">
                     <tr>
-                      <th className="p-3">#</th>
-                      <th className="p-3">Question Statement</th>
-                      <th className="p-3">Options</th>
-                      <th className="p-3">Answer</th>
-                      <th className="p-3">Competency</th>
+                      <th className="p-3 font-black">Item ID</th>
+                      <th className="p-3 font-black">Day / Slide</th>
+                      <th className="p-3 font-black">Competency / Tier</th>
+                      <th className="p-3 font-black">Question Text</th>
+                      <th className="p-3 font-black">Options</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-semibold text-slate-800">
+                  <tbody className="divide-y divide-slate-200 bg-white">
                     {parsedQuestions.map((q, idx) => (
-                      <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3 font-black text-slate-400">{idx + 1}</td>
-                        <td className="p-3 font-bold text-slate-900 max-w-xs truncate">{q.question}</td>
-                        <td className="p-3 text-slate-500 text-[11px] max-w-xs truncate">
-                          {q.options.join(' | ')}
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="p-3 font-black text-indigo-700 whitespace-nowrap">{q.itemId}</td>
+                        <td className="p-3 text-slate-600 whitespace-nowrap">
+                          <div className="font-bold">{q.day}</div>
+                          <div className="text-[10px] text-slate-400">{q.pptSlide}</div>
                         </td>
-                        <td className="p-3 font-black text-emerald-700">
-                          {q.options[q.correctAnswer as number] || `Option ${Number(q.correctAnswer) + 1}`}
+                        <td className="p-3 text-slate-600">
+                          <div className="font-bold text-slate-800">{q.competency}</div>
+                          <div className="text-[10px] text-emerald-700 font-semibold">Tier {q.tier} • {q.cognitiveLevel}</div>
                         </td>
-                        <td className="p-3 text-[10px] text-indigo-700 font-bold max-w-xs truncate">
-                          {q.competency}
+                        <td className="p-3 font-medium text-slate-900 max-w-xs">{q.question}</td>
+                        <td className="p-3 text-slate-600">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded font-bold text-[10px]">
+                            {q.options.length} options (Ans: #{Number(q.correctAnswer) + 1})
+                          </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {successMsg && (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-900 flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  <span>{successMsg}</span>
+                </div>
+              )}
+
+              {/* Confirm Import Button */}
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  onClick={onClose}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmImport}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Confirm & Import {parsedQuestions.length} Items into Item Bank</span>
+                </button>
+              </div>
             </div>
           )}
-        </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
-          >
-            Cancel
-          </button>
+          {/* Development Diagnostics Toggle */}
+          {diagnostics && (
+            <div className="pt-4 border-t border-slate-200">
+              <button
+                onClick={() => setShowDiagnostics(!showDiagnostics)}
+                className="text-xs font-bold text-slate-500 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+              >
+                <Bug className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{showDiagnostics ? 'Hide Parser Diagnostics' : 'Show Parser Diagnostics & Logs'}</span>
+              </button>
 
-          <button
-            disabled={parsedQuestions.length === 0}
-            onClick={handleConfirmImport}
-            className={`px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 cursor-pointer transition-all ${
-              parsedQuestions.length > 0
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-200'
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span>Import {parsedQuestions.length} DepEd Questions</span>
-          </button>
+              {showDiagnostics && (
+                <div className="mt-3 p-4 bg-slate-900 text-slate-200 rounded-2xl text-[11px] font-mono space-y-1.5 shadow-inner">
+                  <p className="text-emerald-400 font-black">--- DepEd Excel Parser Diagnostics ---</p>
+                  <p>• Workbook Loaded: <span className="text-white">{diagnostics.workbookLoaded ? 'Yes' : 'No'}</span></p>
+                  <p>• Sheets Found: <span className="text-white">{diagnostics.sheetNames.join(', ')}</span></p>
+                  <p>• Item Bank Sheet Matched: <span className="text-emerald-300 font-bold">{diagnostics.itemBankSheetFound || 'None'}</span></p>
+                  <p>• Header Row Detected: <span className="text-white">{diagnostics.headerRowDetected ? `Row #${diagnostics.headerRowDetected}` : 'Not Detected'}</span></p>
+                  <p>• Question Column Detected: <span className="text-white">{diagnostics.questionColumnDetected || 'None'}</span></p>
+                  <p>• Total Data Rows: <span className="text-white">{diagnostics.totalDataRows}</span></p>
+                  <p>• Valid Questions Imported: <span className="text-emerald-400 font-bold">{diagnostics.validQuestionsCount}</span></p>
+                  <p>• Skipped Rows Count: <span className="text-amber-400">{diagnostics.skippedRowsCount}</span></p>
+                  {diagnostics.skipReasons.length > 0 && (
+                    <div className="pt-1 text-slate-400">
+                      <p className="font-bold text-slate-300">Logs / Warnings:</p>
+                      {diagnostics.skipReasons.map((log, lIdx) => (
+                        <p key={lIdx} className="pl-2 text-[10px]">• {log}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </motion.div>
     </div>

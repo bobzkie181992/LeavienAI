@@ -65,7 +65,7 @@ export type TeacherNavSection =
   | 'analytics-competency'
   | 'analytics-reports'
   // Resources
-  | 'resources-materials'
+  | 'resources-teaching'
   | 'resources-worksheets'
   | 'resources-shared'
   // General
@@ -192,7 +192,7 @@ export default function TeacherSidebar({
       icon: <FolderOpen className="w-4 h-4 text-teal-400" />,
       defaultOpen: currentSection.startsWith('resources'),
       children: [
-        { id: 'resources-materials', label: 'Teaching Materials' },
+        { id: 'resources-teaching', label: 'Teaching Materials' },
         { id: 'resources-worksheets', label: 'Worksheets' },
         { id: 'resources-shared', label: 'Shared Resources' }
       ]

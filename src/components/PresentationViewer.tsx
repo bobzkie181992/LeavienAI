@@ -19,25 +19,33 @@ import {
   Play, 
   Pause, 
   X, 
-  Layers,
-  ArrowRight,
-  GraduationCap,
-  Activity,
-  Check,
-  Brain,
-  Edit2,
-  Trash2,
-  PenTool,
-  Radio,
-  ExternalLink,
-  Presentation as PresentationIcon,
-  Monitor
+  Layers, 
+  ArrowRight, 
+  GraduationCap, 
+  Activity, 
+  Check, 
+  Brain, 
+  Edit2, 
+  Trash2, 
+  PenTool, 
+  Radio, 
+  ExternalLink, 
+  Presentation as PresentationIcon, 
+  Monitor,
+  ZoomIn,
+  ZoomOut,
+  Download,
+  Sliders,
+  Smartphone,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Presentation, PresentationSlide, UserProfile } from '../types';
+import { generateSlideImage } from '../utils/pptxConverter';
 
 interface PresentationViewerProps {
   presentation: Presentation;
   profile?: UserProfile | null;
+  initialSlideIndex?: number;
   onClose: () => void;
   onStartQuiz?: (topicId: string, quizId?: string) => void;
   onStartDiagnostic?: () => void;
@@ -47,15 +55,34 @@ interface PresentationViewerProps {
 export default function PresentationViewer({
   presentation,
   profile,
+  initialSlideIndex,
   onClose,
   onStartQuiz,
   onStartDiagnostic,
   onCompletePresentation
 }: PresentationViewerProps) {
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const storageKey = `mathquest_pres_prog_${profile?.uid || 'guest'}_${presentation.id}`;
+
+  const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(() => {
+    if (initialSlideIndex !== undefined && initialSlideIndex >= 0) {
+      return initialSlideIndex;
+    }
+    try {
+      const saved = localStorage.getItem(`mathquest_pres_prog_${profile?.uid || 'guest'}_${presentation.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.lastViewedSlide && typeof parsed.lastViewedSlide === 'number') {
+          return Math.max(0, parsed.lastViewedSlide - 1);
+        }
+      }
+    } catch {}
+    return 0;
+  });
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showThumbnails, setShowThumbnails] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [revealedSteps, setRevealedSteps] = useState<number[]>([]);
   const [selectedQuickAnswer, setSelectedQuickAnswer] = useState<number | null>(null);
@@ -64,15 +91,17 @@ export default function PresentationViewer({
   const [showAssessmentSuggestion, setShowAssessmentSuggestion] = useState(false);
   const [hasCompletedPresentation, setHasCompletedPresentation] = useState(false);
 
-  // PowerPoint & Presenter Tools State
-  const [viewMode, setViewMode] = useState<'interactive' | 'powerpoint'>(
-    presentation.embedUrl || presentation.powerpointUrl ? 'powerpoint' : 'interactive'
-  );
+  // PowerPoint & Presenter Tools State (Default to slide_image to display converted PowerPoint PDF images)
+  const [viewMode, setViewMode] = useState<'slide_image' | 'interactive' | 'powerpoint'>('slide_image');
   const [isLaserActive, setIsLaserActive] = useState(false);
   const [laserPos, setLaserPos] = useState({ x: 0, y: 0 });
   const [isPenActive, setIsPenActive] = useState(false);
   const [penColor, setPenColor] = useState('#ef4444');
   const [isDrawing, setIsDrawing] = useState(false);
+
+  // Mobile Touch Swipe Handling
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const slideCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -117,6 +146,74 @@ export default function PresentationViewer({
       y: e.clientY - rect.top
     });
   };
+
+  // Mobile Touch Swipe Navigation
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches && e.touches[0]) {
+      setTouchStartX(e.touches[0].clientX);
+      setTouchStartY(e.touches[0].clientY);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null || touchStartY === null) return;
+    if (e.changedTouches && e.changedTouches[0]) {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const deltaX = touchStartX - touchEndX;
+      const deltaY = touchStartY - touchEndY;
+
+      // Ensure horizontal swipe is dominant and significant
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 40) {
+        if (deltaX > 0) {
+          handleNext();
+        } else {
+          handlePrev();
+        }
+      }
+    }
+    setTouchStartX(null);
+    setTouchStartY(null);
+  };
+
+  // Download PPTX / Resource Handler
+  const handleDownloadPPTX = () => {
+    if (presentation.downloadUrl) {
+      window.open(presentation.downloadUrl, '_blank');
+      return;
+    }
+    // Generate text/slide deck summary fallback download
+    const fileName = presentation.originalFileName || `${presentation.title.replace(/\s+/g, '_')}.pptx`;
+    const content = `PowerPoint Presentation: ${presentation.title}\nTopic: ${presentation.topicTitle}\nGrade: ${presentation.grade}\nSection: ${presentation.section}\n\n` +
+      slides.map((s, idx) => `--- Slide ${idx + 1}: ${s.title} ---\n${s.subtitle || ''}\n\n${s.content.join('\n')}\n\n${s.keyFormula ? 'Formula: ' + s.keyFormula : ''}\n\nNotes: ${s.speakerNotes || 'N/A'}\n`).join('\n\n');
+    
+    const blob = new Blob([content], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Persist student progress whenever slide changes
+  useEffect(() => {
+    try {
+      const progressData = {
+        presentationId: presentation.id,
+        lastViewedSlide: currentSlideIndex + 1,
+        totalSlides: totalSlides,
+        presentationStarted: true,
+        presentationCompleted: currentSlideIndex === totalSlides - 1 || completedSlides.size >= totalSlides,
+        lastViewedDate: new Date().toISOString(),
+        percentage: progressPercent,
+        slidesViewedCount: completedSlides.size
+      };
+      localStorage.setItem(storageKey, JSON.stringify(progressData));
+    } catch {}
+  }, [currentSlideIndex, totalSlides, completedSlides, presentation.id, storageKey, progressPercent]);
 
   // Pen Drawing Handlers
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -288,29 +385,41 @@ export default function PresentationViewer({
 
         {/* Center View Mode Switcher & Progress Tracker */}
         <div className="hidden md:flex items-center gap-4">
-          {/* PowerPoint View vs Interactive Deck Switcher */}
-          {(presentation.embedUrl || presentation.powerpointUrl || presentation.format === 'PPTX') && (
-            <div className="flex bg-slate-800 p-1 rounded-xl text-xs font-bold">
-              <button
-                onClick={() => setViewMode('interactive')}
-                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
-                  viewMode === 'interactive' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <PresentationIcon className="w-3.5 h-3.5" />
-                <span>Interactive Deck</span>
-              </button>
+          {/* PowerPoint / Converted Image / Interactive Deck Switcher */}
+          <div className="flex bg-slate-800 p-1 rounded-xl text-xs font-bold">
+            <button
+              onClick={() => setViewMode('slide_image')}
+              className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                viewMode === 'slide_image' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+              title="View Converted PDF Slide Image"
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span>Slide Image</span>
+            </button>
+            <button
+              onClick={() => setViewMode('interactive')}
+              className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                viewMode === 'interactive' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+              title="View Interactive Math Elements"
+            >
+              <PresentationIcon className="w-3.5 h-3.5" />
+              <span>Interactive</span>
+            </button>
+            {(presentation.embedUrl || presentation.powerpointUrl) && (
               <button
                 onClick={() => setViewMode('powerpoint')}
                 className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
                   viewMode === 'powerpoint' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                 }`}
+                title="View Native PowerPoint Embed"
               >
                 <Monitor className="w-3.5 h-3.5" />
-                <span>PowerPoint (.PPTX)</span>
+                <span>PowerPoint</span>
               </button>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-300">
@@ -465,8 +574,59 @@ export default function PresentationViewer({
           }`}
         />
 
-        {/* NATIVE POWERPOINT EMBED MODE */}
-        {viewMode === 'powerpoint' ? (
+        {/* 1. RENDERED SLIDE IMAGE MODE (CONVERTED FROM PPTX -> PDF -> SLIDE IMAGE) */}
+        {viewMode === 'slide_image' ? (
+          <AnimatePresence mode="wait">
+            {currentSlide && (
+              <div 
+                className="w-full flex items-center justify-center transition-transform duration-200"
+                style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+              >
+                <motion.div
+                  key={`slide-img-${currentSlide.id || currentSlideIndex}`}
+                  initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98, y: -10 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className="w-full max-w-5xl relative rounded-3xl overflow-hidden shadow-2xl border border-slate-800 bg-slate-950 flex flex-col items-center justify-center group"
+                >
+                  <img
+                    src={
+                      currentSlide.imageUrl ||
+                      (presentation.slideImages && presentation.slideImages[currentSlideIndex]) ||
+                      generateSlideImage(currentSlide, totalSlides, presentation.subject, presentation.topicTitle)
+                    }
+                    alt={currentSlide.title || `Slide ${currentSlideIndex + 1}`}
+                    className="w-full h-auto object-contain max-h-[72vh] rounded-3xl select-none"
+                    draggable={false}
+                  />
+
+                  {/* Top Floating Badge */}
+                  <div className="absolute top-4 left-4 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-950/80 backdrop-blur-md border border-slate-700/60 text-[11px] font-bold text-white shadow-lg pointer-events-none">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>PowerPoint → PDF → Rendered Slide Image</span>
+                  </div>
+
+                  {/* Bottom Bar Info on Hover */}
+                  <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[11px] font-mono text-slate-300 bg-slate-950/80 px-3 py-1 rounded-full border border-slate-700/50 backdrop-blur-sm">
+                      {currentSlide.title} • Slide {currentSlideIndex + 1} of {totalSlides}
+                    </span>
+                    <button
+                      onClick={() => setViewMode('interactive')}
+                      className="pointer-events-auto text-[11px] font-bold text-indigo-300 hover:text-white bg-indigo-900/80 hover:bg-indigo-800 border border-indigo-500/50 px-3 py-1 rounded-full backdrop-blur-sm transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <PresentationIcon className="w-3 h-3" />
+                      <span>Switch to Interactive Mode</span>
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+        ) : viewMode === 'powerpoint' ? (
           <div className="w-full max-w-5xl h-[580px] bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between">
             <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -526,6 +686,12 @@ export default function PresentationViewer({
         ) : (
           <AnimatePresence mode="wait">
           {currentSlide && (
+            <div 
+              className="w-full flex items-center justify-center transition-transform duration-200"
+              style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
             <motion.div
               key={currentSlide.id || currentSlideIndex}
               initial={{ opacity: 0, scale: 0.96, y: 10 }}
@@ -812,9 +978,101 @@ export default function PresentationViewer({
                 </button>
               </div>
             </motion.div>
+            </div>
           )}
         </AnimatePresence>
         )}
+      </div>
+
+      {/* EMBEDDED PRESENTATION VIEWER BOTTOM CONTROLS DOCK */}
+      <div className="bg-slate-900/95 border-t border-slate-800 px-4 py-3 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 backdrop-blur-md z-30 shadow-2xl">
+        {/* ◀ Previous  4 / 15  Next ▶ */}
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+          <button
+            onClick={handlePrev}
+            disabled={currentSlideIndex === 0}
+            className="px-4 py-2 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-1.5 text-xs font-bold border border-slate-700"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>◀ Previous</span>
+          </button>
+
+          <div className="flex items-center gap-2 bg-slate-800/90 px-3.5 py-1.5 rounded-xl border border-slate-700 font-mono text-xs font-black text-slate-200">
+            <span className="text-white">{currentSlideIndex + 1}</span>
+            <span className="text-slate-500">/</span>
+            <span>{totalSlides}</span>
+          </div>
+
+          <button
+            onClick={handleNext}
+            className="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 transition-all flex items-center gap-1.5 text-xs font-bold shadow-md shadow-indigo-600/30"
+          >
+            <span>{currentSlideIndex === totalSlides - 1 ? 'Finish' : 'Next ▶'}</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Secondary Toolbar: [Thumbnails] [Zoom] [Fullscreen] [Download PPTX] */}
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-end overflow-x-auto py-1">
+          {/* Thumbnails Navigation */}
+          <button
+            onClick={() => setShowThumbnails(!showThumbnails)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              showThumbnails
+                ? 'bg-indigo-600 text-white border-indigo-500'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border-slate-700'
+            }`}
+            title="Open Slide Thumbnails"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Thumbnails</span>
+          </button>
+
+          {/* Zoom Controls */}
+          <div className="flex items-center bg-slate-800 rounded-xl border border-slate-700 p-0.5 text-xs">
+            <button
+              onClick={() => setZoomLevel(prev => Math.max(0.75, +(prev - 0.15).toFixed(2)))}
+              className="p-1.5 text-slate-300 hover:text-white rounded-lg hover:bg-slate-700 transition-colors"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span 
+              onClick={() => setZoomLevel(1.0)}
+              className="px-2 font-mono font-bold text-[11px] text-slate-300 cursor-pointer hover:text-white"
+              title="Reset Fit (100%)"
+            >
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <button
+              onClick={() => setZoomLevel(prev => Math.min(1.5, +(prev + 0.15).toFixed(2)))}
+              className="p-1.5 text-slate-300 hover:text-white rounded-lg hover:bg-slate-700 transition-colors"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Fullscreen Mode */}
+          <button
+            onClick={toggleFullscreen}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700"
+            title="Toggle Fullscreen"
+          >
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <span className="hidden md:inline">{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+          </button>
+
+          {/* Download Original PPTX */}
+          <button
+            onClick={handleDownloadPPTX}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 hover:bg-slate-700 hover:text-amber-200 text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700"
+            title="Download Original PowerPoint (.pptx)"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">PPTX</span>
+          </button>
+        </div>
       </div>
 
       {/* Teacher Speaker Notes Drawer */}
@@ -870,31 +1128,48 @@ export default function PresentationViewer({
               </button>
             </div>
 
-            <div className="space-y-2">
-              {slides.map((slide, idx) => (
-                <button
-                  key={slide.id || idx}
-                  onClick={() => {
-                    setCurrentSlideIndex(idx);
-                    setShowThumbnails(false);
-                  }}
-                  className={`w-full p-3 rounded-2xl border text-left transition-all flex items-start gap-2.5 ${
-                    idx === currentSlideIndex 
-                      ? 'bg-indigo-600/20 border-indigo-500 text-white' 
-                      : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                  }`}
-                >
-                  <span className={`w-5 h-5 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                    idx === currentSlideIndex ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-300'
-                  }`}>
-                    {idx + 1}
-                  </span>
-                  <div className="flex-1 truncate">
-                    <p className="text-xs font-bold truncate text-slate-100">{slide.title}</p>
-                    <p className="text-[11px] text-slate-400 truncate">{slide.subtitle || 'Slide content'}</p>
-                  </div>
-                </button>
-              ))}
+            <div className="space-y-2.5">
+              {slides.map((slide, idx) => {
+                const thumbImgUrl =
+                  slide.imageUrl ||
+                  (presentation.slideImages && presentation.slideImages[idx]) ||
+                  generateSlideImage(slide, totalSlides, presentation.subject, presentation.topicTitle);
+
+                return (
+                  <button
+                    key={slide.id || idx}
+                    onClick={() => {
+                      setCurrentSlideIndex(idx);
+                      setShowThumbnails(false);
+                    }}
+                    className={`w-full p-2 rounded-2xl border text-left transition-all flex items-center gap-3 cursor-pointer group ${
+                      idx === currentSlideIndex 
+                        ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-md shadow-indigo-500/10' 
+                        : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    {/* Visual Slide Image Thumbnail Preview */}
+                    <div className="w-20 aspect-[16/9] rounded-xl overflow-hidden bg-slate-950 border border-slate-700/80 shrink-0 relative shadow-inner">
+                      <img 
+                        src={thumbImgUrl} 
+                        alt="" 
+                        className="w-full h-full object-cover" 
+                        loading="lazy"
+                      />
+                      <span className={`absolute bottom-1 right-1 text-[9px] font-mono font-black px-1.5 py-0.2 rounded-md ${
+                        idx === currentSlideIndex ? 'bg-indigo-600 text-white' : 'bg-slate-900/90 text-slate-300'
+                      }`}>
+                        {idx + 1}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 min-w-0 truncate">
+                      <p className="text-xs font-bold truncate text-slate-100 group-hover:text-white">{slide.title}</p>
+                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{slide.subtitle || `Slide ${idx + 1} of ${totalSlides}`}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </motion.div>
         )}

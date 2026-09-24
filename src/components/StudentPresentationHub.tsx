@@ -14,7 +14,8 @@ import {
   ArrowRight,
   TrendingUp,
   Clock,
-  GraduationCap
+  GraduationCap,
+  Monitor
 } from 'lucide-react';
 import { Presentation, Topic, UserProfile } from '../types';
 import { usePresentations } from '../hooks/useFirebase';
@@ -173,9 +174,17 @@ export default function StudentPresentationHub({
               <div>
                 {/* Topic and Slide Count Tags */}
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                    {presentation.topicTitle}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      {presentation.topicTitle}
+                    </span>
+                    {(presentation.embedUrl || presentation.powerpointUrl) && (
+                      <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-100 flex items-center gap-1">
+                        <Monitor className="w-2.5 h-2.5" />
+                        PPT
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[11px] font-mono font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
                     {presentation.slides?.length || presentation.totalSlides} SLIDES
                   </span>

@@ -164,10 +164,10 @@ export default function StudentSidebar({
       label: 'Learning Resources',
       icon: <FolderOpen className="w-4 h-4 text-sky-500" />,
       subItems: [
-        { id: 'resources-modules', label: 'Modules & Slides', icon: <Layers className="w-3.5 h-3.5" /> },
-        { id: 'resources-worksheets', label: 'Worksheets & Flashcards', icon: <FileSpreadsheet className="w-3.5 h-3.5" /> },
+        { id: 'resources-modules', label: 'Modules', icon: <Layers className="w-3.5 h-3.5 text-indigo-500" /> },
+        { id: 'resources-worksheets', label: 'Worksheets', icon: <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> },
         { id: 'resources-videos', label: 'Videos', icon: <Video className="w-3.5 h-3.5 text-rose-500" /> },
-        { id: 'resources-references', label: 'References & Formulas', icon: <BookOpen className="w-3.5 h-3.5" /> }
+        { id: 'resources-references', label: 'References', icon: <BookOpen className="w-3.5 h-3.5 text-teal-500" /> }
       ]
     },
     {

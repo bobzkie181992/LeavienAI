@@ -75,6 +75,10 @@ export const isValidatedOrActive = (problem: Problem): boolean => {
 
 export interface Problem {
   id: string;
+  itemId?: string;
+  day?: string;
+  pptSlide?: string;
+  tier?: string | number;
   question: string;
   options: string[];
   correctAnswer: number;
@@ -620,6 +624,7 @@ export interface PresentationSlide {
   speakerNotes?: string;
   diagramDescription?: string;
   iconName?: string;
+  imageUrl?: string;
 }
 
 export interface Presentation {
@@ -628,23 +633,49 @@ export interface Presentation {
   description: string;
   topicId: string;
   topicTitle: string;
+  subject?: string;
   grade: string;
   section: string;
+  quarter?: string;
+  ilawLessonId?: string;
+  ilawLessonTitle?: string;
+  fileSize?: string;
+  fileSizeBytes?: number;
+  visibility?: 'students' | 'private' | 'hidden';
+  isAvailableToStudents?: boolean;
   authorFacultyId?: string;
   authorFacultyName?: string;
   originalFileName?: string;
   format?: 'PPTX' | 'PDF' | 'DOCX' | 'INTERACTIVE_DECK';
   powerpointUrl?: string;
+  downloadUrl?: string;
+  pdfUrl?: string;
+  originalPptxBase64?: string;
   embedUrl?: string;
   slides: PresentationSlide[];
   totalSlides: number;
+  slideImages?: string[];
   connectedQuizId?: string;
   connectedQuizTitle?: string;
   suggestedAssessmentType?: 'quiz' | 'diagnostic' | 'both';
+  conversionStatus?: 'ready' | 'processing' | 'error';
+  uploadedAt?: string;
+  convertedAt?: string;
   createdAt: string;
   updatedAt?: string;
   viewsCount?: number;
   completionsCount?: number;
+}
+
+export interface StudentPresentationProgress {
+  presentationId: string;
+  lastViewedSlide: number;
+  totalSlides: number;
+  presentationStarted: boolean;
+  presentationCompleted: boolean;
+  lastViewedDate: string;
+  percentage: number;
+  slidesViewedCount: number;
 }
 
 export interface PresentationViewRecord {

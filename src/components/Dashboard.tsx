@@ -34,8 +34,8 @@ interface DashboardProps {
   onOpenFormulaHub?: () => void;
   onOpenDailyChallenge?: () => void;
   onOpenExplainerLibrary?: () => void;
-  onOpenReports?: () => void;
   onOpenPresentations?: () => void;
+  onOpenReports?: () => void;
   onOpenDailyQuests?: () => void;
   onOpenSprintArena?: () => void;
   onOpenLevelProgression?: () => void;
@@ -61,9 +61,7 @@ export default function Dashboard({
   onOpenAIMathSolver,
   onOpenFormulaHub,
   onOpenDailyChallenge,
-  onOpenExplainerLibrary,
   onOpenReports,
-  onOpenPresentations,
   onOpenDailyQuests,
   onOpenSprintArena,
   onOpenLevelProgression,
@@ -711,18 +709,7 @@ export default function Dashboard({
               </button>
             )}
 
-            {onOpenExplainerLibrary && (
-              <button
-                onClick={onOpenExplainerLibrary}
-                className="p-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl flex flex-col items-center text-center transition-all active:scale-95 group"
-              >
-                <div className="w-8 h-8 rounded-xl bg-rose-400 text-slate-950 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform shadow">
-                  <Icons.Video className="w-4 h-4" />
-                </div>
-                <span className="text-xs font-bold text-white">Explainer Videos</span>
-                <span className="text-[10px] text-indigo-200">Weak-area guides</span>
-              </button>
-            )}
+
           </div>
         </div>
       </section>
@@ -918,17 +905,7 @@ export default function Dashboard({
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-            {onOpenPresentations && (
-              <button
-                id="dashboard-open-presentations-btn"
-                onClick={onOpenPresentations}
-                className="px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-2xl flex items-center gap-2 text-xs font-bold transition-all shadow-sm active:scale-95"
-                title="Faculty presentations, slide decks, and learning modules"
-              >
-                <Icons.Layers className="w-4 h-4" />
-                <span>Learning Slides</span>
-              </button>
-            )}
+
 
             {onOpenPeerChat && (
               <button
@@ -1093,7 +1070,7 @@ export default function Dashboard({
               <span>AI Smart Recommendations (Weakness Remediation)</span>
             </h2>
             <p className="text-xs sm:text-sm text-slate-500">
-              Personalized adaptive suggestions and academic resources targeting your exact conceptual weaknesses
+              Personalized adaptive suggestions and practice modules targeting your exact conceptual weaknesses
             </p>
           </div>
         </div>
@@ -1231,16 +1208,7 @@ export default function Dashboard({
                       </button>
                     )}
 
-                    {matchingVideo && onOpenExplainerLibrary && (
-                      <button
-                        onClick={onOpenExplainerLibrary}
-                        className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                        title={`Watch matching video: "${matchingVideo.title}" in Explainer Library`}
-                      >
-                        <Icons.Video className="w-3.5 h-3.5 text-rose-500" />
-                        <span>Watch Video Guide</span>
-                      </button>
-                    )}
+
                   </div>
                 </div>
               );

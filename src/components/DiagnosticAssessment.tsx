@@ -176,7 +176,7 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
     
     // 1. Shuffle question order for each student
     const shuffledQuestions = [...fetchedQuestions].sort(() => 0.5 - Math.random());
-    const limit = diagnosticSettings?.itemsCount || 10;
+    const limit = diagnosticSettings?.itemsCount || 26;
     
     // 2. Take item count limit and randomize options for each individual question
     return shuffledQuestions.slice(0, limit).map((q) => {

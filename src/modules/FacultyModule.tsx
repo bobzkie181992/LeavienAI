@@ -91,9 +91,9 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
       case 'analytics-competency': return { title: 'Analytics • Competency Tracking', subtitle: 'MELCs heatmaps and mastery benchmark coverage' };
       case 'analytics-reports': return { title: 'Analytics • Assessment Reports', subtitle: 'Personalized narrative progress reports' };
       // Resources
-      case 'resources-materials': return { title: 'Resources • Teaching Materials', subtitle: 'Interactive slide decks and video lecture library' };
-      case 'resources-worksheets': return { title: 'Resources • Printable Worksheets', subtitle: 'Downloadable practice problem sheets and answer keys' };
-      case 'resources-shared': return { title: 'Resources • Shared Department Drive', subtitle: 'Collaborative curriculum guides and syllabi' };
+      case 'resources-teaching': return { title: 'Resources • Teaching Materials', subtitle: 'Interactive slide presentations and curated video lectures' };
+      case 'resources-worksheets': return { title: 'Resources • Worksheets', subtitle: 'Practice sets and downloadable assessment materials' };
+      case 'resources-shared': return { title: 'Resources • Shared Resources', subtitle: 'Mathematics department shared cloud drive and syllabus' };
       // General
       case 'notifications': return { title: 'Notifications & Alerts', subtitle: 'Real-time student task activity and intervention notices' };
       case 'settings': return { title: 'Faculty Settings', subtitle: 'DepEd D.O. 8 grading weights & academic preferences' };

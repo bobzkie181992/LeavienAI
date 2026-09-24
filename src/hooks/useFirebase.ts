@@ -239,7 +239,7 @@ export function useUserProfile(uid: string | undefined) {
     setProfile(newProfile);
     try {
       const docRef = doc(db, 'users', activeUid);
-      await setDoc(docRef, newProfile);
+      await setDoc(docRef, sanitizeForFirestore(newProfile));
       try {
         localStorage.setItem(`mathquest_profile_${activeUid}`, JSON.stringify(newProfile));
       } catch (e) {}
@@ -633,7 +633,7 @@ export function useAllStudents() {
 
     // 1. Save recitation doc
     try {
-      await setDoc(doc(db, 'oral_recitations', recitationId), recitation);
+      await setDoc(doc(db, 'oral_recitations', recitationId), sanitizeForFirestore(recitation));
     } catch (err) {
       console.warn("Could not save recitation doc remotely:", err);
     }
@@ -918,14 +918,6 @@ export function useCurriculum() {
       const querySnapshot = await getDocs(q);
       let data = querySnapshot.docs.map(doc => doc.data() as Topic);
       if (data.length === 0 && initialTopics.length > 0) {
-        // Automatically seed initial topics so students and faculty immediately have rich curriculum items
-        for (const topic of initialTopics) {
-          try {
-            await setDoc(doc(db, 'curriculum', topic.id), topic);
-          } catch (e) {
-            console.error("Auto-seed error for topic:", topic.id, e);
-          }
-        }
         data = initialTopics;
       } else if (data.length > 0) {
         // Enrich existing topics with latest DepEd ILAW lesson plans and structures if missing
@@ -958,7 +950,7 @@ export function useCurriculum() {
 
   const saveTopic = async (topic: Topic) => {
     try {
-      await setDoc(doc(db, 'curriculum', topic.id), topic);
+      await setDoc(doc(db, 'curriculum', topic.id), sanitizeForFirestore(topic));
       setTopics(prev => {
         const index = prev.findIndex(t => t.id === topic.id);
         if (index >= 0) {
@@ -1572,7 +1564,7 @@ export function useVideoLectures() {
         id: newRef.id,
         createdAt: new Date().toISOString()
       };
-      await setDoc(newRef, newLecture);
+      await setDoc(newRef, sanitizeForFirestore(newLecture));
     } catch (err) {
       console.error("Error adding video lecture:", err);
       throw err;
@@ -1591,78 +1583,158 @@ export function useVideoLectures() {
   return { lectures, loading, addLecture, deleteLecture };
 }
 
+// Local Presentations storage key
+const PRESENTATIONS_CACHE_KEY = 'mathquest_custom_presentations';
+
+function getLocalPresentationsCache(): Presentation[] {
+  try {
+    const raw = localStorage.getItem(PRESENTATIONS_CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return initialPresentations;
+}
+
+function saveLocalPresentationsCache(items: Presentation[]) {
+  try {
+    localStorage.setItem(PRESENTATIONS_CACHE_KEY, JSON.stringify(items));
+    window.dispatchEvent(new CustomEvent('mathquest_presentations_updated', { detail: items }));
+  } catch (e) {}
+}
+
 export function usePresentations(gradeFilter?: string, sectionFilter?: string, topicFilter?: string) {
-  const [presentations, setPresentations] = useState<Presentation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [presentations, setPresentations] = useState<Presentation[]>(getLocalPresentationsCache);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, 'presentations'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items: Presentation[] = [];
-      snapshot.forEach(doc => {
-        items.push({ id: doc.id, ...doc.data() } as Presentation);
-      });
-
-      // If database is currently empty, serve the default curriculum presentations
-      if (items.length === 0) {
-        setPresentations(initialPresentations);
+    // 1. Sync from local events
+    const handleLocalUpdate = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setPresentations(e.detail);
       } else {
-        setPresentations(items);
+        setPresentations(getLocalPresentationsCache());
       }
-      setLoading(false);
-    }, (err) => {
-      console.error("Error fetching presentations:", err);
-      // Fallback to initial presentations if offline or rules issue
-      setPresentations(initialPresentations);
-      setLoading(false);
-    });
+    };
+    window.addEventListener('mathquest_presentations_updated', handleLocalUpdate);
+    window.addEventListener('storage', handleLocalUpdate);
 
-    return () => unsubscribe();
+    // 2. Real-time Firestore sync
+    let unsubscribe = () => {};
+    try {
+      const q = query(collection(db, 'presentations'), orderBy('createdAt', 'desc'));
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        const items: Presentation[] = [];
+        snapshot.forEach(doc => {
+          items.push({ id: doc.id, ...doc.data() } as Presentation);
+        });
+
+        if (items.length > 0) {
+          // Merge remote items with any local fallback presentations
+          const map = new Map<string, Presentation>();
+          initialPresentations.forEach(ip => map.set(ip.id, ip));
+          getLocalPresentationsCache().forEach(lp => map.set(lp.id, lp));
+          items.forEach(it => map.set(it.id, it));
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime()
+          );
+          setPresentations(merged);
+          try {
+            localStorage.setItem(PRESENTATIONS_CACHE_KEY, JSON.stringify(merged));
+          } catch (e) {}
+        }
+        setLoading(false);
+      }, (err) => {
+        console.warn("Firestore presentations listener fallback:", err?.message || err);
+        setLoading(false);
+      });
+    } catch (err) {
+      console.warn("Could not connect presentations listener:", err);
+      setLoading(false);
+    }
+
+    return () => {
+      window.removeEventListener('mathquest_presentations_updated', handleLocalUpdate);
+      window.removeEventListener('storage', handleLocalUpdate);
+      unsubscribe();
+    };
   }, []);
 
   const addPresentation = async (presentation: Omit<Presentation, 'id' | 'createdAt'>) => {
+    const newId = 'pres_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const newPresentation: Presentation = {
+      ...presentation,
+      id: newId,
+      createdAt: new Date().toISOString(),
+      viewsCount: 0,
+      completionsCount: 0
+    };
+
+    // 1. Instant Optimistic Local Update (0ms delay)
+    const current = getLocalPresentationsCache();
+    const updated = [newPresentation, ...current.filter(p => p.id !== newId)];
+    saveLocalPresentationsCache(updated);
+    setPresentations(updated);
+
+    // 2. Background Asynchronous Firestore Sync
     try {
-      const newRef = doc(collection(db, 'presentations'));
-      const newPresentation: Presentation = {
-        ...presentation,
-        id: newRef.id,
-        createdAt: new Date().toISOString(),
-        viewsCount: 0,
-        completionsCount: 0
+      const docRef = doc(db, 'presentations', newId);
+      // Clean large duplicate payload fields to make Firestore write blazing fast (<2KB)
+      const firestoreData = {
+        ...newPresentation,
+        slides: newPresentation.slides.map(s => ({
+          ...s,
+          // keep slide metadata, but leave large base64/svg strings for on-the-fly client generation
+          imageUrl: s.imageUrl?.startsWith('data:') ? undefined : s.imageUrl
+        })),
+        slideImages: undefined // generated deterministically on client
       };
-      await setDoc(newRef, newPresentation);
-      return newPresentation;
+      setDoc(docRef, sanitizeForFirestore(firestoreData)).catch(err => {
+        console.warn("Background Firestore presentation sync noted:", err);
+      });
     } catch (err) {
-      console.error("Error adding presentation:", err);
-      // Fallback local update if offline
-      const newPresentation: Presentation = {
-        ...presentation,
-        id: `pres-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        viewsCount: 0,
-        completionsCount: 0
-      };
-      setPresentations(prev => [newPresentation, ...prev]);
-      return newPresentation;
+      console.warn("Background presentation sync skipped:", err);
     }
+
+    return newPresentation;
   };
 
   const updatePresentation = async (id: string, updates: Partial<Presentation>) => {
+    // 1. Instant Optimistic Local Update
+    const current = getLocalPresentationsCache();
+    const updated = current.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p);
+    saveLocalPresentationsCache(updated);
+    setPresentations(updated);
+
+    // 2. Background Firestore Sync
     try {
       const docRef = doc(db, 'presentations', id);
-      await updateDoc(docRef, { ...updates, updatedAt: new Date().toISOString() });
+      const cleanUpdates = { ...updates, updatedAt: new Date().toISOString() };
+      if (cleanUpdates.slideImages) cleanUpdates.slideImages = undefined;
+      updateDoc(docRef, sanitizeForFirestore(cleanUpdates)).catch(err => {
+        console.warn("Background update presentation sync:", err);
+      });
     } catch (err) {
-      console.error("Error updating presentation:", err);
-      setPresentations(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+      console.warn("Background update presentation skipped:", err);
     }
   };
 
   const deletePresentation = async (id: string) => {
+    // 1. Instant Optimistic Local Update
+    const current = getLocalPresentationsCache();
+    const updated = current.filter(p => p.id !== id);
+    saveLocalPresentationsCache(updated);
+    setPresentations(updated);
+
+    // 2. Background Firestore Sync
     try {
-      await deleteDoc(doc(db, 'presentations', id));
+      const docRef = doc(db, 'presentations', id);
+      deleteDoc(docRef).catch(err => {
+        console.warn("Background delete presentation sync:", err);
+      });
     } catch (err) {
-      console.error("Error deleting presentation:", err);
-      setPresentations(prev => prev.filter(p => p.id !== id));
+      console.warn("Background delete presentation skipped:", err);
     }
   };
 
@@ -1673,7 +1745,7 @@ export function usePresentations(gradeFilter?: string, sectionFilter?: string, t
         ...record,
         id: viewRef.id
       };
-      await setDoc(viewRef, viewData);
+      setDoc(viewRef, sanitizeForFirestore(viewData)).catch(() => {});
 
       // Increment presentation stats
       const presRef = doc(db, 'presentations', record.presentationId);
@@ -1681,9 +1753,9 @@ export function usePresentations(gradeFilter?: string, sectionFilter?: string, t
       if (record.isCompleted) {
         updates.completionsCount = increment(1);
       }
-      await updateDoc(presRef, updates).catch(() => {});
+      updateDoc(presRef, updates).catch(() => {});
     } catch (err) {
-      console.error("Error recording presentation view:", err);
+      console.warn("Error recording presentation view:", err);
     }
   };
 
@@ -1852,32 +1924,15 @@ export function useDiagnosticExam() {
   // 1. Listen to diagnostic questions pool
   useEffect(() => {
     const qCol = collection(db, 'diagnostic_questions');
-    const unsubscribeQuestions = onSnapshot(qCol, async (snapshot) => {
+    const unsubscribeQuestions = onSnapshot(qCol, (snapshot) => {
       const qList: DiagnosticQuestion[] = [];
       snapshot.forEach((docSnap) => {
         qList.push({ id: docSnap.id, ...docSnap.data() } as DiagnosticQuestion);
       });
 
-      // If the pool is completely empty, auto-seed with the complete 200 question bank (50 per level)
-      if (qList.length === 0 && snapshot.metadata.fromCache === false) {
-        setLoading(true);
-        try {
-          const batch = writeBatch(db);
-          for (const dq of allDiagnosticQuestions) {
-            const docRef = doc(db, 'diagnostic_questions', dq.id);
-            batch.set(docRef, sanitizeForFirestore({ ...dq, id: dq.id }), { merge: true });
-          }
-          await batch.commit();
-        } catch (err) {
-          console.error("Error auto-seeding diagnostic questions:", err);
-          setQuestions(allDiagnosticQuestions);
-          setLoading(false);
-        }
-      } else {
-        // If Firestore has questions, use them, otherwise use the complete 200-question curriculum set
-        setQuestions(qList.length > 0 ? qList : allDiagnosticQuestions);
-        setLoading(false);
-      }
+      // If Firestore has questions, use them, otherwise use the complete 200-question curriculum set
+      setQuestions(qList.length > 0 ? qList : allDiagnosticQuestions);
+      setLoading(false);
     }, (err) => {
       console.error("Error loading diagnostic questions:", err);
       setQuestions(allDiagnosticQuestions);
@@ -1894,13 +1949,11 @@ export function useDiagnosticExam() {
       if (docSnap.exists()) {
         setSettings(docSnap.data() as DiagnosticSettings);
       } else {
-        // Seed default settings if missing
-        setDoc(settingsRef, { itemsCount: 10 }).catch(err => {
-          console.error("Error seeding default settings:", err);
-        });
+        setSettings({ itemsCount: 26 });
       }
     }, (err) => {
       console.error("Error loading diagnostic settings:", err);
+      setSettings({ itemsCount: 26 });
     });
 
     return () => unsubscribeSettings();
@@ -1945,22 +1998,26 @@ export function useDiagnosticExam() {
     }
   };
 
-  // 6. Seed/Sync All 200 Diagnostic Questions (50 per level from Level 1 to Level 4)
+  // 6. Seed/Sync All 200 Diagnostic Questions safely in chunks
   const seedAllCurriculumDiagnosticQuestions = async (forceOverwrite: boolean = false): Promise<boolean> => {
     try {
       setLoading(true);
-      const batch = writeBatch(db);
-      for (const dq of allDiagnosticQuestions) {
-        const docRef = doc(db, 'diagnostic_questions', dq.id);
-        batch.set(docRef, sanitizeForFirestore({ ...dq, id: dq.id }), { merge: !forceOverwrite });
+      const chunkSize = 40;
+      for (let i = 0; i < allDiagnosticQuestions.length; i += chunkSize) {
+        const chunk = allDiagnosticQuestions.slice(i, i + chunkSize);
+        const batch = writeBatch(db);
+        for (const dq of chunk) {
+          const docRef = doc(db, 'diagnostic_questions', dq.id);
+          batch.set(docRef, sanitizeForFirestore({ ...dq, id: dq.id }), { merge: !forceOverwrite });
+        }
+        await batch.commit();
       }
-      await batch.commit();
       setQuestions(allDiagnosticQuestions);
       setLoading(false);
       return true;
     } catch (err) {
-      console.error("Error batch seeding 200 diagnostic questions:", err);
-      handleFirestoreError(err, OperationType.WRITE, 'diagnostic_questions');
+      console.error("Error batch seeding diagnostic questions:", err);
+      setQuestions(allDiagnosticQuestions);
       setLoading(false);
       return false;
     }

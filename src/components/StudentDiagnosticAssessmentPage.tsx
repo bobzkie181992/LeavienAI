@@ -15,8 +15,7 @@ import {
   ShieldCheck,
   Zap,
   Info,
-  ChevronRight,
-  ListChecks
+  ChevronRight
 } from 'lucide-react';
 import { Topic, QuizResult, UserProfile, LearningPathway } from '../types';
 import DiagnosticAssessment from './DiagnosticAssessment';
@@ -42,8 +41,6 @@ export default function StudentDiagnosticAssessmentPage({
   onBackToOverview
 }: StudentDiagnosticAssessmentPageProps) {
   const [isTestActive, setIsTestActive] = useState(false);
-  const [testMode, setTestMode] = useState<'timed' | 'untimed'>('untimed');
-  const [selectedQuestionCount, setSelectedQuestionCount] = useState<number>(15);
 
   // Teacher Schedule & Permission Gate state
   const [inputPasscode, setInputPasscode] = useState('');
@@ -133,12 +130,12 @@ export default function StudentDiagnosticAssessmentPage({
                   <span className="text-xs sm:text-sm font-black text-slate-900">General Mathematics</span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Teacher Config</span>
-                  <span className="text-xs sm:text-sm font-black text-indigo-600">10 Questions</span>
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Grade Level</span>
+                  <span className="text-xs sm:text-sm font-black text-slate-900">Grade 11</span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Time Mode</span>
-                  <span className="text-xs sm:text-sm font-black text-emerald-600">30 Mins (Strict)</span>
+                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Quarter</span>
+                  <span className="text-xs sm:text-sm font-black text-slate-900">Quarter 1</span>
                 </div>
                 <div>
                   <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">Topic</span>
@@ -196,86 +193,17 @@ export default function StudentDiagnosticAssessmentPage({
                 </ul>
               </div>
 
-              {/* Configuration Controls: Question Count & Time Mode */}
-              <div className="p-5 bg-gradient-to-r from-slate-50 to-indigo-50/40 rounded-2xl border border-slate-200/80 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 flex items-center gap-1.5">
-                    <ListChecks className="w-4 h-4 text-indigo-600" />
-                    <span>Diagnostic Test Setup</span>
-                  </h4>
-                  <span className="text-[11px] font-bold text-indigo-600 bg-white px-2.5 py-0.5 rounded-full border border-indigo-100">
-                    CAT Item-Response Algorithm
-                  </span>
+              {/* Instructions Box */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-1.5">
+                <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                  <Info className="w-4 h-4 text-indigo-600" />
+                  <span>Instructions for Student:</span>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Question Count Selection */}
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      Number of Questions
-                    </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[10, 15, 25].map((cnt) => (
-                        <button
-                          key={cnt}
-                          onClick={() => setSelectedQuestionCount(cnt)}
-                          className={`py-2 px-3 rounded-xl text-xs font-black transition-all cursor-pointer border ${
-                            selectedQuestionCount === cnt
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                              : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          {cnt} Items
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Time Mode Selection */}
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      Time Mode
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setTestMode('untimed')}
-                        className={`py-2 px-3 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                          testMode === 'untimed'
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>No Time Limit</span>
-                      </button>
-
-                      <button
-                        onClick={() => setTestMode('timed')}
-                        className={`py-2 px-3 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center justify-center gap-1.5 ${
-                          testMode === 'timed'
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <Zap className="w-3.5 h-3.5" />
-                        <span>20 Mins Timed</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Instructions Box */}
-                <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
-                  <div className="font-bold text-slate-900 flex items-center gap-1">
-                    <Info className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Instructions for Student:</span>
-                  </div>
-                  <p>
-                    1. Read each question carefully and select the single best mathematical answer.<br />
-                    2. Do not guess blindly — if unsure, analyze the graph or substitution step logically.<br />
-                    3. Your result will automatically configure your personalized General Mathematics study pathway.
-                  </p>
-                </div>
+                <p className="leading-relaxed">
+                  1. Read each question carefully and select the single best mathematical answer.<br />
+                  2. Do not guess blindly — if unsure, analyze the graph or substitution step logically.<br />
+                  3. Your result will automatically configure your personalized General Mathematics study pathway.
+                </p>
               </div>
 
               {/* TEACHER SCHEDULE & PERMISSION SECURITY GATE */}

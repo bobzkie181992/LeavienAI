@@ -92,17 +92,21 @@ export default function ItemBankManager() {
     const defaultQuiz = defaultTopic.quizzes[0] || { id: 'quiz-1' };
 
     const newProblems: Problem[] = imported.map((q, idx) => ({
-      id: `deped-excel-${Date.now()}-${idx}`,
+      id: q.itemId ? `deped-${q.itemId}` : `deped-excel-${Date.now()}-${idx}`,
+      itemId: q.itemId || `W1D1-${idx + 1}`,
+      day: q.day || 'Monday',
+      pptSlide: q.pptSlide || 'Slide 1',
+      tier: q.tier || 1,
       question: q.question,
       options: q.options,
       correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
       solution: q.correctFeedback || q.incorrectFeedback || '',
       topic: defaultTopic.title,
-      competency: q.competency,
+      competency: q.competency || 'M11GM-DepEd-MELC',
       difficulty: q.difficulty,
       difficultyParameter: q.difficulty === 'easy' ? -0.8 : q.difficulty === 'hard' ? 1.2 : 0.0,
       discriminationParameter: 1.0,
-      cognitiveLevel: 'Understanding',
+      cognitiveLevel: q.cognitiveLevel || 'Understanding',
       status: 'Active',
       assessmentType: 'diagnostic',
       assessmentLevel: 'Level 1 - Baseline Knowledge Check',
@@ -115,7 +119,6 @@ export default function ItemBankManager() {
     }));
 
     await importProblems(defaultTopic.id, defaultQuiz.id, newProblems);
-    alert(`Successfully imported ${imported.length} DepEd Excel questions into Item Bank!`);
   };
 
   const handleAIGeneratedItem = async (q: GeneratedQuestionPayload) => {
