@@ -179,27 +179,31 @@ export default function StudentModule({
       return;
     }
 
-    let blurTimeout: any;
+    let wasAway = false;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        playWarningSound();
-        setTabOutCount(prev => prev + 1);
-        setShowAltTabWarning(true);
+        wasAway = true;
+      } else {
+        if (wasAway) {
+          wasAway = false;
+          playWarningSound();
+          setTabOutCount(prev => prev + 1);
+          setShowAltTabWarning(true);
+        }
       }
     };
 
     const handleWindowBlur = () => {
-      blurTimeout = setTimeout(() => {
-        playWarningSound();
-        setTabOutCount(prev => prev + 1);
-        setShowAltTabWarning(true);
-      }, 400); // 400ms buffer to allow normal system delays
+      wasAway = true;
     };
 
     const handleWindowFocus = () => {
-      if (blurTimeout) {
-        clearTimeout(blurTimeout);
+      if (wasAway) {
+        wasAway = false;
+        playWarningSound();
+        setTabOutCount(prev => prev + 1);
+        setShowAltTabWarning(true);
       }
     };
 
@@ -211,9 +215,6 @@ export default function StudentModule({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);
-      if (blurTimeout) {
-        clearTimeout(blurTimeout);
-      }
     };
   }, [activeQuiz, isTakingDiagnostic, activeSummativeAssessment, isSprintArenaOpen, isDailyChallengeOpen]);
 
@@ -416,7 +417,6 @@ export default function StudentModule({
     switch (sec) {
       case 'dashboard': return 'Dashboard';
       case 'curriculum':
-      case 'curriculum-hierarchy': return 'Curriculum • 8-Level Hierarchy';
       case 'curriculum-overview': return 'Curriculum • Overview';
       case 'curriculum-ilaw': return 'Curriculum • DepEd ILAW Lessons';
       case 'curriculum-subjects': return 'Curriculum • My Subjects';
@@ -719,8 +719,7 @@ export default function StudentModule({
                     currentSection === 'curriculum-ilaw' ? 'ilaw' :
                     currentSection === 'curriculum-subjects' ? 'subjects' :
                     currentSection === 'curriculum-competencies' ? 'competencies' :
-                    currentSection === 'curriculum-overview' ? 'overview' :
-                    'hierarchy'
+                    'overview'
                   }
                   onSelectTopic={setSelectedTopic}
                   onOpenTopicDLP={setSelectedTopic}
@@ -894,7 +893,7 @@ export default function StudentModule({
                   onSelectTopic={setSelectedTopic}
                   onStartDiagnostic={handleRetakeDiagnostic}
                   onOpenActivities={() => setCurrentSection('activities-todo')}
-                  onOpenCurriculum={() => setCurrentSection('curriculum-hierarchy')}
+                  onOpenCurriculum={() => setCurrentSection('curriculum-overview')}
                   onOpenProgress={() => setCurrentSection('progress')}
                 />
 

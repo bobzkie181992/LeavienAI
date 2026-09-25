@@ -20,6 +20,7 @@ import {
 import { Topic, isValidatedOrActive } from '../../types';
 import { topics as defaultTopics } from '../../data/curriculum';
 import CurriculumHierarchyBrowser from '../CurriculumHierarchyBrowser';
+import { useAcademicTerms } from '../../hooks/useFirebase';
 
 interface TeacherCurriculumViewProps {
   topics?: Topic[];
@@ -32,6 +33,7 @@ export default function TeacherCurriculumView({
   initialSubTab = 'hierarchy',
   onSelectTopicForEdit
 }: TeacherCurriculumViewProps) {
+  const { terms } = useAcademicTerms();
   const [subTab, setSubTab] = useState<'hierarchy' | 'overview' | 'ilaw' | 'competencies' | 'map'>(initialSubTab);
   const [selectedTerm, setSelectedTerm] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -152,7 +154,7 @@ export default function TeacherCurriculumView({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
             <div className="flex items-center gap-2 overflow-x-auto">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Term Filter:</span>
-              {['All', 'Term 1', 'Term 2', 'Term 3'].map(term => (
+              {['All', ...terms.map(t => t.name)].map(term => (
                 <button
                   key={term}
                   onClick={() => setSelectedTerm(term)}

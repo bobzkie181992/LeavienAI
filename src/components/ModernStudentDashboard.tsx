@@ -20,9 +20,12 @@ import {
   RotateCcw,
   Zap,
   Target,
-  GraduationCap
+  GraduationCap,
+  ShieldAlert,
+  ShieldCheck
 } from 'lucide-react';
 import { Topic, QuizResult, UserProfile, Quiz } from '../types';
+import { getIntegritySettings } from '../lib/integritySettings';
 
 interface ModernStudentDashboardProps {
   topics: Topic[];
@@ -44,7 +47,6 @@ export default function ModernStudentDashboard({
   onStartQuiz,
   onStartDiagnostic,
   onOpenActivities,
-  onOpenCurriculum,
   onOpenProgress
 }: ModernStudentDashboardProps) {
   // 1. Detect Most Recently Accessed ILAW Lesson from localStorage or fall back
@@ -411,15 +413,6 @@ export default function ModernStudentDashboard({
             </h2>
             <p className="text-xs text-slate-400">Senior High School Grade 11 Subjects</p>
           </div>
-          {onOpenCurriculum && (
-            <button
-              onClick={onOpenCurriculum}
-              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
-            >
-              <span>Full Curriculum</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -474,17 +467,16 @@ export default function ModernStudentDashboard({
                       if (isGenMath) {
                         const target = topics[0];
                         if (target) onSelectTopic(target);
-                      } else if (onOpenCurriculum) {
-                        onOpenCurriculum();
                       }
                     }}
-                    className={`w-full mt-2 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    disabled={!isGenMath}
+                    className={`w-full mt-2 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
                       isGenMath
-                        ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 cursor-pointer'
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-60'
                     }`}
                   >
-                    <span>{isGenMath ? 'Explore Lessons' : 'View Course'}</span>
+                    <span>{isGenMath ? 'Explore Lessons' : 'Locked'}</span>
                     <ChevronRight className="w-3 h-3" />
                   </button>
                 </div>
@@ -565,6 +557,84 @@ export default function ModernStudentDashboard({
           ))}
         </div>
       </section>
+
+      {/* ========================================================================= */}
+      {/* ACADEMIC INTEGRITY & VIOLATION RECORD CARD                                 */}
+      {/* ========================================================================= */}
+      {(() => {
+        const diagV = profile.diagnosticViolations || 0;
+        const formV = profile.formativeViolations || 0;
+        const totalV = diagV + formV;
+        const deductionRate = getIntegritySettings().violationDeductionPoints;
+        const totalDeductedPts = totalV * deductionRate;
+
+        return (
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                  totalV > 0 ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                }`}>
+                  {totalV > 0 ? <ShieldAlert className="w-5 h-5 animate-pulse text-rose-500" /> : <ShieldCheck className="w-5 h-5 text-emerald-600" />}
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    Academic Integrity Record
+                    <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-200 font-bold">
+                      Policy: -{deductionRate} pt(s) per violation
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Integrity tracking across Diagnostic Baseline Exams and Formative Lesson Quizzes.
+                  </p>
+                </div>
+              </div>
+
+              {totalV > 0 ? (
+                <span className="px-3 py-1 bg-rose-50 border border-rose-200 text-rose-700 font-black text-xs rounded-full self-start sm:self-center">
+                  ⚠️ {totalV} Violation{totalV > 1 ? 's' : ''} Logged (-{totalDeductedPts} Pts)
+                </span>
+              ) : (
+                <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs rounded-full self-start sm:self-center">
+                  ✓ Clean Academic Record
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Diagnostic Violations</span>
+                  <span className={`font-black ${diagV > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                    {diagV} Tab Out{diagV !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400">-{diagV * deductionRate} pts</span>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Formative Violations</span>
+                  <span className={`font-black ${formV > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                    {formV} Tab Out{formV !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400">-{formV * deductionRate} pts</span>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Total Penalty Deducted</span>
+                  <span className={`font-black ${totalDeductedPts > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    -{totalDeductedPts} Points Total
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400">Rate: {deductionRate}/tab</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* 5. MY PROGRESS                                                            */}

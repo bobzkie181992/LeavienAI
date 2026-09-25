@@ -34,6 +34,7 @@ import {
   AcademicQuarter, 
   PerformanceRating 
 } from '../types';
+import { useAcademicTerms } from '../hooks/useFirebase';
 import { topics } from '../data/curriculum';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 
@@ -75,6 +76,9 @@ export default function FacultyReportsManager({
   preselectedStudent,
   onClearPreselectedStudent
 }: FacultyReportsManagerProps) {
+  const { terms } = useAcademicTerms();
+  const activeTerm = terms.find(t => t.active);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [quarterFilter, setQuarterFilter] = useState<string>('All');
@@ -129,7 +133,7 @@ export default function FacultyReportsManager({
       setFormTitle('Student Mathematics Progress Report');
     }
     setFormCategory('student_progress');
-    setFormQuarter('Quarter 1');
+    setFormQuarter(activeTerm?.name || terms[0]?.name || 'Quarter 1');
     setFormTopicId('general');
     setFormRating('Satisfactory');
     setFormSummary('Student demonstrates consistent engagement in Grade 11 General Mathematics. Shows solid conceptual grasp of basic definitions.');
@@ -519,12 +523,9 @@ export default function FacultyReportsManager({
               className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500"
             >
               <option value="All">All Quarters</option>
-              <option value="Quarter 1">Quarter 1</option>
-              <option value="Quarter 2">Quarter 2</option>
-              <option value="Quarter 3">Quarter 3</option>
-              <option value="Quarter 4">Quarter 4</option>
-              <option value="Midterm">Midterm</option>
-              <option value="Finals">Finals</option>
+              {terms.map(t => (
+                <option key={t.id} value={t.name}>{t.name}</option>
+              ))}
             </select>
 
             {/* Section Filter */}
@@ -881,12 +882,9 @@ export default function FacultyReportsManager({
                       onChange={(e) => setFormQuarter(e.target.value as AcademicQuarter)}
                       className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500"
                     >
-                      <option value="Quarter 1">Quarter 1</option>
-                      <option value="Quarter 2">Quarter 2</option>
-                      <option value="Quarter 3">Quarter 3</option>
-                      <option value="Quarter 4">Quarter 4</option>
-                      <option value="Midterm">Midterm</option>
-                      <option value="Finals">Finals</option>
+                      {terms.map(t => (
+                        <option key={t.id} value={t.name}>{t.name}</option>
+                      ))}
                     </select>
                   </div>
                 </div>

@@ -17,6 +17,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { UserProfile, Topic } from '../types';
+import { useUserProfile } from '../hooks/useFirebase';
 import FormativeCheckWidget, { FormativeQuestion } from './FormativeCheckWidget';
 
 interface FormativeAssessmentItem {
@@ -111,6 +112,7 @@ export default function StudentFormativeAssessmentPage({
   topics,
   onBackToOverview
 }: StudentFormativeAssessmentPageProps) {
+  const { saveFormativeResult } = useUserProfile(profile.uid);
   const [assessments, setAssessments] = useState<FormativeAssessmentItem[]>(() => {
     const list = [...SAMPLE_FORMATIVE_ASSESSMENTS];
     try {
@@ -198,11 +200,14 @@ export default function StudentFormativeAssessmentPage({
     }, 1800);
   };
 
-  const handleCompleteCheck = (score: number, total: number) => {
+  const handleCompleteCheck = (score: number, total: number, violations: number = 0) => {
     if (!selectedAssessment) return;
     setAssessments((prev) =>
       prev.map((a) => (a.id === selectedAssessment.id ? { ...a, status: 'completed', score, total } : a))
     );
+    if (saveFormativeResult) {
+      saveFormativeResult(score, total, violations);
+    }
   };
 
   return (

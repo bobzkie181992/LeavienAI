@@ -17,7 +17,12 @@ import {
   Plus,
   FileSpreadsheet,
   UploadCloud,
-  Check
+  Check,
+  Trash2,
+  ShieldAlert,
+  AlertTriangle,
+  Settings,
+  Sliders
 } from 'lucide-react';
 import { Topic, Quiz, Problem, SummativeAssessment, isValidatedOrActive } from '../../types';
 import ItemBankManager from '../ItemBankManager';
@@ -26,11 +31,13 @@ import CreateFormativeModal from '../CreateFormativeModal';
 import PrintableAssessmentModal from '../PrintableAssessmentModal';
 import TeacherAssessmentResults from '../TeacherAssessmentResults';
 import DepEdExcelImporter, { ParsedDepEdQuestion } from '../DepEdExcelImporter';
+import EditCustomAssessmentModal from '../EditCustomAssessmentModal';
 import { useCurriculum } from '../../hooks/useFirebase';
+import { getIntegritySettings, saveIntegritySettings, IntegritySettings } from '../../lib/integritySettings';
 
 interface TeacherAssessmentsViewProps {
   topics: Topic[];
-  initialSubTab?: 'diagnostic' | 'formative' | 'bank' | 'create' | 'results' | 'quizzes' | 'exams';
+  initialSubTab?: 'diagnostic' | 'formative' | 'bank' | 'diagnostic-results' | 'formative-results' | 'quizzes' | 'exams';
 }
 
 export default function TeacherAssessmentsView({
@@ -38,12 +45,17 @@ export default function TeacherAssessmentsView({
   initialSubTab = 'diagnostic'
 }: TeacherAssessmentsViewProps) {
   const { importProblems } = useCurriculum();
-  const [subTab, setSubTab] = useState<'diagnostic' | 'formative' | 'bank' | 'create' | 'results' | 'quizzes' | 'exams'>(initialSubTab);
+  const [subTab, setSubTab] = useState<'diagnostic' | 'formative' | 'bank' | 'diagnostic-results' | 'formative-results' | 'quizzes' | 'exams'>(initialSubTab);
   const [isDiagnosticModalOpen, setIsDiagnosticModalOpen] = useState(false);
   const [isDiagnosticExcelOpen, setIsDiagnosticExcelOpen] = useState(false);
   const [isFormativeModalOpen, setIsFormativeModalOpen] = useState(false);
   const [isFormativeExcelOpen, setIsFormativeExcelOpen] = useState(false);
   const [excelSuccessNotification, setExcelSuccessNotification] = useState<string | null>(null);
+
+  // Academic Integrity Penalty Policy State
+  const [integritySettings, setIntegritySettings] = useState<IntegritySettings>(() => getIntegritySettings());
+  const [isEditingIntegrity, setIsEditingIntegrity] = useState(false);
+  const [tempDeductionPoints, setTempDeductionPoints] = useState<number>(integritySettings.violationDeductionPoints);
 
   // Custom Diagnostic Assessments List (persisted in local storage)
   const [customDiagnosticList, setCustomDiagnosticList] = useState<Array<{
@@ -251,6 +263,79 @@ export default function TeacherAssessmentsView({
     }>;
   } | null>(null);
 
+  const [defaultDiagnosticDeleted, setDefaultDiagnosticDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_diagnostic_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [defaultFormativeDeleted, setDefaultFormativeDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_formative_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [editingCustomAssessment, setEditingCustomAssessment] = useState<any | null>(null);
+
+  const handleSaveEditedAssessment = (updated: any) => {
+    const isDiag = customDiagnosticList.some(d => d.id === updated.id);
+    if (isDiag) {
+      const newList = customDiagnosticList.map(d => d.id === updated.id ? updated : d);
+      setCustomDiagnosticList(newList);
+      try {
+        localStorage.setItem('mathquest_diagnostic_assessments', JSON.stringify(newList));
+      } catch (e) {}
+    } else {
+      const newList = customFormativeList.map(f => f.id === updated.id ? updated : f);
+      setCustomFormativeList(newList);
+      try {
+        localStorage.setItem('mathquest_formative_assessments', JSON.stringify(newList));
+      } catch (e) {}
+    }
+  };
+
+  const handleDeleteDiagnostic = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this custom diagnostic assessment?')) {
+      const updatedList = customDiagnosticList.filter(d => d.id !== id);
+      setCustomDiagnosticList(updatedList);
+      try {
+        localStorage.setItem('mathquest_diagnostic_assessments', JSON.stringify(updatedList));
+      } catch (e) {}
+    }
+  };
+
+  const handleDeleteFormative = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this custom formative assessment?')) {
+      const updatedList = customFormativeList.filter(f => f.id !== id);
+      setCustomFormativeList(updatedList);
+      try {
+        localStorage.setItem('mathquest_formative_assessments', JSON.stringify(updatedList));
+      } catch (e) {}
+    }
+  };
+
+  const handleDeleteDefaultDiagnostic = () => {
+    if (window.confirm('Are you sure you want to delete this default diagnostic assessment? This action cannot be undone.')) {
+      setDefaultDiagnosticDeleted(true);
+      try {
+        localStorage.setItem('mathquest_default_diagnostic_deleted', 'true');
+      } catch (e) {}
+    }
+  };
+
+  const handleDeleteDefaultFormative = () => {
+    if (window.confirm('Are you sure you want to delete this default formative assessment? This action cannot be undone.')) {
+      setDefaultFormativeDeleted(true);
+      try {
+        localStorage.setItem('mathquest_default_formative_deleted', 'true');
+      } catch (e) {}
+    }
+  };
+
   const handlePrintDiagnostic = () => {
     setPrintableData({
       title: 'Grade 11 General Mathematics Quarter 1 Diagnostic Checkpoint',
@@ -354,23 +439,132 @@ export default function TeacherAssessmentsView({
             {/* Quick Action Authoring Buttons */}
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => setIsDiagnosticModalOpen(true)}
-                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                onClick={() => setIsEditingIntegrity(!isEditingIntegrity)}
+                className="px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/30 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer"
+                title="Configure points deducted per student violation"
               >
-                <Plus className="w-4 h-4" />
-                <span>+ Create Diagnostic</span>
-              </button>
-
-              <button
-                onClick={() => setIsFormativeModalOpen(true)}
-                className="px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Create Formative</span>
+                <ShieldAlert className="w-4 h-4 text-rose-400 animate-pulse" />
+                <span>Violation Penalty: -{integritySettings.violationDeductionPoints} pt(s) / tab-out</span>
               </button>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ACADEMIC INTEGRITY DEDUCTION POLICY CONFIG CARD */}
+      <div className="bg-slate-900 text-white p-5 rounded-3xl border border-slate-800 shadow-lg space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-2xl flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-white flex items-center gap-2 flex-wrap">
+                Academic Integrity & Violation Deduction Policy
+                <span className="text-[10px] bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full border border-rose-500/30 font-extrabold">
+                  Active Deduction: -{integritySettings.violationDeductionPoints} pt(s) per violation
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Teacher control for student focus-loss / tab-out penalty rates in Diagnostic and Formative assessments.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsEditingIntegrity(!isEditingIntegrity)}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition-all shadow-md shrink-0 flex items-center gap-1.5 cursor-pointer"
+          >
+            <Settings className="w-4 h-4" />
+            <span>{isEditingIntegrity ? 'Hide Settings' : 'Edit Penalty Rate'}</span>
+          </button>
+        </div>
+
+        {/* Expanded Config Panel */}
+        {isEditingIntegrity && (
+          <div className="p-5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-4 animate-in fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Points Deducted Per Violation (Tab-Out / Focus-Loss)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="20"
+                    value={tempDeductionPoints}
+                    onChange={(e) => setTempDeductionPoints(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="w-28 p-3 bg-slate-900 border-2 border-indigo-500/50 rounded-xl text-white font-black text-center text-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                  <div className="text-xs text-slate-400">
+                    <span className="font-bold text-slate-200 block">Point Deduction Rate</span>
+                    Deducted from student's final score for each tab switch.
+                  </div>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Presets:</span>
+                  {[0.5, 1, 1.5, 2, 3, 5].map((pts) => (
+                    <button
+                      key={pts}
+                      type="button"
+                      onClick={() => setTempDeductionPoints(pts)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                        tempDeductionPoints === pts
+                          ? 'bg-rose-500 text-white shadow-xs font-black ring-2 ring-rose-400/40'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      -{pts} pt{pts > 1 ? 's' : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live Calculation Example Preview */}
+              <div className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800/80 space-y-2 text-xs">
+                <span className="text-[10px] font-black text-rose-400 uppercase tracking-wider block">Policy Applied Calculation Example</span>
+                <p className="text-slate-300 leading-relaxed text-[11px]">
+                  If a student answers <strong>10 questions correctly</strong> but loses focus / switches tabs <strong>3 times</strong>:
+                </p>
+                <div className="p-2.5 bg-slate-950 rounded-xl text-emerald-400 font-mono font-bold text-center text-xs border border-slate-800">
+                  Calculated Score = 10 - (3 violations × {tempDeductionPoints} pts) = <strong className="text-white font-black text-sm">{Math.max(0, 10 - 3 * tempDeductionPoints)} / 10 Points</strong>
+                </div>
+                <span className="text-[10px] text-slate-500 block italic">
+                  Note: The policy applies automatically across Diagnostic Exams and Formative Checkpoints.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setTempDeductionPoints(integritySettings.violationDeductionPoints);
+                  setIsEditingIntegrity(false);
+                }}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = saveIntegritySettings({ violationDeductionPoints: tempDeductionPoints });
+                  setIntegritySettings(updated);
+                  setIsEditingIntegrity(false);
+                  setExcelSuccessNotification(`Academic Integrity penalty rate updated to -${tempDeductionPoints} point(s) per violation.`);
+                }}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-md cursor-pointer"
+              >
+                Save Policy & Update Deduction Rate
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sub-Tab Navigation */}
@@ -412,27 +606,27 @@ export default function TeacherAssessmentsView({
         </button>
 
         <button
-          onClick={() => setSubTab('create')}
+          onClick={() => setSubTab('diagnostic-results')}
           className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
-            subTab === 'create'
-              ? 'bg-slate-900 text-white shadow-sm font-black'
+            subTab === 'diagnostic-results'
+              ? 'bg-amber-600 text-white shadow-sm font-black'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <PlusCircle className="w-4 h-4 text-emerald-400" />
-          <span>Create Assessment</span>
+          <BarChart3 className="w-4 h-4 text-amber-300" />
+          <span>Diagnostic Results</span>
         </button>
 
         <button
-          onClick={() => setSubTab('results')}
+          onClick={() => setSubTab('formative-results')}
           className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
-            subTab === 'results'
-              ? 'bg-slate-900 text-white shadow-sm font-black'
+            subTab === 'formative-results'
+              ? 'bg-indigo-600 text-white shadow-sm font-black'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <BarChart3 className="w-4 h-4 text-emerald-400" />
-          <span>Assessment Results</span>
+          <BarChart3 className="w-4 h-4 text-indigo-300" />
+          <span>Formative Results</span>
         </button>
 
         <button
@@ -506,7 +700,7 @@ export default function TeacherAssessmentsView({
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">
-              Active Diagnostic Assessments ({1 + customDiagnosticList.length})
+              Active Diagnostic Assessments ({(defaultDiagnosticDeleted ? 0 : 1) + customDiagnosticList.length})
             </h3>
             <div className="flex items-center gap-2 flex-wrap">
               <button
@@ -515,14 +709,6 @@ export default function TeacherAssessmentsView({
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>Upload Excel (ITEM BANK)</span>
-              </button>
-
-              <button
-                onClick={() => setIsDiagnosticModalOpen(true)}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Create Diagnostic Assessment</span>
               </button>
             </div>
           </div>
@@ -573,6 +759,23 @@ export default function TeacherAssessmentsView({
                     >
                       <span>🖨️ Print Test Sheet</span>
                     </button>
+
+                    <button
+                      onClick={() => setEditingCustomAssessment(cd)}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 border border-slate-200"
+                      title="Edit Imported Item Bank Questions"
+                    >
+                      <span>✏️ Edit Item Bank</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteDiagnostic(cd.id)}
+                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 text-rose-600 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 border border-rose-200"
+                      title="Delete Diagnostic Assessment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
                   </div>
                 </div>
 
@@ -605,75 +808,86 @@ export default function TeacherAssessmentsView({
               </div>
             ))}
 
-            <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:border-amber-400 transition-all space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-black uppercase text-amber-950 bg-amber-100 px-2.5 py-0.5 rounded">
-                      Quarter 1 Baseline Check
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400">Grade 11 • General Mathematics</span>
-                    <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
-                      Target: Grade 11 - STEM A
-                    </span>
+            {!defaultDiagnosticDeleted && (
+              <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:border-amber-400 transition-all space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase text-amber-950 bg-amber-100 px-2.5 py-0.5 rounded">
+                        Quarter 1 Baseline Check
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">Grade 11 • General Mathematics</span>
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                        Target: Grade 11 - STEM A
+                      </span>
+                    </div>
+                    <h4 className="font-black text-slate-900 text-base">Functions & Their Graphs - Pre-Lesson Diagnostic</h4>
+                    <p className="text-xs text-slate-500">Evaluates baseline knowledge on function definitions, notation, domain, and range.</p>
                   </div>
-                  <h4 className="font-black text-slate-900 text-base">Functions & Their Graphs - Pre-Lesson Diagnostic</h4>
-                  <p className="text-xs text-slate-500">Evaluates baseline knowledge on function definitions, notation, domain, and range.</p>
+
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-lg">Published</span>
+                    
+                    <button
+                      onClick={handlePrintDiagnostic}
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                    >
+                      <span>🖨️ Print Test Sheet</span>
+                    </button>
+
+                    <button
+                      onClick={() => setIsDiagnosticModalOpen(true)}
+                      className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      Edit Assessment
+                    </button>
+
+                    <button
+                      onClick={handleDeleteDefaultDiagnostic}
+                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 text-rose-600 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 border border-rose-200"
+                      title="Delete Diagnostic Assessment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                  <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-lg">Published</span>
-                  
-                  <button
-                    onClick={handlePrintDiagnostic}
-                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
-                  >
-                    <span>🖨️ Print Test Sheet</span>
-                  </button>
+                {/* Schedule & Permission Live Bar */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-4 flex-wrap text-slate-700 font-bold">
+                    <div className="flex items-center gap-1.5 text-slate-900">
+                      <Clock className="w-4 h-4 text-amber-600" />
+                      <span>Schedule: <strong>Today (08:00 AM - 05:00 PM)</strong></span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-900">
+                      <Award className="w-4 h-4 text-indigo-600" />
+                      <span>Passcode: <strong className="bg-white px-2 py-0.5 rounded border border-slate-300 tracking-wider font-mono text-amber-900">{accessCodes['diag-1']}</strong></span>
+                    </div>
+                  </div>
 
-                  <button
-                    onClick={() => setIsDiagnosticModalOpen(true)}
-                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-                  >
-                    Edit Assessment
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => toggleUnlockStatus('diag-1')}
+                      className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                        unlockedAssessments['diag-1']
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-rose-600 text-white shadow-xs'
+                      }`}
+                    >
+                      <span>{unlockedAssessments['diag-1'] ? '🔓 Unlocked for STEM-A' : '🔒 Locked (Permission Required)'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShowPermissionModal(true)}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Student Requests ({pendingRequests.length})</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              {/* Schedule & Permission Live Bar */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-4 flex-wrap text-slate-700 font-bold">
-                  <div className="flex items-center gap-1.5 text-slate-900">
-                    <Clock className="w-4 h-4 text-amber-600" />
-                    <span>Schedule: <strong>Today (08:00 AM - 05:00 PM)</strong></span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-slate-900">
-                    <Award className="w-4 h-4 text-indigo-600" />
-                    <span>Passcode: <strong className="bg-white px-2 py-0.5 rounded border border-slate-300 tracking-wider font-mono text-amber-900">{accessCodes['diag-1']}</strong></span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => toggleUnlockStatus('diag-1')}
-                    className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                      unlockedAssessments['diag-1']
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'bg-rose-600 text-white shadow-xs'
-                    }`}
-                  >
-                    <span>{unlockedAssessments['diag-1'] ? '🔓 Unlocked for STEM-A' : '🔒 Locked (Permission Required)'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowPermissionModal(true)}
-                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                  >
-                    <span>Student Requests ({pendingRequests.length})</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -724,7 +938,7 @@ export default function TeacherAssessmentsView({
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-wider">
-              Active Formative Checks & In-Lesson Quizzes ({1 + customFormativeList.length})
+              Active Formative Checks & In-Lesson Quizzes ({(defaultFormativeDeleted ? 0 : 1) + customFormativeList.length})
             </h3>
             
             <div className="flex items-center gap-2 flex-wrap">
@@ -734,14 +948,6 @@ export default function TeacherAssessmentsView({
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>Upload Excel (ITEM BANK)</span>
-              </button>
-
-              <button
-                onClick={() => setIsFormativeModalOpen(true)}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Create Formative Assessment</span>
               </button>
             </div>
           </div>
@@ -792,6 +998,23 @@ export default function TeacherAssessmentsView({
                     >
                       <span>🖨️ Print Test Sheet</span>
                     </button>
+
+                    <button
+                      onClick={() => setEditingCustomAssessment(cf)}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 border border-slate-200"
+                      title="Edit Imported Item Bank Questions"
+                    >
+                      <span>✏️ Edit Item Bank</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteFormative(cf.id)}
+                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 text-rose-600 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 border border-rose-200"
+                      title="Delete Formative Assessment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
                   </div>
                 </div>
 
@@ -825,75 +1048,86 @@ export default function TeacherAssessmentsView({
             ))}
 
             {/* Standard Formative Check 1 */}
-            <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:border-indigo-400 transition-all space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-black uppercase text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded">
-                      In-Lesson Quick Check
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400">Lesson 1: Introduction to Functions</span>
-                    <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
-                      Target: Grade 11 - STEM A
-                    </span>
+            {!defaultFormativeDeleted && (
+              <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs hover:border-indigo-400 transition-all space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded">
+                        In-Lesson Quick Check
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">Lesson 1: Introduction to Functions</span>
+                      <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                        Target: Grade 11 - STEM A
+                      </span>
+                    </div>
+                    <h4 className="font-black text-slate-900 text-base">Formative Check #1: Functions & Notation</h4>
+                    <p className="text-xs text-slate-500">Immediate explanation feedback on evaluating f(x) and vertical line test.</p>
                   </div>
-                  <h4 className="font-black text-slate-900 text-base">Formative Check #1: Functions & Notation</h4>
-                  <p className="text-xs text-slate-500">Immediate explanation feedback on evaluating f(x) and vertical line test.</p>
+
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span className="px-3 py-1 bg-indigo-50 text-indigo-700 font-extrabold text-xs rounded-lg">Assigned</span>
+                    
+                    <button
+                      onClick={handlePrintFormative}
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                    >
+                      <span>🖨️ Print Test Sheet</span>
+                    </button>
+
+                    <button
+                      onClick={() => setIsFormativeModalOpen(true)}
+                      className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      Edit Formative Check
+                    </button>
+
+                    <button
+                      onClick={handleDeleteDefaultFormative}
+                      className="px-3 py-2 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 text-rose-600 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 border border-rose-200"
+                      title="Delete Formative Assessment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                  <span className="px-3 py-1 bg-indigo-50 text-indigo-700 font-extrabold text-xs rounded-lg">Assigned</span>
-                  
-                  <button
-                    onClick={handlePrintFormative}
-                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
-                  >
-                    <span>🖨️ Print Test Sheet</span>
-                  </button>
+                {/* Schedule & Permission Live Bar */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-4 flex-wrap text-slate-700 font-bold">
+                    <div className="flex items-center gap-1.5 text-slate-900">
+                      <Clock className="w-4 h-4 text-indigo-600" />
+                      <span>Schedule: <strong>Today (08:00 AM - 05:00 PM)</strong></span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-900">
+                      <Award className="w-4 h-4 text-amber-600" />
+                      <span>Passcode: <strong className="bg-white px-2 py-0.5 rounded border border-slate-300 tracking-wider font-mono text-indigo-900">{accessCodes['form-1']}</strong></span>
+                    </div>
+                  </div>
 
-                  <button
-                    onClick={() => setIsFormativeModalOpen(true)}
-                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-                  >
-                    Edit Formative Check
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => toggleUnlockStatus('form-1')}
+                      className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                        unlockedAssessments['form-1']
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-rose-600 text-white shadow-xs'
+                      }`}
+                    >
+                      <span>{unlockedAssessments['form-1'] ? '🔓 Unlocked for STEM-A' : '🔒 Locked (Permission Required)'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShowPermissionModal(true)}
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Student Requests ({pendingRequests.length})</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              {/* Schedule & Permission Live Bar */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-4 flex-wrap text-slate-700 font-bold">
-                  <div className="flex items-center gap-1.5 text-slate-900">
-                    <Clock className="w-4 h-4 text-indigo-600" />
-                    <span>Schedule: <strong>Today (08:00 AM - 05:00 PM)</strong></span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-slate-900">
-                    <Award className="w-4 h-4 text-amber-600" />
-                    <span>Passcode: <strong className="bg-white px-2 py-0.5 rounded border border-slate-300 tracking-wider font-mono text-indigo-900">{accessCodes['form-1']}</strong></span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => toggleUnlockStatus('form-1')}
-                    className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                      unlockedAssessments['form-1']
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'bg-rose-600 text-white shadow-xs'
-                    }`}
-                  >
-                    <span>{unlockedAssessments['form-1'] ? '🔓 Unlocked for STEM-A' : '🔒 Locked (Permission Required)'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowPermissionModal(true)}
-                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                  >
-                    <span>Student Requests ({pendingRequests.length})</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -905,60 +1139,17 @@ export default function TeacherAssessmentsView({
         </div>
       )}
 
-      {/* 4. CREATE ASSESSMENT */}
-      {subTab === 'create' && (
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
-          <div className="space-y-1">
-            <h3 className="text-xl font-black text-slate-900">Create New Assessment</h3>
-            <p className="text-xs text-slate-500">Select an assessment type to author questions, set competencies, and assign to Grade 11 classes.</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-6 bg-amber-50/80 border border-amber-200 rounded-3xl space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="bg-amber-500 text-slate-950 font-black text-[10px] uppercase px-2.5 py-0.5 rounded-full">
-                  Diagnostic Type
-                </span>
-                <Sparkles className="w-5 h-5 text-amber-600" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-lg font-black text-amber-950">Diagnostic Assessment</h4>
-                <p className="text-xs text-amber-900">Measures prior knowledge before active instruction. Yields student strengths and learning gaps.</p>
-              </div>
-              <button
-                onClick={() => setIsDiagnosticModalOpen(true)}
-                className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-2xl shadow-md transition-all cursor-pointer"
-              >
-                Author Diagnostic Assessment →
-              </button>
-            </div>
-
-            <div className="p-6 bg-indigo-50/80 border border-indigo-200 rounded-3xl space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="bg-indigo-600 text-white font-black text-[10px] uppercase px-2.5 py-0.5 rounded-full">
-                  Formative Type
-                </span>
-                <Target className="w-5 h-5 text-indigo-600" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-lg font-black text-indigo-950">Formative Assessment</h4>
-                <p className="text-xs text-indigo-900">Continuous in-lesson practice with correct/incorrect feedback and remediation guidance.</p>
-              </div>
-              <button
-                onClick={() => setIsFormativeModalOpen(true)}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-2xl shadow-md transition-all cursor-pointer"
-              >
-                Author Formative Check →
-              </button>
-            </div>
-          </div>
+      {/* DIAGNOSTIC RESULTS */}
+      {subTab === 'diagnostic-results' && (
+        <div>
+          <TeacherAssessmentResults mode="diagnostic" />
         </div>
       )}
 
-      {/* 5. ASSESSMENT RESULTS */}
-      {subTab === 'results' && (
+      {/* FORMATIVE RESULTS */}
+      {subTab === 'formative-results' && (
         <div>
-          <TeacherAssessmentResults />
+          <TeacherAssessmentResults mode="formative" />
         </div>
       )}
 
@@ -1098,12 +1289,7 @@ export default function TeacherAssessmentsView({
         </div>
       )}
 
-      {/* 4. RESULTS & CLASS PERFORMANCE */}
-      {subTab === 'results' && (
-        <div>
-          <TeacherAssessmentResults />
-        </div>
-      )}
+
 
       {/* Authoring Modals */}
       <CreateDiagnosticModal
@@ -1215,6 +1401,14 @@ export default function TeacherAssessmentsView({
           questions={printableData.questions}
         />
       )}
+
+      {/* Edit Custom Imported Assessment Modal */}
+      <EditCustomAssessmentModal
+        isOpen={!!editingCustomAssessment}
+        onClose={() => setEditingCustomAssessment(null)}
+        assessment={editingCustomAssessment}
+        onSave={handleSaveEditedAssessment}
+      />
     </div>
   );
 }

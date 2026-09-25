@@ -3,12 +3,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Users, UserPlus, Search, GraduationCap, TrendingUp, Award, Mail, ChevronRight, X, Database, BookOpen } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { useAllStudents } from '../hooks/useFirebase';
-import { db } from '../lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db, sanitizeForFirestore } from '../lib/firebase';
+import { collection, getDocs, query, orderBy, setDoc, doc } from 'firebase/firestore';
 import { UserProfile, QuizResult } from '../types';
 import { topics } from '../data/curriculum';
+import { saveLocalUser } from '../lib/localAuth';
+import { getIntegritySettings } from '../lib/integritySettings';
 
 import ConfirmDeleteModal from './ConfirmDeleteModal';
+import StudentViolationReportModal from './StudentViolationReportModal';
 
 interface FacultyDashboardProps {
   facultyProfile?: UserProfile;
@@ -21,6 +24,7 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [gradeFilter, setGradeFilter] = useState('All');
+  const [reportStudent, setReportStudent] = useState<UserProfile | null>(null);
   const [sectionFilter, setSectionFilter] = useState('All');
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [isEditingStudent, setIsEditingStudent] = useState<UserProfile | null>(null);
@@ -480,11 +484,16 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                               Pass Set
                             </span>
                           )}
-                          {(student.diagnosticViolations && student.diagnosticViolations > 0) && (
-                            <span className="inline-flex items-center gap-1 text-[10px] bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full font-semibold border border-rose-100" title={`${student.diagnosticViolations} Academic Integrity Violations (Tab Switches)`}>
+                          {((student.diagnosticViolations || 0) + (student.formativeViolations || 0)) > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setReportStudent(student)}
+                              className="inline-flex items-center gap-1 text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-bold border border-rose-200 transition-colors cursor-pointer"
+                              title="Click to view Alt-Tab Focus Loss Activity Report"
+                            >
                               <Icons.ShieldAlert className="w-2.5 h-2.5 text-rose-500 animate-pulse" />
-                              {student.diagnosticViolations} Tab Out{(student.diagnosticViolations > 1) ? 's' : ''}
-                            </span>
+                              {((student.diagnosticViolations || 0) + (student.formativeViolations || 0))} Alt-Tab{(((student.diagnosticViolations || 0) + (student.formativeViolations || 0)) > 1) ? 's' : ''}
+                            </button>
                           )}
                         </div>
                         <div className="text-xs text-slate-500 flex items-center gap-1">
@@ -549,10 +558,17 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                           setResultsTab('diagnostic');
                           fetchStudentResults(student.uid);
                         }}
-                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all cursor-pointer"
                         title="View Diagnostic & Formative Results"
                       >
                         <Icons.BarChart2 className="w-5 h-5 text-indigo-600" />
+                      </button>
+                      <button 
+                        onClick={() => setReportStudent(student)}
+                        className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                        title="View Switched App & Alt-Tab Focus Loss Report"
+                      >
+                        <Icons.ShieldAlert className="w-5 h-5 text-rose-600" />
                       </button>
                       <button 
                         onClick={() => {
@@ -1189,15 +1205,29 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                       </div>
 
                       <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-2">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Academic Integrity</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Academic Integrity & Violations</span>
+                          <button
+                            type="button"
+                            onClick={() => setReportStudent(viewingResultsStudent)}
+                            className="text-[10px] font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                            title="View Switched App & Alt-Tab Focus Loss Report"
+                          >
+                            <Icons.ShieldAlert className="w-3 h-3 text-rose-600" />
+                            <span>View Alt-Tab Report</span>
+                          </button>
+                        </div>
                         <div className="flex items-center gap-2">
                           <Icons.ShieldAlert className={`w-4 h-4 ${
-                            (viewingResultsStudent.diagnosticViolations || 0) > 0 ? 'text-rose-500 animate-pulse' : 'text-emerald-500'
+                            ((viewingResultsStudent.diagnosticViolations || 0) + (viewingResultsStudent.formativeViolations || 0)) > 0 ? 'text-rose-500 animate-pulse' : 'text-emerald-500'
                           }`} />
                           <span className="font-extrabold text-slate-800 text-sm">
-                            {(viewingResultsStudent.diagnosticViolations || 0) > 0 ? (
+                            {((viewingResultsStudent.diagnosticViolations || 0) + (viewingResultsStudent.formativeViolations || 0)) > 0 ? (
                               <span className="text-rose-600">
-                                {viewingResultsStudent.diagnosticViolations} Tab Out{(viewingResultsStudent.diagnosticViolations || 0) > 1 ? 's' : ''}
+                                {viewingResultsStudent.diagnosticViolations || 0} Diag / {viewingResultsStudent.formativeViolations || 0} Formative Tab Out(s)
+                                <span className="block text-[11px] text-rose-700 font-bold mt-0.5">
+                                  Score Penalty: -{((viewingResultsStudent.diagnosticViolations || 0) + (viewingResultsStudent.formativeViolations || 0)) * getIntegritySettings().violationDeductionPoints} Pts
+                                </span>
                               </span>
                             ) : (
                               <span className="text-emerald-600">No Violations Logged</span>
@@ -1436,6 +1466,12 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
           </div>
         )}
       </AnimatePresence>
+
+      <StudentViolationReportModal
+        isOpen={!!reportStudent}
+        onClose={() => setReportStudent(null)}
+        student={reportStudent}
+      />
 
       <ConfirmDeleteModal
         isOpen={!!deletingStudentUid}

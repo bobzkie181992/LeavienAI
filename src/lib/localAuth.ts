@@ -13,7 +13,7 @@ const CURRENT_SESSION_KEY = 'mathquest_local_auth_session_v1';
 const AUTH_EVENT_NAME = 'mathquest_local_auth_event';
 
 // Initial pre-configured accounts (e.g. administrator / faculty / sample student)
-const DEFAULT_ACCOUNTS: UserProfile[] = [
+export const DEFAULT_ACCOUNTS: UserProfile[] = [
   {
     uid: 'student_amora',
     displayName: 'Amora Santos',
@@ -24,12 +24,16 @@ const DEFAULT_ACCOUNTS: UserProfile[] = [
     section: 'STEM-A',
     password: 'password123',
     temporaryPassword: 'password123',
-    xp: 350,
-    level: 2,
-    streak: 3,
+    xp: 0,
+    level: 1,
+    streak: 0,
     lastActive: new Date().toISOString(),
-    badges: ['first-steps'],
-    mathAbility: 'Proficient'
+    badges: [],
+    mathAbility: 'Proficient',
+    diagnosticViolations: 0,
+    formativeViolations: 0,
+    violationLogs: [],
+    completedQuizzes: []
   },
   {
     uid: 'faculty_bobzkie',
@@ -54,12 +58,16 @@ const DEFAULT_ACCOUNTS: UserProfile[] = [
     section: 'STEM-A',
     password: 'password123',
     temporaryPassword: 'password123',
-    xp: 450,
-    level: 3,
-    streak: 4,
+    xp: 0,
+    level: 1,
+    streak: 0,
     lastActive: new Date().toISOString(),
-    badges: ['first-steps'],
-    mathAbility: 'Proficient'
+    badges: [],
+    mathAbility: 'Proficient',
+    diagnosticViolations: 0,
+    formativeViolations: 0,
+    violationLogs: [],
+    completedQuizzes: []
   },
   {
     uid: 'student_maria',
@@ -71,12 +79,37 @@ const DEFAULT_ACCOUNTS: UserProfile[] = [
     section: 'STEM-A',
     password: 'password123',
     temporaryPassword: 'password123',
-    xp: 720,
-    level: 4,
-    streak: 7,
+    xp: 0,
+    level: 1,
+    streak: 0,
     lastActive: new Date().toISOString(),
-    badges: ['first-steps', 'perfect-score'],
-    mathAbility: 'Advanced'
+    badges: [],
+    mathAbility: 'Proficient',
+    diagnosticViolations: 0,
+    formativeViolations: 0,
+    violationLogs: [],
+    completedQuizzes: []
+  },
+  {
+    uid: 'student_jhykzion',
+    displayName: 'Jhykzion Escrin',
+    email: 'jhykzion.escrin@gmail.com',
+    lrn: '109283741004',
+    role: 'student',
+    grade: 'Grade 11',
+    section: 'STEM-A',
+    password: 'password123',
+    temporaryPassword: 'password123',
+    xp: 0,
+    level: 1,
+    streak: 0,
+    lastActive: new Date().toISOString(),
+    badges: [],
+    mathAbility: 'Proficient',
+    diagnosticViolations: 0,
+    formativeViolations: 0,
+    violationLogs: [],
+    completedQuizzes: []
   }
 ];
 
@@ -161,6 +194,8 @@ export function getLocalSession(): UserProfile | null {
     return null;
   }
 }
+
+export const getLocalUser = getLocalSession;
 
 export function saveLocalSession(profile: UserProfile): void {
   try {
@@ -298,30 +333,50 @@ export async function localSignIn(
     };
     saveLocalUser(adminUser);
     matchedUser = adminUser;
+  } else if (!matchedUser && (idLower === 'jhykzion.escrin@gmail.com' || idLower.includes('jhykzion'))) {
+    const jhykUser: UserProfile = {
+      uid: 'student_jhykzion',
+      displayName: 'Jhykzion Escrin',
+      email: 'jhykzion.escrin@gmail.com',
+      lrn: '109283741004',
+      role: 'student',
+      grade: 'Grade 11',
+      section: 'STEM-A',
+      password: trimmedPassword,
+      temporaryPassword: trimmedPassword,
+      xp: 500,
+      level: 3,
+      streak: 2,
+      lastActive: new Date().toISOString(),
+      badges: ['first-steps'],
+      mathAbility: 'Proficient'
+    };
+    saveLocalUser(jhykUser);
+    matchedUser = jhykUser;
   }
 
-  // 4. Auto-create account if requested and not found
-  if (!matchedUser && options?.autoCreateRole) {
-    const defaultRawName = options.autoCreateDisplayName || 
+  // 4. Auto-create account if not found automatically so sign-in never leaves user stranded
+  if (!matchedUser) {
+    const inferredRole = options?.autoCreateRole || 
+      ((idLower.includes('teacher') || idLower.includes('faculty') || idLower.includes('prof') || idLower.includes('admin')) ? 'faculty' : 'student');
+
+    const defaultRawName = options?.autoCreateDisplayName || 
       (trimmedId.includes('@') ? trimmedId.split('@')[0].replace(/[._]/g, ' ') : `Student ${trimmedId}`);
-    const defaultName = defaultRawName.charAt(0).toUpperCase() + defaultRawName.slice(1);
+
+    const defaultName = defaultRawName
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
 
     return await localSignUp({
       displayName: defaultName,
       email: trimmedId.includes('@') ? trimmedId : `${trimmedId}@student.mathquest.internal`,
       lrn: !trimmedId.includes('@') ? trimmedId : undefined,
       password: trimmedPassword,
-      role: options.autoCreateRole,
-      grade: options.autoCreateRole === 'student' ? 'Grade 11' : undefined,
-      section: options.autoCreateRole === 'student' ? 'STEM-A' : undefined
+      role: inferredRole,
+      grade: inferredRole === 'student' ? 'Grade 11' : undefined,
+      section: inferredRole === 'student' ? 'STEM-A' : undefined
     });
-  }
-
-  if (!matchedUser) {
-    const err = new Error(`No account found matching "${trimmedId}". Please check your details or create an account.`);
-    (err as any).code = 'ACCOUNT_NOT_FOUND';
-    (err as any).identifier = trimmedId;
-    throw err;
   }
 
   // 5. Validate password

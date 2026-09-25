@@ -13,9 +13,15 @@ import {
   ListChecks,
   ChevronRight,
   TrendingUp,
-  RotateCcw
+  RotateCcw,
+  ShieldAlert,
+  ShieldCheck,
+  AlertTriangle,
+  Info
 } from 'lucide-react';
 import { Topic, QuizResult, UserProfile, Quiz, SummativeAssessment, isValidatedOrActive } from '../../types';
+import { getIntegritySettings } from '../../lib/integritySettings';
+import StudentViolationReportModal from '../StudentViolationReportModal';
 
 interface AssessmentsViewProps {
   topics: Topic[];
@@ -38,6 +44,7 @@ export default function AssessmentsView({
 }: AssessmentsViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<'quizzes' | 'exams' | 'results'>(initialTab);
   const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Filter topics
   const displayedTopics = topics.filter(t => {
@@ -331,73 +338,252 @@ export default function AssessmentsView({
       )}
 
       {/* 3. MY RESULTS & ANALYTICS */}
-      {activeSubTab === 'results' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-black text-slate-900">Scorecard & Academic Performance Roster</h3>
-                <p className="text-xs text-slate-400">All recorded testing sessions and diagnostic assessments</p>
+      {activeSubTab === 'results' && (() => {
+        const integritySettings = getIntegritySettings();
+        const deductionRate = integritySettings.violationDeductionPoints;
+        const diagViolations = profile.diagnosticViolations || 0;
+        const formativeViolations = results.reduce((sum, r) => sum + (r.violations || 0), 0) || (profile.formativeViolations || 0);
+        const totalViolations = diagViolations + formativeViolations;
+        const totalDeductedPoints = totalViolations * deductionRate;
+
+        // Diagnostic raw score check
+        const diagnosticRaw = profile.diagnosticScores?.['general'] ?? (profile.diagnosticCompleted ? 12 : null);
+
+        return (
+          <div className="space-y-6">
+            {/* Academic Integrity & Violation Summary Banner */}
+            <div className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 shadow-lg space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center justify-center text-rose-400 shrink-0">
+                    <ShieldAlert className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white flex items-center gap-2">
+                      Academic Integrity & Violation Tracking
+                      <span className="text-[10px] bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full border border-rose-500/30 font-extrabold">
+                        Universal Rate: -{deductionRate} pt(s) / violation
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Monitors tab-outs and focus losses during assessments. Points are automatically deducted according to your teacher's universal penalty rate.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2 bg-slate-950 p-3 rounded-2xl border border-slate-800 shrink-0">
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Violations</span>
+                      <span className="text-xl font-black text-rose-400">{totalViolations} Tab-Outs</span>
+                    </div>
+                    <div className="h-8 w-px bg-slate-800 mx-1" />
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Score Deducted</span>
+                      <span className="text-xl font-black text-amber-400">-{totalDeductedPoints} Pts</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowReportModal(true)}
+                    className="px-4 py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-2xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <ShieldAlert className="w-4 h-4" />
+                    <span>View Alt-Tab Activity Log</span>
+                  </button>
+                </div>
               </div>
-              {onOpenPerformanceModal && (
-                <button
-                  onClick={onOpenPerformanceModal}
-                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-                >
-                  Deep Performance Analytics
-                </button>
+
+              {/* Individual Violation Counts per Assessment Category */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-slate-200 block">Diagnostic Violations</span>
+                    <span className="text-[10px] text-slate-400">Tab-outs during baseline test</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-rose-400 text-sm block">{diagViolations} Violation{diagViolations !== 1 ? 's' : ''}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">-{diagViolations * deductionRate} Points</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-slate-200 block">Formative Check Violations</span>
+                    <span className="text-[10px] text-slate-400">Tab-outs during topic quizzes</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-rose-400 text-sm block">{formativeViolations} Violation{formativeViolations !== 1 ? 's' : ''}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">-{formativeViolations * deductionRate} Points</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Diagnostic Assessment Detailed Score Card */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center font-black">
+                    <Target className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">Diagnostic Assessment Score & Violations</h3>
+                    <p className="text-xs text-slate-400">Prior knowledge baseline check & academic integrity record</p>
+                  </div>
+                </div>
+                {profile.diagnosticCompleted ? (
+                  <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-full border border-emerald-200/60 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Completed</span>
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 bg-amber-50 text-amber-700 font-extrabold text-xs rounded-full border border-amber-200/60">
+                    Pending Diagnostic
+                  </span>
+                )}
+              </div>
+
+              {diagnosticRaw !== null ? (() => {
+                const diagTotal = 15;
+                const diagDeduction = diagViolations * deductionRate;
+                const netDiagScore = Math.max(0, diagnosticRaw - diagDeduction);
+                const netDiagPct = Math.round((netDiagScore / diagTotal) * 100);
+
+                return (
+                  <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
+                    <div className="sm:col-span-2 space-y-1">
+                      <span className="text-[10px] font-black uppercase text-amber-600 tracking-wider block">
+                        General Mathematics Diagnostic Baseline
+                      </span>
+                      <h4 className="font-bold text-slate-900 text-sm">Quarter 1 Functions & Competencies Check</h4>
+                      <p className="text-xs text-slate-500">
+                        Diagnosis: <strong className="text-slate-800">{profile.diagnosticAbility || 'Proficient - Grade 11 Ready'}</strong>
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-xl border border-slate-200 text-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Violations Recorded</span>
+                      <span className="text-base font-black text-rose-600 flex items-center justify-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {diagViolations} ({diagDeduction > 0 ? `-${diagDeduction} pts` : 'No Penalty'})
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-xl border border-slate-200 text-center">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Net Adjusted Score</span>
+                      <span className="text-lg font-black text-slate-900 block">
+                        {netDiagScore} / {diagTotal} <span className="text-xs font-bold text-indigo-600">({netDiagPct}%)</span>
+                      </span>
+                    </div>
+                  </div>
+                );
+              })() : (
+                <div className="p-6 text-center bg-slate-50 rounded-2xl">
+                  <p className="text-xs text-slate-500 font-medium">You haven't completed the Diagnostic Assessment yet.</p>
+                </div>
               )}
             </div>
 
-            {results.length === 0 ? (
-              <div className="p-8 text-center bg-slate-50 rounded-2xl">
-                <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                <h4 className="font-bold text-slate-900">No Assessment Records Yet</h4>
-                <p className="text-xs text-slate-500">Take a quiz or diagnostic exam to generate your first scorecard!</p>
+            {/* Formative Assessments Scorecard & Roster */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">Formative Assessment Scorecards</h3>
+                    <p className="text-xs text-slate-400">Individual scores, logged violations, and adjusted final grades</p>
+                  </div>
+                </div>
+                {onOpenPerformanceModal && (
+                  <button
+                    onClick={onOpenPerformanceModal}
+                    className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Deep Analytics
+                  </button>
+                )}
               </div>
-            ) : (
-              <div className="grid gap-2.5">
-                {results.map((res, idx) => {
-                  const percent = Math.round((res.score / res.total) * 100);
-                  const isPassed = percent >= 75;
 
-                  return (
-                    <div
-                      key={idx}
-                      className="p-4 bg-slate-50/70 rounded-2xl border border-slate-200/80 flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-black text-slate-900 text-sm">
-                            {res.quizId.replace('custom-', '').replace('adaptive-', 'Adaptive: ')}
-                          </span>
-                          <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-200/60 px-2 py-0.2 rounded">
-                            {res.quizMode || 'standard'}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-500">
-                          Completed on {new Date(res.timestamp).toLocaleDateString()} at {new Date(res.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
+              {results.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl">
+                  <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <h4 className="font-bold text-slate-900">No Formative Records Yet</h4>
+                  <p className="text-xs text-slate-500">Take a formative quiz to record your first score!</p>
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {results.map((res, idx) => {
+                    const quizViolations = res.violations || 0;
+                    const quizDeduction = quizViolations * deductionRate;
+                    const rawScore = res.score;
+                    const netScore = Math.max(0, rawScore - quizDeduction);
+                    const percent = res.total > 0 ? Math.round((netScore / res.total) * 100) : 0;
+                    const isPassed = percent >= 75;
 
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <span className="font-black text-slate-900 text-base block">
-                            {res.score}/{res.total}
-                          </span>
-                          <span className={`text-[10px] font-bold ${isPassed ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {percent}% ({isPassed ? 'Pass' : 'Review Needed'})
-                          </span>
+                    return (
+                      <div
+                        key={idx}
+                        className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
+                      >
+                        <div className="space-y-1 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-slate-900 text-sm">
+                              {res.quizId.replace('custom-', '').replace('adaptive-', 'Adaptive: ')}
+                            </span>
+                            <span className="text-[10px] uppercase font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
+                              {res.quizMode || 'Formative'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 flex items-center gap-2">
+                            <span>Completed {new Date(res.timestamp).toLocaleDateString()} at {new Date(res.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </p>
+                        </div>
+
+                        {/* Violations & Deductions Badge */}
+                        <div className="flex items-center gap-4 shrink-0">
+                          <div className="px-3 py-2 bg-white rounded-xl border border-slate-200 text-center min-w-[110px]">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase block">Violations</span>
+                            {quizViolations > 0 ? (
+                              <span className="text-xs font-black text-rose-600 flex items-center justify-center gap-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                {quizViolations} (-{quizDeduction} pts)
+                              </span>
+                            ) : (
+                              <span className="text-xs font-bold text-emerald-600 flex items-center justify-center gap-1">
+                                <ShieldCheck className="w-3 h-3" />
+                                Clean (0)
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-right min-w-[100px]">
+                            <span className="font-black text-slate-900 text-base block">
+                              {netScore}/{res.total}
+                            </span>
+                            <span className={`text-[10px] font-black ${isPassed ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {percent}% ({isPassed ? 'Passed' : 'Needs Review'})
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+      {/* Student Violation Report Modal */}
+      <StudentViolationReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        student={profile}
+      />
     </div>
   );
 }

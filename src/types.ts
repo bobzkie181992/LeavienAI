@@ -196,6 +196,17 @@ export interface ItemStats {
   discriminationIndex: number;
 }
 
+export interface AltTabViolationLog {
+  id: string;
+  timestamp: string;
+  assessmentType: 'Diagnostic' | 'Formative' | 'Summative';
+  assessmentTitle: string;
+  questionNumber?: number;
+  questionText?: string;
+  durationSeconds?: number;
+  switchedAppReason: string; // e.g. "External Web Browser / AI Solver Search", "Messaging App / Discord", "Digital Notes Reader", "System Alt+Tab Switch"
+}
+
 export interface QuizResult {
   id?: string;
   userId: string;
@@ -208,6 +219,7 @@ export interface QuizResult {
   abilityEstimate?: string;
   mathAbilityDiagnosis?: string;
   violations?: number;
+  violationLogs?: AltTabViolationLog[];
   quizMode?: 'diagnostic' | 'assessment' | 'adaptive' | 'timed' | 'standard' | 'summative';
   isCompetent?: boolean;
   summativeTranscript?: SummativeTranscript;
@@ -443,7 +455,15 @@ export interface UserProfile {
   diagnosticCompleted?: boolean;
   diagnosticAbility?: string;
   diagnosticScores?: Record<string, number>;
+  diagnosticScore?: number;
   diagnosticViolations?: number;
+  formativeViolations?: number;
+  customViolationDeduction?: number;
+  violationLogs?: AltTabViolationLog[];
+  completedQuizzes?: string[];
+  stepProgress?: Record<string, number>;
+  oralRecitations?: any[];
+  summativeAssessments?: any[];
   mathAbility?: string;
   competencyScores?: Record<string, number>;
   activePathway?: LearningPathway;
@@ -749,7 +769,15 @@ export type TeacherReportCategory =
   | 'class_section_summary'
   | 'at_risk_alert';
 
-export type AcademicQuarter = 'Quarter 1' | 'Quarter 2' | 'Quarter 3' | 'Quarter 4' | 'Midterm' | 'Finals';
+export type AcademicQuarter = string;
+
+export interface AcademicTerm {
+  id: string;
+  name: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
 
 export type PerformanceRating = 'Outstanding' | 'Satisfactory' | 'Developing' | 'Needs Remediation' | 'Critical Support';
 

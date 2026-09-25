@@ -78,11 +78,11 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
       case 'assessments-formative': return { title: 'Assessments • Formative Assessments', subtitle: 'In-lesson continuous learning and immediate feedback checks' };
       case 'assessments-bank': return { title: 'Assessments • Question Bank', subtitle: 'Author, search, filter, and calibrate assessment items' };
       case 'assessments-create': return { title: 'Assessments • Create Assessment', subtitle: 'Author new Diagnostic or Formative assessments' };
-      case 'assessments-results': return { title: 'Assessments • Assessment Results', subtitle: 'Class performance analytics, diagnostic baselines, and learning gaps' };
+      case 'assessments-diagnostic-results': return { title: 'Assessments • Diagnostic Results', subtitle: 'Pre-learning baseline analytics and student diagnostic scoreboards' };
+      case 'assessments-formative-results': return { title: 'Assessments • Formative Results', subtitle: 'In-lesson continuous quiz results and formative performance scoreboards' };
       case 'assessments-quizzes': return { title: 'Assessments • Quizzes', subtitle: 'Formative unit assessment modules' };
       case 'assessments-exams': return { title: 'Assessments • Summative Exams', subtitle: 'Table of Specifications (TOS) examination blueprints' };
       // My Classes
-      case 'classes-grade11': return { title: 'My Classes • Grade 11 Overview', subtitle: 'Senior High School cohort analytics' };
       case 'classes-sections': return { title: 'My Classes • Sections & Strands', subtitle: 'STEM, ABM, HUMSS, TVL section distribution' };
       case 'classes-students': return { title: 'My Classes • Student Directory', subtitle: 'Manage student records, LRNs, and login PINs' };
       // Analytics
@@ -231,9 +231,10 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
                   initialSubTab={
                     currentSection === 'assessments-diagnostic' ? 'diagnostic' :
                     currentSection === 'assessments-formative' ? 'formative' :
-                    currentSection === 'assessments-create' ? 'create' :
+                    currentSection === 'assessments-create' ? 'diagnostic' :
                     currentSection === 'assessments-bank' ? 'bank' :
-                    currentSection === 'assessments-results' ? 'results' :
+                    currentSection === 'assessments-diagnostic-results' ? 'diagnostic-results' :
+                    currentSection === 'assessments-formative-results' ? 'formative-results' :
                     currentSection === 'assessments-exams' ? 'exams' :
                     'quizzes'
                   }
@@ -251,7 +252,6 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
                   students={students}
                   profile={profile}
                   initialSubTab={
-                    currentSection === 'classes-grade11' ? 'grade11' :
                     currentSection === 'classes-sections' ? 'sections' :
                     'students'
                   }

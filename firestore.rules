@@ -76,5 +76,10 @@ service cloud.firestore {
     match /settings/{settingsId} {
       allow read, write: if true;
     }
+
+    // Academic quarters or terms managed by faculty
+    match /academic_terms/{termId} {
+      allow read, write: if true;
+    }
   }
 }

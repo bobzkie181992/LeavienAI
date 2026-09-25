@@ -52,11 +52,11 @@ export type TeacherNavSection =
   | 'assessments-formative'
   | 'assessments-bank'
   | 'assessments-create'
-  | 'assessments-results'
+  | 'assessments-diagnostic-results'
+  | 'assessments-formative-results'
   | 'assessments-quizzes'
   | 'assessments-exams'
   // My Classes
-  | 'classes-grade11'
   | 'classes-sections'
   | 'classes-students'
   // Analytics
@@ -156,8 +156,8 @@ export default function TeacherSidebar({
         { id: 'assessments-diagnostic', label: 'Diagnostic Assessments' },
         { id: 'assessments-formative', label: 'Formative Assessments' },
         { id: 'assessments-bank', label: 'Question Bank' },
-        { id: 'assessments-create', label: 'Create Assessment' },
-        { id: 'assessments-results', label: 'Assessment Results' },
+        { id: 'assessments-diagnostic-results', label: 'Diagnostic Results' },
+        { id: 'assessments-formative-results', label: 'Formative Results' },
         { id: 'assessments-quizzes', label: 'Quizzes' },
         { id: 'assessments-exams', label: 'Exams (TOS)' }
       ]
@@ -169,7 +169,6 @@ export default function TeacherSidebar({
       defaultOpen: currentSection.startsWith('classes'),
       badge: studentsCount > 0 ? studentsCount : undefined,
       children: [
-        { id: 'classes-grade11', label: 'Grade 11' },
         { id: 'classes-sections', label: 'Sections' },
         { id: 'classes-students', label: 'Students', badge: studentsCount > 0 ? studentsCount : undefined }
       ]
@@ -256,26 +255,6 @@ export default function TeacherSidebar({
             <X className="w-5 h-5" />
           </button>
         )}
-      </div>
-
-      {/* 2. Teacher Profile Snapshot */}
-      <div className="px-4 py-3 border-b border-slate-800/60 bg-slate-900/30 shrink-0">
-        <div className="flex items-center gap-3 p-2 bg-slate-900/80 rounded-2xl border border-slate-800">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-inner">
-            {(profile.displayName || profile.email?.split('@')[0] || 'T').charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <p className="text-xs font-bold text-slate-100 truncate">
-                {profile.displayName || 'Faculty Member'}
-              </p>
-              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            </div>
-            <p className="text-[10px] text-slate-400 truncate">
-              {profile.email || 'Senior High School Faculty'}
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* 3. Navigation Scroll Area */}

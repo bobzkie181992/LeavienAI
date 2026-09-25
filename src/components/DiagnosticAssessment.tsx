@@ -6,6 +6,9 @@ import { generateLearningPathway } from '../utils/pathwayGenerator';
 import { generateAIMistakeGuidance, fetchAIMistakeDiagnosis } from '../utils/aiTutorCoach';
 import { playPopSound, playWarningSound } from '../utils/audioEffects';
 import { useDiagnosticExam } from '../hooks/useFirebase';
+import { getIntegritySettings } from '../lib/integritySettings';
+import { logAltTabViolation } from '../lib/violationLogger';
+import { getLocalUser } from '../lib/localAuth';
 
 interface DiagnosticAssessmentProps {
   topics: Topic[];
@@ -57,27 +60,49 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
       return;
     }
 
-    let blurTimeout: any;
+    let wasAway = false;
+
+    const currentUser = getLocalUser();
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        playWarningSound();
-        setViolationCount(prev => prev + 1);
-        setShowAltTabWarning(true);
+        wasAway = true;
+      } else {
+        if (wasAway) {
+          wasAway = false;
+          playWarningSound();
+          setViolationCount(prev => prev + 1);
+          setShowAltTabWarning(true);
+          if (currentUser?.uid) {
+            logAltTabViolation(
+              currentUser.uid,
+              'Diagnostic',
+              'General Mathematics Diagnostic Baseline Check',
+              currentStep + 1
+            );
+          }
+        }
       }
     };
 
     const handleWindowBlur = () => {
-      blurTimeout = setTimeout(() => {
-        playWarningSound();
-        setViolationCount(prev => prev + 1);
-        setShowAltTabWarning(true);
-      }, 400); // 400ms buffer to allow normal system delays
+      wasAway = true;
     };
 
     const handleWindowFocus = () => {
-      if (blurTimeout) {
-        clearTimeout(blurTimeout);
+      if (wasAway) {
+        wasAway = false;
+        playWarningSound();
+        setViolationCount(prev => prev + 1);
+        setShowAltTabWarning(true);
+        if (currentUser?.uid) {
+          logAltTabViolation(
+            currentUser.uid,
+            'Diagnostic',
+            'General Mathematics Diagnostic Baseline Check',
+            currentStep + 1
+          );
+        }
       }
     };
 
@@ -89,9 +114,6 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);
-      if (blurTimeout) {
-        clearTimeout(blurTimeout);
-      }
     };
   }, [assessmentPhase, isTakingBooster]);
 
@@ -490,8 +512,12 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
       });
     });
 
-    // Overall Ability Estimation
-    const overallPercentage = totalQuestionsCount > 0 ? Math.round((totalFirstAttemptCorrect / totalQuestionsCount) * 100) : 0;
+    // Overall Ability Estimation (Deducting configured penalty points per violation)
+    const integritySettings = getIntegritySettings();
+    const penaltyRate = integritySettings.violationDeductionPoints;
+    const totalDeductionPoints = violationCount * penaltyRate;
+    const finalDeductedScore = Math.max(0, totalFirstAttemptCorrect - totalDeductionPoints);
+    const overallPercentage = totalQuestionsCount > 0 ? Math.round((finalDeductedScore / totalQuestionsCount) * 100) : 0;
     
     let estimatedAbility = 'Novice';
     if (overallPercentage >= 85) estimatedAbility = 'Expert';
@@ -825,8 +851,26 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
             <div className="text-5xl sm:text-6xl font-black tracking-tight text-indigo-600">
               {overallPercentage}%
             </div>
-            <div className="inline-block px-3 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-700 shadow-2xs">
-              Math Ability Placement: <strong className="text-indigo-600 font-black">{estimatedAbility}</strong>
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="inline-block px-3 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-700 shadow-2xs">
+                Math Ability Placement: <strong className="text-indigo-600 font-black">{estimatedAbility}</strong>
+              </div>
+              {violationCount > 0 ? (
+                <div className="inline-flex flex-col items-center gap-1 px-4 py-2 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-black text-rose-800 shadow-2xs">
+                  <div className="flex items-center gap-1.5 text-rose-700">
+                    <Icons.AlertTriangle className="w-4 h-4 text-rose-600 animate-pulse" />
+                    <span>Academic Integrity Policy: -{getIntegritySettings().violationDeductionPoints} Pt(s) per Tab-Out</span>
+                  </div>
+                  <span className="text-[11px] font-semibold text-rose-900">
+                    {violationCount} Violation{violationCount > 1 ? 's' : ''} Logged • Deduction: -{violationCount * getIntegritySettings().violationDeductionPoints} Pts ({totalFirstAttemptCorrect} Correct → {finalDeductedScore} Final Score)
+                  </span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-bold text-emerald-800">
+                  <Icons.ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Academic Integrity: Clean Record (No Tab Switches Logged)</span>
+                </div>
+              )}
             </div>
           </div>
 

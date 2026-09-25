@@ -12,8 +12,13 @@ import {
   Zap,
   Target,
   BarChart2,
-  Info
+  Info,
+  ShieldAlert,
+  ShieldCheck
 } from 'lucide-react';
+import { getIntegritySettings } from '../lib/integritySettings';
+import { logAltTabViolation } from '../lib/violationLogger';
+import { getLocalUser } from '../lib/localAuth';
 
 export interface FormativeQuestion {
   id: string;
@@ -30,7 +35,7 @@ interface FormativeCheckWidgetProps {
   title?: string;
   subtitle?: string;
   questions?: FormativeQuestion[];
-  onComplete?: (score: number, total: number) => void;
+  onComplete?: (score: number, total: number, violations: number) => void;
   onNextStep?: () => void;
 }
 
@@ -79,6 +84,70 @@ export default function FormativeCheckWidget({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [answersState, setAnswersState] = useState<Record<number, AnswerRecord>>({});
   const [isFinished, setIsFinished] = useState(false);
+  
+  const [violationCount, setViolationCount] = useState<number>(0);
+  const [showAltTabWarning, setShowAltTabWarning] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (isFinished) {
+      return;
+    }
+
+    let wasAway = false;
+    const currentUser = getLocalUser();
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        wasAway = true;
+      } else {
+        if (wasAway) {
+          wasAway = false;
+          setViolationCount(prev => prev + 1);
+          setShowAltTabWarning(true);
+          if (currentUser?.uid) {
+            logAltTabViolation(
+              currentUser.uid,
+              'Formative',
+              title || 'Formative Competency Check',
+              currentIndex + 1,
+              questions[currentIndex]?.question
+            );
+          }
+        }
+      }
+    };
+
+    const handleWindowBlur = () => {
+      wasAway = true;
+    };
+
+    const handleWindowFocus = () => {
+      if (wasAway) {
+        wasAway = false;
+        setViolationCount(prev => prev + 1);
+        setShowAltTabWarning(true);
+        if (currentUser?.uid) {
+          logAltTabViolation(
+            currentUser.uid,
+            'Formative',
+            title || 'Formative Competency Check',
+            currentIndex + 1,
+            questions[currentIndex]?.question
+          );
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [isFinished]);
 
   const currentQ = questions[currentIndex] || DEFAULT_FORMATIVE_QUESTIONS[0];
   const isCorrect = selectedOption === currentQ.correctAnswer;
@@ -95,8 +164,9 @@ export default function FormativeCheckWidget({
 
     if (currentIndex === questions.length - 1) {
       const correctCount = Object.values(newAnswers).filter((a: AnswerRecord) => a.isCorrect).length;
+      const finalDeductedScore = Math.max(0, correctCount - violationCount);
       if (onComplete) {
-        onComplete(correctCount, questions.length);
+        onComplete(finalDeductedScore, questions.length, violationCount);
       }
     }
   };
@@ -286,20 +356,51 @@ export default function FormativeCheckWidget({
             </div>
 
             {/* Summary Metrics */}
-            <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center">
-              <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Answered</span>
-                <span className="text-lg font-black text-slate-900">{totalAnswered}</span>
-              </div>
-              <div>
-                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider block">Correct</span>
-                <span className="text-lg font-black text-emerald-600">{correctCount}</span>
-              </div>
-              <div>
-                <span className="text-[10px] font-black text-rose-500 uppercase tracking-wider block">Incorrect</span>
-                <span className="text-lg font-black text-rose-500">{incorrectCount}</span>
-              </div>
-            </div>
+            {(() => {
+              const deductionRate = getIntegritySettings().violationDeductionPoints;
+              const totalDeductionPoints = violationCount * deductionRate;
+              const netCorrect = Math.max(0, correctCount - totalDeductionPoints);
+
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center">
+                    <div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Answered</span>
+                      <span className="text-lg font-black text-slate-900">{totalAnswered}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider block">Raw Correct</span>
+                      <span className="text-lg font-black text-emerald-600">
+                        {correctCount}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black text-indigo-600 uppercase tracking-wider block">Net Adjusted Score</span>
+                      <span className="text-lg font-black text-indigo-600">
+                        {netCorrect} <span className="text-[10px] text-slate-400 font-normal">/ {questions.length}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {violationCount > 0 ? (
+                    <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl flex flex-col items-center gap-1.5 shadow-2xs text-xs font-bold">
+                      <div className="flex items-center gap-2 text-rose-700 font-black">
+                        <ShieldAlert className="w-4 h-4 text-rose-600 animate-pulse" />
+                        <span>Academic Integrity Policy: -{deductionRate} Pt(s) per Tab-Out</span>
+                      </div>
+                      <span className="text-[11px] text-rose-900 font-semibold">
+                        {violationCount} Tab Out Violation{violationCount > 1 ? 's' : ''} Logged • Total Penalty: -{totalDeductionPoints} Pts ({correctCount} Correct → {netCorrect} Final Score)
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold shadow-2xs">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <span>Academic Integrity: Clean Record (No Tab Out Violations)</span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* Accuracy Progress Bar */}
             <div className="space-y-1 text-left">
@@ -336,6 +437,57 @@ export default function FormativeCheckWidget({
               </button>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Alt-Tab/Browser Loss focus warning popup during formative check */}
+      <AnimatePresence>
+        {showAltTabWarning && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[32px] max-w-md w-full p-8 text-center shadow-2xl relative border border-rose-100"
+            >
+              <div className="w-16 h-16 bg-rose-50 border border-rose-100 text-rose-600 rounded-3xl flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <CheckCircle2 className="w-8 h-8 text-rose-600" />
+              </div>
+
+              <h2 className="text-xl font-extrabold text-slate-900 mb-2 tracking-tight">
+                Academic Integrity Notice
+              </h2>
+              
+              <p className="text-slate-500 text-xs leading-relaxed mb-6">
+                You have navigated away from the active Formative Check window. Tab-switching is tracked to promote focus and academic integrity.
+              </p>
+
+              <div className="p-4 bg-rose-50/50 rounded-2xl border border-rose-100 mb-6 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping shrink-0" />
+                  <span className="text-xs font-black uppercase text-rose-800 tracking-wider">
+                    Violation Warning Active
+                  </span>
+                </div>
+                <p className="text-xs text-rose-700 font-semibold leading-relaxed text-left">
+                  Leaving Assessment Instance count: <strong className="text-rose-950 text-sm font-black">{violationCount}</strong>
+                </p>
+                <p className="text-[10px] text-rose-600/90 leading-tight text-left">
+                  This action is recorded. Each violation deducts 1 point from your final assessment score.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAltTabWarning(false);
+                }}
+                className="w-full py-4 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-black rounded-2xl shadow-lg shadow-rose-100 transition-all text-xs tracking-wider uppercase"
+              >
+                Return & Resume Formative Check
+              </button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

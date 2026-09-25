@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { auth, db, createStudentAuthAccount, sanitizeForFirestore } from '../lib/firebase';
 import { User } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, query, where, getDocs, orderBy, limit, deleteDoc, onSnapshot, writeBatch } from 'firebase/firestore';
-import { UserProfile, QuizResult, Topic, LearningPathway, Problem, ItemStatus, ItemStats, StudyRequest, VideoLecture, Presentation, PresentationViewRecord, DiagnosticQuestion, DiagnosticSettings, TeacherReport } from '../types';
+import { UserProfile, QuizResult, Topic, LearningPathway, Problem, ItemStatus, ItemStats, StudyRequest, VideoLecture, Presentation, PresentationViewRecord, DiagnosticQuestion, DiagnosticSettings, TeacherReport, AcademicTerm } from '../types';
 import { topics as initialTopics } from '../data/curriculum';
 import { initialPresentations } from '../data/presentations';
 import { allDiagnosticQuestions } from '../data/diagnosticQuestions';
@@ -412,6 +412,25 @@ export function useUserProfile(uid: string | undefined) {
     }
   };
 
+  const saveFormativeResult = async (score: number, total: number, violations: number) => {
+    if (!uid || !profile) return;
+    const currentFormativeViolations = profile.formativeViolations || 0;
+    const updated: UserProfile = {
+      ...profile,
+      formativeViolations: currentFormativeViolations + violations
+    };
+    saveLocalUser(updated);
+    setProfile(updated);
+    try {
+      const docRef = doc(db, 'users', uid);
+      await updateDoc(docRef, {
+        formativeViolations: increment(violations)
+      });
+    } catch (err) {
+      console.warn("Remote formative violation save deferred:", err);
+    }
+  };
+
   return {
     profile,
     loading,
@@ -422,7 +441,8 @@ export function useUserProfile(uid: string | undefined) {
     addXP,
     unlockBadge,
     saveDiagnosticResult,
-    savePathwayProgress
+    savePathwayProgress,
+    saveFormativeResult
   };
 }
 
@@ -430,36 +450,45 @@ export function useAllStudents() {
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchStudents = async () => {
+  const fetchStudents = async () => {
+    try {
+      const q = query(collection(db, 'users'), where('role', '==', 'student'));
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => doc.data() as UserProfile);
+
+      // Merge with local accounts database
       try {
-        const q = query(collection(db, 'users'), where('role', '==', 'student'));
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => doc.data() as UserProfile);
-
-        // Merge with local accounts database
-        try {
-          const localStudents = getLocalUsers().filter(u => u.role === 'student');
-          const existingUids = new Set(data.map(s => s.uid));
-          for (const s of localStudents) {
-            if (!existingUids.has(s.uid)) {
-              data.push(s);
-            }
+        const localStudents = getLocalUsers().filter(u => u.role === 'student');
+        const existingUids = new Set(data.map(s => s.uid));
+        for (const s of localStudents) {
+          if (!existingUids.has(s.uid)) {
+            data.push(s);
           }
-        } catch (e) {}
+        }
+      } catch (e) {}
 
-        setStudents(data);
-      } catch (err) {
-        console.error("Error fetching students from Firestore, loading from local database:", err);
-        try {
-          const localStudents = getLocalUsers().filter(u => u.role === 'student');
-          setStudents(localStudents);
-        } catch (e) {}
-      } finally {
-        setLoading(false);
-      }
-    };
+      setStudents(data);
+    } catch (err) {
+      console.error("Error fetching students from Firestore, loading from local database:", err);
+      try {
+        const localStudents = getLocalUsers().filter(u => u.role === 'student');
+        setStudents(localStudents);
+      } catch (e) {}
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchStudents();
+
+    const handleReset = () => {
+      fetchStudents();
+    };
+    window.addEventListener('mathquest_database_reset', handleReset);
+    return () => {
+      window.removeEventListener('mathquest_database_reset', handleReset);
+    };
   }, []);
 
   const addStudent = async (studentData: Partial<UserProfile> & { password?: string }) => {
@@ -2181,6 +2210,236 @@ export function useTeacherReports() {
   };
 
   return { reports, loading, saveReport, deleteReport };
+}
+
+export function useAcademicTerms() {
+  const [terms, setTerms] = useState<AcademicTerm[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 1. Initial local cache loading
+    try {
+      const cached = localStorage.getItem('mathquest_academic_terms');
+      if (cached) {
+        setTerms(JSON.parse(cached));
+      }
+    } catch (e) {}
+
+    // 2. Real-time Firestore sync
+    const q = query(collection(db, 'academic_terms'), orderBy('name', 'asc'));
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const list: AcademicTerm[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({ id: docSnap.id, ...docSnap.data() } as AcademicTerm);
+      });
+
+      if (list.length === 0) {
+        // If empty, auto-seed the default ones in Firestore
+        const defaultTerms = [
+          { name: 'Quarter 1', active: true },
+          { name: 'Quarter 2', active: false },
+          { name: 'Quarter 3', active: false },
+          { name: 'Quarter 4', active: false },
+          { name: 'Midterm', active: false },
+          { name: 'Finals', active: false }
+        ];
+
+        try {
+          const batch = writeBatch(db);
+          const seededList: AcademicTerm[] = [];
+          defaultTerms.forEach((term, idx) => {
+            const id = 'term_' + (idx + 1) + '_' + Date.now();
+            const ref = doc(db, 'academic_terms', id);
+            const payload = {
+              id,
+              name: term.name,
+              active: term.active,
+              createdAt: new Date().toISOString()
+            };
+            batch.set(ref, payload);
+            seededList.push(payload);
+          });
+          await batch.commit();
+          setTerms(seededList);
+          localStorage.setItem('mathquest_academic_terms', JSON.stringify(seededList));
+        } catch (err) {
+          console.warn("Error seeding default academic terms remotely, using offline local seed:", err);
+          const offlineList = defaultTerms.map((term, idx) => ({
+            id: 'local_term_' + (idx + 1),
+            name: term.name,
+            active: term.active,
+            createdAt: new Date().toISOString()
+          }));
+          setTerms(offlineList);
+          localStorage.setItem('mathquest_academic_terms', JSON.stringify(offlineList));
+        }
+      } else {
+        // Sort active or customized order if needed, but standard alpha/name sort is fine
+        // Make sure there is at least one active term
+        if (!list.some(t => t.active)) {
+          list[0].active = true;
+        }
+        setTerms(list);
+        try {
+          localStorage.setItem('mathquest_academic_terms', JSON.stringify(list));
+        } catch (e) {}
+      }
+      setLoading(false);
+    }, (err) => {
+      console.warn("Error fetching academic terms, using local storage cache:", err);
+      try {
+        const cached = localStorage.getItem('mathquest_academic_terms');
+        if (cached) {
+          setTerms(JSON.parse(cached));
+        } else {
+          // Hard fallback list if there's no cache
+          const fallback = [
+            { id: 'fb_1', name: 'Quarter 1', active: true, createdAt: new Date().toISOString() },
+            { id: 'fb_2', name: 'Quarter 2', active: false, createdAt: new Date().toISOString() },
+            { id: 'fb_3', name: 'Quarter 3', active: false, createdAt: new Date().toISOString() },
+            { id: 'fb_4', name: 'Quarter 4', active: false, createdAt: new Date().toISOString() }
+          ];
+          setTerms(fallback);
+        }
+      } catch (e) {}
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const saveAcademicTerm = async (termData: { id?: string; name: string; active?: boolean }) => {
+    try {
+      const isNew = !termData.id;
+      const id = termData.id || 'term_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+      const docRef = doc(db, 'academic_terms', id);
+
+      const payload: AcademicTerm = {
+        id,
+        name: termData.name.trim(),
+        active: termData.active ?? false,
+        createdAt: new Date().toISOString(),
+        updatedAt: isNew ? undefined : new Date().toISOString()
+      };
+
+      await setDoc(docRef, sanitizeForFirestore(payload), { merge: true });
+
+      // If set as active, deactivate other terms in background
+      if (termData.active) {
+        await setActiveTerm(id);
+      }
+
+      setTerms(prev => {
+        const index = prev.findIndex(t => t.id === id);
+        const next = [...prev];
+        if (index >= 0) {
+          next[index] = { ...next[index], ...payload };
+        } else {
+          next.push(payload);
+        }
+        try {
+          localStorage.setItem('mathquest_academic_terms', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+    } catch (err) {
+      console.warn("Error saving academic term remotely, updating local state:", err);
+      const id = termData.id || 'local_term_' + Date.now();
+      const payload: AcademicTerm = {
+        id,
+        name: termData.name.trim(),
+        active: termData.active ?? false,
+        createdAt: new Date().toISOString()
+      };
+      setTerms(prev => {
+        const index = prev.findIndex(t => t.id === id);
+        let next = [...prev];
+        if (index >= 0) {
+          next[index] = payload;
+        } else {
+          next.push(payload);
+        }
+        if (termData.active) {
+          next = next.map(t => t.id === id ? { ...t, active: true } : { ...t, active: false });
+        }
+        try {
+          localStorage.setItem('mathquest_academic_terms', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+    }
+  };
+
+  const deleteAcademicTerm = async (termId: string) => {
+    try {
+      // Find term to see if it is active before deleting
+      const target = terms.find(t => t.id === termId);
+      await deleteDoc(doc(db, 'academic_terms', termId));
+      
+      setTerms(prev => {
+        let next = prev.filter(t => t.id !== termId);
+        // If we deleted the active one, mark the first remaining one as active
+        if (target?.active && next.length > 0) {
+          next[0].active = true;
+          // Sync new active in background
+          setActiveTerm(next[0].id).catch(() => {});
+        }
+        try {
+          localStorage.setItem('mathquest_academic_terms', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+    } catch (err) {
+      console.warn("Error deleting academic term remotely, updating locally:", err);
+      setTerms(prev => {
+        const target = prev.find(t => t.id === termId);
+        let next = prev.filter(t => t.id !== termId);
+        if (target?.active && next.length > 0) {
+          next[0].active = true;
+        }
+        try {
+          localStorage.setItem('mathquest_academic_terms', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+    }
+  };
+
+  const setActiveTerm = async (termId: string) => {
+    try {
+      const batch = writeBatch(db);
+      terms.forEach(t => {
+        const ref = doc(db, 'academic_terms', t.id);
+        batch.update(ref, { active: t.id === termId });
+      });
+      await batch.commit();
+
+      setTerms(prev => {
+        const next = prev.map(t => ({
+          ...t,
+          active: t.id === termId
+        }));
+        try {
+          localStorage.setItem('mathquest_academic_terms', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+    } catch (err) {
+      console.warn("Error setting active term remotely, setting locally:", err);
+      setTerms(prev => {
+        const next = prev.map(t => ({
+          ...t,
+          active: t.id === termId
+        }));
+        try {
+          localStorage.setItem('mathquest_academic_terms', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+    }
+  };
+
+  return { terms, loading, saveAcademicTerm, deleteAcademicTerm, setActiveTerm };
 }
 
 

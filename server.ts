@@ -406,6 +406,115 @@ Return only valid JSON response. Keep descriptions encouraging, supportive, high
   }
 });
 
+// API Route: AI Progressive Scaffolding Lesson Plan Generator according to Student Performance
+app.post('/api/ai/generate-personalized-lesson', async (req, res) => {
+  try {
+    const { topicTitle, score, total, incorrectQuestions } = req.body;
+    if (!topicTitle) {
+      return res.status(400).json({ success: false, error: 'Topic title is required' });
+    }
+
+    let lessonData: any = null;
+    try {
+      const ai = getGeminiClient();
+      const prompt = `You are a highly supportive, expert Grade 11 Mathematics AI Tutor utilizing progressive scaffolding. 
+A student has just completed a 20-item Diagnostic Checkpoint on the topic "${topicTitle}".
+The student scored ${score} out of ${total} (${Math.round((score / total) * 100)}%).
+
+Here are some of the concepts or questions the student got WRONG:
+${JSON.stringify(incorrectQuestions || [])}
+
+Based on this student's diagnostic performance profile, generate a highly personalized, custom lesson to help them master their specific weak areas. 
+The lesson should include:
+1. A customized, supportive welcome message addressing their score and encouraging them. Explain that this is a safe space for learning.
+2. A list of 2-3 specific Focus Areas that need reinforcement.
+3. A personalized conceptual breakdown focusing deeply on the specific concepts they got wrong (e.g. piecewise function intervals, function composition steps, exponential bases). Break it down in a very clear, intuitive, and pedagogical way with markdown math formatting if needed.
+4. Exactly 2 custom, step-by-step worked examples directly addressing the misconceptions shown in their wrong answers.
+5. A "Personalized Action Plan" with 3 concrete steps they can take on our platform to reach full mastery.
+
+You MUST return a valid JSON object with the following exact structure (no markdown code blocks, just pure JSON or standard JSON):
+{
+  "supportMessage": "Supportive personalized welcome and encouragement...",
+  "focusAreas": ["Area 1", "Area 2"],
+  "conceptBreakdown": "In-depth, custom pedagogical explanation with equations in clear text format...",
+  "examples": [
+    {
+      "title": "Worked Example 1: [Topic Title]...",
+      "problem": "Problem text...",
+      "solutionSteps": [
+        "Step 1...",
+        "Step 2...",
+        "Step 3..."
+      ]
+    },
+    {
+      "title": "Worked Example 2: [Topic Title]...",
+      "problem": "Problem text...",
+      "solutionSteps": [
+        "Step 1...",
+        "Step 2...",
+        "Step 3..."
+      ]
+    }
+  ],
+  "actionPlan": [
+    "Action Step 1...",
+    "Action Step 2...",
+    "Action Step 3..."
+  ]
+}
+Return only a valid JSON response. Keep descriptions highly academic, precise, encouraging, and centered around Grade 11 concepts.`;
+
+      const textResponse = await generateWithFallback(ai, prompt);
+      const jsonString = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+      lessonData = JSON.parse(jsonString);
+    } catch (apiErr: any) {
+      console.warn('Gemini API personalized lesson generator fallback triggered.', apiErr);
+      
+      // Fallback structured personalized lesson so students are never blocked
+      lessonData = {
+        supportMessage: `Welcome to your custom math study guide! You scored ${score}/${total} (${Math.round((score / total) * 100)}%) on your Diagnostic Checkpoint. Mistakes are the path to mastery! We've designed this personalized scaffolded lesson specifically to strengthen your foundational understanding of ${topicTitle}. Let's work together to conquer this unit.`,
+        focusAreas: [
+          `Mastering core operations and definitions for ${topicTitle}`,
+          `Avoiding common arithmetic and signs errors in intermediate evaluation steps`,
+          `Applying properties and solving multi-step equations`
+        ],
+        conceptBreakdown: `In ${topicTitle}, mathematical precision is developed by decomposing complex equations into smaller foundational components. For the concepts that proved challenging during the baseline check, remember to carefully evaluate restrictions, verify order of operations, and apply domain constraints (such as denominators cannot be zero, and exponents or logarithms must stay within valid ranges). Work through the structured examples below to see these step-by-step derivations in action.`,
+        examples: [
+          {
+            title: `Personalized Guide 1: Foundational Check`,
+            problem: `Simplify and solve the primary algebraic properties representing ${topicTitle}.`,
+            solutionSteps: [
+              `Step 1: Identify all given inputs, constants, and operators in the equation.`,
+              `Step 2: Group like terms and apply order of operations (PEMDAS) carefully, noting any negative signs.`,
+              `Step 3: Solve for the unknown variable and double check if the resulting value lies within the valid domain.`
+            ]
+          },
+          {
+            title: `Personalized Guide 2: Guided Substitution & Solving`,
+            problem: `Evaluate the mathematical model f(x) for the given numerical parameters.`,
+            solutionSteps: [
+              `Step 1: Write down the general function formula or conditional intervals.`,
+              `Step 2: Substitute the numerical parameter into the expression, making sure to handle negative squared numbers as positive.`,
+              `Step 3: Simplify the fractions and arithmetic terms to obtain the final simplified coordinate value.`
+            ]
+          }
+        ],
+        actionPlan: [
+          `Review the interactive presentation slides on ${topicTitle} inside the resources tab.`,
+          `Practice 5-10 quick challenges in the MathSprint Arena to build fluency and speed.`,
+          `Complete the step-by-step adaptive learning pathway for this topic on your student dashboard.`
+        ]
+      };
+    }
+
+    res.json({ success: true, lesson: lessonData });
+  } catch (error: any) {
+    console.error('Error in generating personalized lesson:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to generate personalized lesson' });
+  }
+});
+
 // API Route: AI Smart Document Analysis, Extraction, and ILAW Conversion
 app.post('/api/ai/parse-document', async (req, res) => {
   try {

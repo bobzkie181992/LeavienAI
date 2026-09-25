@@ -285,7 +285,7 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
                   Quick Demo Accounts
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -294,8 +294,20 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
                     }}
                     className="p-2 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100 rounded-xl text-left transition-colors"
                   >
-                    <div className="text-xs font-bold text-indigo-950 truncate">Amora (Student)</div>
-                    <div className="text-[10px] text-indigo-600 truncate">amora@gmail.com</div>
+                    <div className="text-[11px] font-bold text-indigo-950 truncate">Amora</div>
+                    <div className="text-[9px] text-indigo-600 truncate">Student</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('jhykzion.escrin@gmail.com');
+                      setPassword('password123');
+                    }}
+                    className="p-2 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100 rounded-xl text-left transition-colors"
+                  >
+                    <div className="text-[11px] font-bold text-indigo-950 truncate">Jhykzion</div>
+                    <div className="text-[9px] text-indigo-600 truncate">Student</div>
                   </button>
 
                   <button
@@ -306,8 +318,8 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
                     }}
                     className="p-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-left transition-colors"
                   >
-                    <div className="text-xs font-bold text-slate-900 truncate">Prof. Bob (Faculty)</div>
-                    <div className="text-[10px] text-slate-500 truncate">bobzkie181992...</div>
+                    <div className="text-[11px] font-bold text-slate-900 truncate">Prof. Bob</div>
+                    <div className="text-[9px] text-slate-500 truncate">Faculty</div>
                   </button>
                 </div>
               </div>

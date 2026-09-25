@@ -27,15 +27,13 @@ import {
   PieChart,
   User,
   ShieldCheck,
-  Compass,
-  ListTree
+  Compass
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
 export type StudentNavSection = 
   | 'dashboard'
   | 'curriculum'
-  | 'curriculum-hierarchy'
   | 'curriculum-overview'
   | 'curriculum-ilaw'
   | 'curriculum-subjects'
@@ -128,7 +126,6 @@ export default function StudentSidebar({
       label: 'Curriculum',
       icon: <BookOpen className="w-4 h-4 text-indigo-500" />,
       subItems: [
-        { id: 'curriculum-hierarchy', label: '8-Level Hierarchy', icon: <ListTree className="w-3.5 h-3.5 text-amber-500" /> },
         { id: 'curriculum-overview', label: 'Overview', icon: <Layers className="w-3.5 h-3.5" /> },
         { id: 'curriculum-ilaw', label: 'ILAW Lessons', icon: <Compass className="w-3.5 h-3.5 text-amber-500" /> },
         { id: 'curriculum-subjects', label: 'My Subjects', icon: <GraduationCap className="w-3.5 h-3.5" /> },

@@ -16,20 +16,18 @@ import {
   ChevronRight,
   BookMarked,
   ShieldCheck,
-  Zap,
-  ListTree
+  Zap
 } from 'lucide-react';
 import { Topic, QuizResult, UserProfile } from '../../types';
 import { ILAW_LESSON_PLANS } from '../../data/ilawLessons';
 import { GRADE_11_SUBJECTS } from '../../data/grade11SampleData';
 import { SubjectCard } from '../ui/SubjectCard';
-import CurriculumHierarchyBrowser from '../CurriculumHierarchyBrowser';
 
 interface CurriculumViewProps {
   topics: Topic[];
   results: QuizResult[];
   profile: UserProfile;
-  initialTab?: 'hierarchy' | 'overview' | 'ilaw' | 'subjects' | 'competencies';
+  initialTab?: 'overview' | 'ilaw' | 'subjects' | 'competencies';
   onSelectTopic: (topic: Topic) => void;
   onOpenTopicDLP: (topic: Topic) => void;
   onStartCompetencyPractice?: (competencyName: string) => void;
@@ -41,14 +39,14 @@ export default function CurriculumView({
   topics,
   results,
   profile,
-  initialTab = 'hierarchy',
+  initialTab = 'overview',
   onSelectTopic,
   onOpenTopicDLP,
   onStartCompetencyPractice,
   onSaveQuizResult,
   onAddXP
 }: CurriculumViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'hierarchy' | 'overview' | 'ilaw' | 'subjects' | 'competencies'>(initialTab);
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'ilaw' | 'subjects' | 'competencies'>(initialTab);
   const [selectedTermFilter, setSelectedTermFilter] = useState<string>('all');
 
   // Filter topics by term if selected
@@ -144,7 +142,6 @@ export default function CurriculumView({
       {/* Sub-Tab Navigation Bar */}
       <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 gap-1 overflow-x-auto scrollbar-none">
         {[
-          { id: 'hierarchy', label: '8-Level Hierarchy Explorer', icon: <ListTree className="w-4 h-4 text-amber-500" /> },
           { id: 'overview', label: 'Curriculum Overview', icon: <Layers className="w-4 h-4" /> },
           { id: 'ilaw', label: 'DepEd ILAW Lessons', icon: <Compass className="w-4 h-4 text-amber-500" /> },
           { id: 'subjects', label: 'My Subjects', icon: <GraduationCap className="w-4 h-4 text-indigo-500" /> },
@@ -164,18 +161,6 @@ export default function CurriculumView({
           </button>
         ))}
       </div>
-
-      {/* 0. 8-LEVEL CURRICULUM HIERARCHY EXPLORER */}
-      {activeSubTab === 'hierarchy' && (
-        <CurriculumHierarchyBrowser
-          topics={topics}
-          results={results}
-          profile={profile}
-          onSaveQuizResult={onSaveQuizResult}
-          onAddXP={onAddXP}
-          onOpenTopicDLP={onOpenTopicDLP}
-        />
-      )}
 
       {/* 1. CURRICULUM OVERVIEW */}
       {activeSubTab === 'overview' && (

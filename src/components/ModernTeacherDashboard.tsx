@@ -210,7 +210,7 @@ export default function ModernTeacherDashboard({
       badgeText: 'Score: 100% (5/5)',
       badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
       actionLabel: 'Inspect Answers',
-      navTarget: 'assessments-results'
+      navTarget: 'assessments-formative-results'
     },
     {
       id: 'act-4',
@@ -234,7 +234,7 @@ export default function ModernTeacherDashboard({
       badgeText: 'Score: 80% (4/5)',
       badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200/80',
       actionLabel: 'Inspect Answers',
-      navTarget: 'assessments-results'
+      navTarget: 'assessments-diagnostic-results'
     }
   ];
 

@@ -211,6 +211,19 @@
       },
       "required": ["itemsCount"]
     },
+    "AcademicTerm": {
+      "title": "Academic Term or Quarter",
+      "description": "Stores dynamic academic terms or quarters managed by teachers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
     "TeacherReport": {
       "title": "Teacher Progress & Academic Evaluation Report",
       "description": "Reports created by teachers evaluating individual student progress, remediation plans, diagnostic outcomes, or class section performance",
@@ -243,6 +256,10 @@
     }
   },
   "firestore": {
+    "/academic_terms/{termId}": {
+      "schema": "AcademicTerm",
+      "description": "Dynamic academic quarters or terms managed by faculty"
+    },
     "/teacher_reports/{reportId}": {
       "schema": "TeacherReport",
       "description": "Progress, diagnostic, remediation, and section evaluation reports created by faculty"

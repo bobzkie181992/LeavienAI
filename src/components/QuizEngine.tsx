@@ -49,6 +49,10 @@ import {
 import { generateAIMistakeGuidance, fetchAIMistakeDiagnosis } from '../utils/aiTutorCoach';
 import { AIMistakeGuidance } from '../types';
 import ErrorRemediationModal from './ErrorRemediationModal';
+import { getLocalUser } from '../lib/localAuth';
+import { logAltTabViolation } from '../lib/violationLogger';
+import { playWarningSound } from '../utils/audioEffects';
+import { getIntegritySettings } from '../lib/integritySettings';
 
 export type QuizMode = 'diagnostic' | 'assessment' | 'adaptive' | 'standard' | 'timed';
 
@@ -176,16 +180,69 @@ export default function QuizEngine({
   const [itemResponses, setItemResponses] = useState<ItemResponse[]>([]);
   const [violationCount, setViolationCount] = useState<number>(0);
 
-  // Violation detection
+  const [showAltTabWarning, setShowAltTabWarning] = useState<boolean>(false);
+
+  // Violation detection (Counts and warns when returning back to the app)
   useEffect(() => {
+    if (showSummary) return;
+
+    let wasAway = false;
+    const currentUser = getLocalUser();
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        setViolationCount(prev => prev + 1);
+      if (document.hidden) {
+        wasAway = true;
+      } else {
+        if (wasAway) {
+          wasAway = false;
+          playWarningSound();
+          setViolationCount(prev => prev + 1);
+          setShowAltTabWarning(true);
+          if (currentUser?.uid) {
+            logAltTabViolation(
+              currentUser.uid,
+              quiz.quizType === 'diagnostic' || mode === 'diagnostic' ? 'Diagnostic' : 'Formative',
+              quiz.title || 'Mathematics Quiz',
+              currentStep + 1,
+              problems[currentStep]?.question
+            );
+          }
+        }
       }
     };
+
+    const handleWindowBlur = () => {
+      wasAway = true;
+    };
+
+    const handleWindowFocus = () => {
+      if (wasAway) {
+        wasAway = false;
+        playWarningSound();
+        setViolationCount(prev => prev + 1);
+        setShowAltTabWarning(true);
+        if (currentUser?.uid) {
+          logAltTabViolation(
+            currentUser.uid,
+            quiz.quizType === 'diagnostic' || mode === 'diagnostic' ? 'Diagnostic' : 'Formative',
+            quiz.title || 'Mathematics Quiz',
+            currentStep + 1,
+            problems[currentStep]?.question
+          );
+        }
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [showSummary, currentStep, problems, quiz, mode]);
 
   // Timed Mode State
   const totalTimeAllowed = quiz.problems.length * 30; // 30s per problem
@@ -1045,6 +1102,39 @@ export default function QuizEngine({
               exit={{ opacity: 0, y: -15 }}
               className="space-y-6"
             >
+              {/* Academic Integrity Alt-Tab Alert Banner */}
+              <AnimatePresence>
+                {showAltTabWarning && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                    className="p-4 bg-rose-50 border-2 border-rose-500 rounded-2xl flex items-center justify-between gap-3 text-rose-900 shadow-md"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0">
+                        <AlertTriangle className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div className="text-xs">
+                        <span className="font-black text-rose-900 block uppercase tracking-wider">
+                          Academic Integrity Warning: Window Tab-Out Detected ({violationCount} Violation{violationCount > 1 ? 's' : ''})
+                        </span>
+                        <span className="text-rose-700">
+                          Leaving the active test window is recorded on your official scorecard. Score deduction is applied automatically.
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAltTabWarning(false)}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-[11px] rounded-xl shrink-0 cursor-pointer"
+                    >
+                      Acknowledge
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Question Metadata Tags */}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest bg-white px-2.5 py-1 rounded-lg border border-slate-200">
