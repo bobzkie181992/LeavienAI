@@ -688,7 +688,7 @@ export default function LearningReports({ profile, results = [], onTakeDiagnosti
                     <Brain className="w-8 h-8" />
                   </div>
                   <div className="space-y-1.5">
-                    <h4 className="font-extrabold text-slate-900 text-sm">Calibrate Your MathQuest Journey</h4>
+                    <h4 className="font-extrabold text-slate-900 text-sm">Calibrate Your Leavien AI Journey</h4>
                     <p className="text-xs text-slate-500 leading-relaxed">
                       You haven't completed your baseline diagnostic exam yet. Take it now to customize your learning pathway and unlock adaptive challenge recommendations tailored to your mathematical strengths!
                     </p>
@@ -856,7 +856,7 @@ export default function LearningReports({ profile, results = [], onTakeDiagnosti
               <div className="space-y-4">
                 <div className="border-b border-slate-50 pb-2">
                   <h3 className="font-extrabold text-slate-900 text-xs sm:text-sm">Verified Recitation logs</h3>
-                  <p className="text-[10px] text-slate-400">Historical trail of classroom recitations validated by MathQuest faculty</p>
+                  <p className="text-[10px] text-slate-400">Historical trail of classroom recitations validated by Leavien AI faculty</p>
                 </div>
 
                 {loadingRecitations ? (

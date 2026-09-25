@@ -237,7 +237,7 @@ export default function TeacherSidebar({
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h1 className="text-base font-black text-white tracking-tight leading-none">MathQuest</h1>
+              <h1 className="text-base font-black text-white tracking-tight leading-none">Leavien AI</h1>
               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 flex items-center gap-1 shadow-xs">
                 <ShieldCheck className="w-2.5 h-2.5" />
                 TEACHER

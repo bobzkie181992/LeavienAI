@@ -97,7 +97,7 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
       // General
       case 'notifications': return { title: 'Notifications & Alerts', subtitle: 'Real-time student task activity and intervention notices' };
       case 'settings': return { title: 'Faculty Settings', subtitle: 'DepEd D.O. 8 grading weights & academic preferences' };
-      default: return { title: 'Faculty Management Portal', subtitle: 'MathQuest Grade 11' };
+      default: return { title: 'Faculty Management Portal', subtitle: 'Leavien AI Grade 11' };
     }
   };
 
@@ -333,7 +333,7 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
       <ConfirmDeleteModal
         isOpen={showLogoutConfirm}
         title="Sign Out of Faculty Hub"
-        message="Are you sure you want to log out of the MathQuest Faculty Management Portal?"
+        message="Are you sure you want to log out of the Leavien AI Faculty Management Portal?"
         confirmText="Log Out"
         cancelText="Cancel"
         variant="logout"

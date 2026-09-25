@@ -121,7 +121,7 @@ export default function LevelProgressionModal({
         {/* Rank Roadmap List */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-3 flex-1">
           <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-2">
-            MathQuest Progression Tree
+            Leavien AI Progression Tree
           </h3>
 
           <div className="space-y-2.5">

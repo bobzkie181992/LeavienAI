@@ -292,7 +292,7 @@ export function generateSlideImage(
           DepEd Senior High School • ${escapeXml(subject)} • ${escapeXml(topic)}
         </text>
         <text x="1120" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="700" fill="#94a3b8" text-anchor="end">
-          MathQuest Interactive PowerPoint Presentation
+          Leavien AI Interactive PowerPoint Presentation
         </text>
       </g>
     </svg>

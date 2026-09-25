@@ -283,7 +283,7 @@ export default function FacultyReportsManager({
       defaultRating = 'Critical Support';
       generatedSummary = `Urgent academic alert for ${sName}. Quiz completion rates and assessment scores in ${topicName} fall below the 75% passing threshold. Immediate intervention is required.`;
       generatedStrengths = [
-        'Enrolled in the MathQuest digital curriculum platform'
+        'Enrolled in the Leavien AI digital curriculum platform'
       ];
       generatedGaps = [
         'Multiple unattempted formative quizzes',
@@ -1114,7 +1114,7 @@ export default function FacultyReportsManager({
                     Senior High School Mathematics Evaluation
                   </h2>
                   <p className="text-xs font-semibold text-slate-600">
-                    MathQuest Adaptive Learning Assessment Record
+                    Leavien AI Adaptive Learning Assessment Record
                   </p>
                 </div>
 

@@ -1,5 +1,5 @@
 /**
- * Procedural Web Audio API sound generator for MathQuest gamification.
+ * Procedural Web Audio API sound generator for Leavien AI gamification.
  * Works 100% offline, requires no external audio assets, and supports a mute toggle.
  */
 

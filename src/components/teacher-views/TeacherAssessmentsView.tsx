@@ -95,6 +95,39 @@ export default function TeacherAssessmentsView({
     return [];
   });
 
+  // Active Exam Activation State
+  const [activeDiagnosticId, setActiveDiagnosticId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('mathquest_active_diagnostic_id') || 'diag-1';
+    } catch (e) {
+      return 'diag-1';
+    }
+  });
+
+  const [activeFormativeId, setActiveFormativeId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('mathquest_active_formative_id') || 'form-1';
+    } catch (e) {
+      return 'form-1';
+    }
+  });
+
+  const handleSetActiveDiagnostic = (id: string) => {
+    setActiveDiagnosticId(id);
+    try {
+      localStorage.setItem('mathquest_active_diagnostic_id', id);
+      window.dispatchEvent(new CustomEvent('mathquest_active_assessment_changed', { detail: { type: 'diagnostic', id } }));
+    } catch (e) {}
+  };
+
+  const handleSetActiveFormative = (id: string) => {
+    setActiveFormativeId(id);
+    try {
+      localStorage.setItem('mathquest_active_formative_id', id);
+      window.dispatchEvent(new CustomEvent('mathquest_active_assessment_changed', { detail: { type: 'formative', id } }));
+    } catch (e) {}
+  };
+
   const handleImportFormativeExcel = async (imported: ParsedDepEdQuestion[]) => {
     if (imported.length === 0) return;
 
@@ -739,6 +772,20 @@ export default function TeacherAssessmentsView({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {activeDiagnosticId === cd.id ? (
+                      <span className="px-3 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded-lg flex items-center gap-1 shadow-xs">
+                        <span>⭐ Active Diagnostic Exam</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSetActiveDiagnostic(cd.id)}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer border border-slate-200"
+                        title="Set this assessment as active exam"
+                      >
+                        Set as Active Exam
+                      </button>
+                    )}
+
                     <span className="px-3 py-1 bg-emerald-100 text-emerald-800 font-extrabold text-xs rounded-lg">Published</span>
                     
                     <button
@@ -826,6 +873,20 @@ export default function TeacherAssessmentsView({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {activeDiagnosticId === 'diag-1' ? (
+                      <span className="px-3 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded-lg flex items-center gap-1 shadow-xs">
+                        <span>⭐ Active Diagnostic Exam</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSetActiveDiagnostic('diag-1')}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer border border-slate-200"
+                        title="Set this assessment as active exam"
+                      >
+                        Set as Active Exam
+                      </button>
+                    )}
+
                     <span className="px-3 py-1 bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-lg">Published</span>
                     
                     <button
@@ -978,6 +1039,20 @@ export default function TeacherAssessmentsView({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {activeFormativeId === cf.id ? (
+                      <span className="px-3 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded-lg flex items-center gap-1 shadow-xs">
+                        <span>⭐ Active Formative Exam</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSetActiveFormative(cf.id)}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer border border-slate-200"
+                        title="Set this assessment as active exam"
+                      >
+                        Set as Active Exam
+                      </button>
+                    )}
+
                     <span className="px-3 py-1 bg-emerald-100 text-emerald-800 font-extrabold text-xs rounded-lg">Active</span>
                     
                     <button
@@ -1066,6 +1141,20 @@ export default function TeacherAssessmentsView({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {activeFormativeId === 'form-1' ? (
+                      <span className="px-3 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded-lg flex items-center gap-1 shadow-xs">
+                        <span>⭐ Active Formative Exam</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSetActiveFormative('form-1')}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer border border-slate-200"
+                        title="Set this assessment as active exam"
+                      >
+                        Set as Active Exam
+                      </button>
+                    )}
+
                     <span className="px-3 py-1 bg-indigo-50 text-indigo-700 font-extrabold text-xs rounded-lg">Assigned</span>
                     
                     <button

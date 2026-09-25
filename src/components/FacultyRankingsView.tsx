@@ -481,7 +481,7 @@ export default function FacultyRankingsView({
 
         {/* Printable Header */}
         <div className="hidden print:block p-6 border-b border-slate-200 text-center">
-          <h2 className="text-xl font-black text-slate-900">MathQuest Grade 11 — Official Student Rankings</h2>
+          <h2 className="text-xl font-black text-slate-900">Leavien AI Grade 11 — Official Student Rankings</h2>
           <p className="text-xs text-slate-600">
             Cohort: {gradeFilter} | Section: {sectionFilter} | Generated on: {new Date().toLocaleDateString()}
           </p>

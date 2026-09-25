@@ -303,7 +303,7 @@ export const ILAW_LESSON_PLANS: Record<string, LessonPlan> = {
         phase: 'Generalization & Homework',
         durationMinutes: 5,
         teacherActivity: 'Summarize key formulas and prompt reflection on real-world engineering applications.',
-        studentActivity: 'Write a 2-sentence summary in their MathQuest journal connecting trigonometry to modern technology.',
+        studentActivity: 'Write a 2-sentence summary in their Leavien AI journal connecting trigonometry to modern technology.',
         ilawPillar: 'W - Ways Forward'
       }
     ],

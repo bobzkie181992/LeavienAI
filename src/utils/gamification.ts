@@ -1,5 +1,5 @@
 /**
- * Gamification Core System for MathQuest Grade 11
+ * Gamification Core System for Leavien AI Grade 11
  * Handles ranks, RPG level tiers, daily bounties/quests, daily check-in rewards, and avatar titles.
  */
 

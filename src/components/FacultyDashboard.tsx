@@ -163,12 +163,12 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
 
   const copyCredentialsSlip = (name: string, email: string, lrn?: string, password?: string) => {
     const text = [
-      `📚 MathQuest Grade 11 — Student Login Credentials`,
+      `📚 Leavien AI Grade 11 — Student Login Credentials`,
       `Student: ${name}`,
       `Email / ID: ${email || (lrn ? `${lrn}@student.mathquest.internal` : 'N/A')}`,
       ...(lrn ? [`LRN: ${lrn}`] : []),
       ...(password ? [`Password: ${password}`] : []),
-      `Portal: Sign in at MathQuest using your Email/LRN and Password.`
+      `Portal: Sign in at Leavien AI using your Email/LRN and Password.`
     ].join('\n');
 
     navigator.clipboard.writeText(text);
@@ -768,7 +768,7 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                   <p className="text-[11px] text-slate-400 mt-1 ml-1">
                     {isEditingStudent 
                       ? "Enter a new password (min. 6 chars) to update, or leave blank to keep unchanged." 
-                      : "Password for the student to log into MathQuest. Minimum 6 characters."}
+                      : "Password for the student to log into Leavien AI. Minimum 6 characters."}
                   </p>
                 </div>
 
@@ -820,7 +820,7 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                 {createdStudentCredentials ? 'Student Account Created' : 'Student Login Credentials'}
               </h3>
               <p className="text-slate-500 text-xs mb-5">
-                Share these login details with the student so they can access their MathQuest portal.
+                Share these login details with the student so they can access their Leavien AI portal.
               </p>
 
               {(() => {

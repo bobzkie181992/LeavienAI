@@ -15,8 +15,8 @@ export default defineConfig(() => {
       },
       manifest: {
         id: '/',
-        name: 'LeavienAI',
-        short_name: 'LeavienAI',
+        name: 'Leavien AI',
+        short_name: 'Leavien AI',
         description: 'A gamified math learning platform for Grade 11 students.',
         theme_color: '#4f46e5',
         background_color: '#4f46e5',

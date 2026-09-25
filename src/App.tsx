@@ -217,7 +217,7 @@ export default function App() {
                   onClick={handleCompleteStudentSetup}
                   className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
                 >
-                  {isCreatingRole ? 'Setting Up...' : 'Confirm & Enter MathQuest'}
+                  {isCreatingRole ? 'Setting Up...' : 'Confirm & Enter Leavien AI'}
                 </button>
 
                 <button
