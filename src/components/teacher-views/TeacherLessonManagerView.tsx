@@ -15,9 +15,13 @@ import {
   Layers,
   Calendar,
   Clock,
-  BookOpen
+  BookOpen,
+  RotateCcw,
+  AlertOctagon,
+  Loader2
 } from 'lucide-react';
 import { Topic } from '../../types';
+import { performDatabaseReset } from '../../lib/databaseReset';
 
 interface LessonPlanItem {
   id: string;
@@ -102,6 +106,72 @@ export default function TeacherLessonManagerView({
   const [assessingLearning, setAssessingLearning] = useState('');
   const [waysForward, setWaysForward] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+
+  const handlePerformResetLessons = async () => {
+    setIsResetting(true);
+    setResetMessage(null);
+    try {
+      const res = await performDatabaseReset('lessons');
+      setResetMessage(res.message);
+      // Restore initial default lesson templates
+      setLessons([
+        {
+          id: 'lp-1',
+          title: 'Rational Functions, Equations and Inequalities Mastery',
+          topicTitle: 'Rational Functions',
+          term: 'Term 1',
+          week: 'Week 2',
+          status: 'Published',
+          updatedAt: 'Just now (Reset to Baseline)',
+          competency: 'M11GM-Ib-1: Distinguishes rational function, rational equation, and rational inequality.',
+          intentions: 'Students master LCD clearing and domain restriction checks for extraneous roots.',
+          learningExperience: 'Real-world speed/time word problems, table of values, graphing asymptotes.',
+          assessingLearning: 'Formative board work, 5-problem diagnostics, and TOS summative items.',
+          waysForward: 'Adaptive 7-step remediation for students scoring under 75%.'
+        },
+        {
+          id: 'lp-2',
+          title: 'Simple and Compound Interest in Practical Financial Math',
+          topicTitle: 'Business Mathematics',
+          term: 'Term 2',
+          week: 'Week 1',
+          status: 'Published',
+          updatedAt: 'Just now (Reset to Baseline)',
+          competency: 'M11GM-IIa-1: Illustrates simple and compound interests and maturity value.',
+          intentions: 'Understand compounding frequency (annual, semi-annual, quarterly, monthly).',
+          learningExperience: 'Bank loan comparison simulation, amortisation schedule creation.',
+          assessingLearning: 'Formative interest calculator checks, quiz with real-world scenarios.',
+          waysForward: 'Advanced investment portfolio projects for high scorers.'
+        },
+        {
+          id: 'lp-3',
+          title: 'Exponential Growth and Half-life Modeling [Draft]',
+          topicTitle: 'Exponential Functions',
+          term: 'Term 1',
+          week: 'Week 4',
+          status: 'Draft',
+          updatedAt: 'Just now (Reset to Baseline)',
+          competency: 'M11GM-Ie-1: Represents real-life situations using exponential functions.',
+          intentions: 'Model population surges and radioactive isotope decay curves.',
+          learningExperience: 'Hands-on coin toss simulation of half-life degradation.',
+          assessingLearning: 'Practice problem sets on e^(kt) modeling.',
+          waysForward: 'Step-by-step hint engine for logarithm inversion.'
+        }
+      ]);
+      setTimeout(() => {
+        setIsResetting(false);
+        setIsResetModalOpen(false);
+        setResetMessage(null);
+      }, 1500);
+    } catch (e) {
+      setIsResetting(false);
+      setResetMessage('Failed to reset lessons.');
+    }
+  };
 
   const handleCreateLesson = (publishStatus: 'Published' | 'Draft') => {
     if (!newTitle.trim()) {
@@ -248,6 +318,18 @@ export default function TeacherLessonManagerView({
           <Sparkles className="w-4 h-4 text-indigo-400" />
           <span>Lesson Templates</span>
         </button>
+
+        <div className="ml-auto flex items-center pr-1">
+          <button
+            type="button"
+            onClick={() => setIsResetModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-colors cursor-pointer"
+            title="Reset custom lessons and restore default DepEd ILAW templates"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset Lessons</span>
+          </button>
+        </div>
       </div>
 
       {/* CREATE LESSON STUDIO */}
@@ -570,6 +652,69 @@ export default function TeacherLessonManagerView({
           </div>
         </div>
       )}
+
+      {/* Reset Lessons Confirmation Modal */}
+      <AnimatePresence>
+        {isResetModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-4 relative overflow-hidden"
+            >
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+                <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <AlertOctagon className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Reset Lessons & Progress</h3>
+                  <p className="text-xs text-rose-600 font-bold">Restore Baseline DepEd Templates</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed bg-rose-50/70 p-3.5 rounded-2xl border border-rose-100">
+                Are you sure you want to reset lesson plans? This will restore default ILAW lesson plans and clear student step progress.
+              </p>
+
+              {resetMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 font-bold text-xs">
+                  {resetMessage}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsResetModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isResetting}
+                  onClick={handlePerformResetLessons}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-black rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                >
+                  {isResetting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Resetting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Confirm Reset</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

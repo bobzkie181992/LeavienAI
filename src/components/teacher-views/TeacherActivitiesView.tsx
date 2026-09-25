@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   ClipboardList, 
   PlusCircle, 
@@ -11,9 +11,13 @@ import {
   Award, 
   Send,
   MessageSquare,
-  AlertCircle
+  AlertCircle,
+  RotateCcw,
+  AlertOctagon,
+  Loader2
 } from 'lucide-react';
 import { Topic, UserProfile } from '../../types';
+import { performDatabaseReset } from '../../lib/databaseReset';
 
 interface ActivityItem {
   id: string;
@@ -142,6 +146,68 @@ export default function TeacherActivitiesView({
   const [gradeInput, setGradeInput] = useState<number>(85);
   const [feedbackInput, setFeedbackInput] = useState('');
 
+  // Reset Activities State
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+
+  const handlePerformResetActivities = async () => {
+    setIsResetting(true);
+    setResetMessage(null);
+    try {
+      const res = await performDatabaseReset('activities');
+      setResetMessage(res.message);
+      // Restore default active activities and empty pending submissions
+      setActivities([
+        {
+          id: 'act-1',
+          title: '3D Box Packaging Optimization Performance Task',
+          type: 'Performance Task',
+          topic: 'Functions & Graphs',
+          term: 'Term 1',
+          dueDate: 'Oct 15, 2026',
+          assignedTo: 'Grade 11 - All Sections',
+          submissionsCount: 0,
+          totalStudents: students.length || 25,
+          status: 'Active'
+        },
+        {
+          id: 'act-2',
+          title: 'Bank Loan Comparison & Annuity Amortization Table',
+          type: 'Real-World Case Study',
+          topic: 'Business Mathematics',
+          term: 'Term 2',
+          dueDate: 'Oct 28, 2026',
+          assignedTo: 'STEM-A & ABM-A',
+          submissionsCount: 0,
+          totalStudents: 15,
+          status: 'Active'
+        },
+        {
+          id: 'act-3',
+          title: 'Rational Equation Extraneous Root Problem Sheet',
+          type: 'Worksheet',
+          topic: 'Rational Functions',
+          term: 'Term 1',
+          dueDate: 'Next Week',
+          assignedTo: 'Grade 11 - All Sections',
+          submissionsCount: 0,
+          totalStudents: 25,
+          status: 'Active'
+        }
+      ]);
+      setSubmissions([]);
+      setTimeout(() => {
+        setIsResetting(false);
+        setIsResetModalOpen(false);
+        setResetMessage(null);
+      }, 1500);
+    } catch (e) {
+      setIsResetting(false);
+      setResetMessage('Failed to reset activities.');
+    }
+  };
+
   const handleCreateActivity = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -250,6 +316,18 @@ export default function TeacherActivitiesView({
             {submissions.filter(s => s.status === 'Pending Review').length} Pending
           </span>
         </button>
+
+        <div className="ml-auto flex items-center pr-1">
+          <button
+            type="button"
+            onClick={() => setIsResetModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-black transition-colors cursor-pointer"
+            title="Reset student submissions and restore default activity assignments"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset Activities</span>
+          </button>
+        </div>
       </div>
 
       {/* 1. ACTIVE ACTIVITIES */}
@@ -539,6 +617,69 @@ export default function TeacherActivitiesView({
           )}
         </div>
       )}
+
+      {/* Reset Activities Confirmation Modal */}
+      <AnimatePresence>
+        {isResetModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 border border-slate-200 shadow-2xl space-y-4 relative overflow-hidden"
+            >
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+                <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center shrink-0">
+                  <AlertOctagon className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Reset Activities & Tasks</h3>
+                  <p className="text-xs text-rose-600 font-bold">Clear Submissions & Reset Assignments</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed bg-rose-50/70 p-3.5 rounded-2xl border border-rose-100">
+                Are you sure you want to reset activities? This will purge student performance task submissions, reset oral recitation recordings, and restore default active assignments.
+              </p>
+
+              {resetMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 font-bold text-xs">
+                  {resetMessage}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsResetModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isResetting}
+                  onClick={handlePerformResetActivities}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-black rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                >
+                  {isResetting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Resetting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Confirm Reset</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

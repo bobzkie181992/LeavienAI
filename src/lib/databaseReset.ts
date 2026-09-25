@@ -9,8 +9,10 @@ import {
 import { UserProfile } from '../types';
 import { getLocalUsers, saveLocalUser, DEFAULT_ACCOUNTS } from './localAuth';
 
+export type DatabaseResetType = 'all' | 'results' | 'violations' | 'lessons' | 'activities';
+
 export interface ResetOptions {
-  type: 'all' | 'results' | 'violations';
+  type: DatabaseResetType;
 }
 
 /**
@@ -18,8 +20,10 @@ export interface ResetOptions {
  * - 'all': Wipes all student activities, scores, assessments, XP, step progress, oral recitations, transcripts, study requests, presentations views, and integrity violation logs across Firestore and Local Database.
  * - 'results': Wipes all assessment quiz, diagnostic, formative, and summative score records.
  * - 'violations': Resets all Alt-Tab violation logs, tab-out counters, and penalty scores to 0.
+ * - 'lessons': Resets all Lesson Plans, custom drafted/published lessons, student step progress, and slide presentation views.
+ * - 'activities': Resets all Student Activity Submissions, performance tasks, daily challenges, oral recitations, and math sprint records.
  */
-export async function performDatabaseReset(type: 'all' | 'results' | 'violations'): Promise<{ success: boolean; message: string }> {
+export async function performDatabaseReset(type: DatabaseResetType): Promise<{ success: boolean; message: string }> {
   try {
     // 1. FIREBASE FIRESTORE PURGE & RESET
     try {
@@ -44,7 +48,7 @@ export async function performDatabaseReset(type: 'all' | 'results' | 'violations
         }
 
         // Subcollection: flashcards
-        if (type === 'all') {
+        if (type === 'all' || type === 'activities') {
           try {
             const flashcardsRef = collection(db, `users/${uid}/flashcards`);
             const flashSnap = await getDocs(flashcardsRef);
@@ -88,15 +92,27 @@ export async function performDatabaseReset(type: 'all' | 'results' | 'violations
               formativeViolations: 0,
               violationLogs: []
             }).catch(() => {});
+          } else if (type === 'lessons') {
+            await updateDoc(doc(db, 'users', uid), {
+              stepProgress: {}
+            }).catch(() => {});
+          } else if (type === 'activities') {
+            await updateDoc(doc(db, 'users', uid), {
+              oralRecitations: []
+            }).catch(() => {});
           }
         }
       }
 
       // Clear top-level auxiliary collections in Firestore
-      if (type === 'all' || type === 'results') {
+      if (type === 'all' || type === 'results' || type === 'lessons' || type === 'activities') {
         const collectionsToWipe = type === 'all'
           ? ['summative_transcripts', 'oral_recitations', 'presentation_views', 'study_requests', 'chat_messages', 'teacher_reports']
-          : ['summative_transcripts', 'oral_recitations'];
+          : type === 'results'
+          ? ['summative_transcripts']
+          : type === 'lessons'
+          ? ['presentation_views']
+          : ['oral_recitations', 'study_requests'];
 
         for (const colName of collectionsToWipe) {
           try {
@@ -177,6 +193,8 @@ export async function performDatabaseReset(type: 'all' | 'results' | 'violations
           const key = localStorage.key(i);
           if (key && (
             key.startsWith('mathquest_results_') ||
+            key.startsWith('mathquest_lesson') ||
+            key.startsWith('mathquest_activity') ||
             key === 'mathquest_quiz_results' ||
             key === 'mathquest_diagnostic_exams' ||
             key === 'mathquest_violation_logs' ||
@@ -184,13 +202,22 @@ export async function performDatabaseReset(type: 'all' | 'results' | 'violations
             key === 'mathquest_step_progress' ||
             key === 'mathquest_xp_history' ||
             key === 'mathquest_daily_quests' ||
+            key === 'mathquest_daily_challenge' ||
+            key === 'mathquest_sprint_arena' ||
             key === 'mathquest_study_requests' ||
             key === 'mathquest_flashcards' ||
             key === 'mathquest_oral_recitations' ||
             key === 'mathquest_presentations' ||
             key === 'mathquest_custom_students' ||
+            key === 'mathquest_lesson_plans' ||
+            key === 'mathquest_custom_lessons' ||
+            key === 'mathquest_ilaw_lessons' ||
+            key === 'mathquest_activity_submissions' ||
+            key === 'mathquest_activities' ||
             key.includes('violation') ||
-            key.includes('quiz')
+            key.includes('quiz') ||
+            key.includes('lesson') ||
+            key.includes('activity')
           )) {
             keysToRemove.push(key);
           }
@@ -247,6 +274,87 @@ export async function performDatabaseReset(type: 'all' | 'results' | 'violations
         }
 
         localStorage.removeItem('mathquest_violation_logs');
+      } else if (type === 'lessons') {
+        users = users.map(u => {
+          if (u.role === 'student') {
+            return {
+              ...u,
+              stepProgress: {}
+            };
+          }
+          return u;
+        });
+        localStorage.setItem('mathquest_local_accounts_v1', JSON.stringify(users));
+
+        const rawSession = localStorage.getItem('mathquest_local_auth_session_v1');
+        if (rawSession) {
+          const sessionUser = JSON.parse(rawSession) as UserProfile;
+          if (sessionUser.role === 'student') {
+            localStorage.setItem('mathquest_local_auth_session_v1', JSON.stringify({
+              ...sessionUser,
+              stepProgress: {}
+            }));
+          }
+        }
+
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (
+            key === 'mathquest_lesson_plans' ||
+            key === 'mathquest_custom_lessons' ||
+            key === 'mathquest_ilaw_lessons' ||
+            key === 'mathquest_step_progress' ||
+            key === 'mathquest_presentation_progress' ||
+            key === 'mathquest_user_lessons' ||
+            key.includes('lesson_plan')
+          )) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+      } else if (type === 'activities') {
+        users = users.map(u => {
+          if (u.role === 'student') {
+            return {
+              ...u,
+              oralRecitations: []
+            };
+          }
+          return u;
+        });
+        localStorage.setItem('mathquest_local_accounts_v1', JSON.stringify(users));
+
+        const rawSession = localStorage.getItem('mathquest_local_auth_session_v1');
+        if (rawSession) {
+          const sessionUser = JSON.parse(rawSession) as UserProfile;
+          if (sessionUser.role === 'student') {
+            localStorage.setItem('mathquest_local_auth_session_v1', JSON.stringify({
+              ...sessionUser,
+              oralRecitations: []
+            }));
+          }
+        }
+
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (
+            key === 'mathquest_activity_submissions' ||
+            key === 'mathquest_activities' ||
+            key === 'mathquest_teacher_activities' ||
+            key === 'mathquest_daily_quests' ||
+            key === 'mathquest_daily_challenge' ||
+            key === 'mathquest_sprint_arena' ||
+            key === 'mathquest_flashcards' ||
+            key === 'mathquest_oral_recitations' ||
+            key.includes('activity_submission') ||
+            key.includes('activity_grading')
+          )) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
       }
     } catch (localErr) {
       console.warn("Local storage reset error:", localErr);
@@ -258,10 +366,14 @@ export async function performDatabaseReset(type: 'all' | 'results' | 'violations
     return {
       success: true,
       message: type === 'all'
-        ? 'Full System Reset complete: All activities, assessment scores, and integrity logs have been wiped.'
+        ? 'Full System Reset complete: All activities, lesson progress, assessment scores, and integrity logs have been wiped.'
         : type === 'results'
         ? 'All assessment quiz and diagnostic results have been wiped.'
-        : 'All academic integrity violation logs and tab-out counters have been reset to zero.'
+        : type === 'violations'
+        ? 'All academic integrity violation logs and tab-out counters have been reset to zero.'
+        : type === 'lessons'
+        ? 'All Lesson Plans, customized lesson drafts, student step progress, and presentation views have been reset to baseline.'
+        : 'All Student Activity Submissions, performance tasks, daily challenges, oral recitations, and math sprint records have been reset.'
     };
   } catch (err: any) {
     console.error("Critical error in performDatabaseReset:", err);

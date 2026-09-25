@@ -20,12 +20,13 @@ import {
   RotateCcw,
   AlertOctagon,
   RefreshCw,
-  FileSpreadsheet
+  FileSpreadsheet,
+  BookOpen
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { useAcademicTerms } from '../../hooks/useFirebase';
 import { getIntegritySettings, saveIntegritySettings } from '../../lib/integritySettings';
-import { performDatabaseReset } from '../../lib/databaseReset';
+import { performDatabaseReset, DatabaseResetType } from '../../lib/databaseReset';
 
 interface TeacherSettingsViewProps {
   profile: UserProfile;
@@ -42,13 +43,13 @@ export default function TeacherSettingsView({ profile }: TeacherSettingsViewProp
   const [quarterlyExamWeight, setQuarterlyExamWeight] = useState(25);
   const [passingThreshold, setPassingThreshold] = useState(75);
   const [universalDeductionPoints, setUniversalDeductionPoints] = useState<number>(() => getIntegritySettings().violationDeductionPoints);
-  const [testViolations, setTestViolations] = useState<number>(3);
+  const [testViolations, setTestViolations] = useState<number>(2);
   const [testRawScore, setTestRawScore] = useState<number>(10);
   const [isSaved, setIsSaved] = useState(false);
 
   // Database Reset State
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
-  const [resetType, setResetType] = useState<'all' | 'results' | 'violations'>('all');
+  const [resetType, setResetType] = useState<DatabaseResetType>('all');
   const [confirmInput, setConfirmInput] = useState('');
   const [isResetting, setIsResetting] = useState(false);
   const [resetStatusMessage, setResetStatusMessage] = useState<string | null>(null);
@@ -490,7 +491,7 @@ export default function TeacherSettingsView({ profile }: TeacherSettingsViewProp
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -506,6 +507,42 @@ export default function TeacherSettingsView({ profile }: TeacherSettingsViewProp
                 <div className="font-black text-slate-900 group-hover:text-white text-xs mb-1">Reset All in Database</div>
                 <p className="text-[10px] text-slate-500 group-hover:text-rose-100 leading-tight">
                   Wipe all student results, violation logs, custom accounts & restore pristine defaults.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setResetType('lessons');
+                  setIsResetModalOpen(true);
+                }}
+                className="p-4 bg-white hover:bg-emerald-600 hover:text-white border border-emerald-200 rounded-2xl text-left transition-all group shadow-2xs cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 group-hover:text-emerald-100">Lesson Plans & Progress</span>
+                  <BookOpen className="w-4 h-4 text-emerald-500 group-hover:text-white transition-colors" />
+                </div>
+                <div className="font-black text-slate-900 group-hover:text-white text-xs mb-1">Reset Lessons & Progress</div>
+                <p className="text-[10px] text-slate-500 group-hover:text-emerald-100 leading-tight">
+                  Reset custom drafted lesson plans, student step completion, and presentation views.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setResetType('activities');
+                  setIsResetModalOpen(true);
+                }}
+                className="p-4 bg-white hover:bg-sky-600 hover:text-white border border-sky-200 rounded-2xl text-left transition-all group shadow-2xs cursor-pointer"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-sky-600 group-hover:text-sky-100">Activities & Tasks</span>
+                  <Award className="w-4 h-4 text-sky-500 group-hover:text-white transition-colors" />
+                </div>
+                <div className="font-black text-slate-900 group-hover:text-white text-xs mb-1">Reset Activities & Submissions</div>
+                <p className="text-[10px] text-slate-500 group-hover:text-sky-100 leading-tight">
+                  Clear student performance task submissions, problem sets, daily challenges & quests.
                 </p>
               </button>
 
@@ -718,6 +755,8 @@ export default function TeacherSettingsView({ profile }: TeacherSettingsViewProp
                   <div>
                     <h3 className="text-lg font-black text-slate-900">
                       {resetType === 'all' && 'Confirm Reset All in Database'}
+                      {resetType === 'lessons' && 'Confirm Reset Lessons & Progress'}
+                      {resetType === 'activities' && 'Confirm Reset Activities & Submissions'}
                       {resetType === 'results' && 'Confirm Clear Assessment Results'}
                       {resetType === 'violations' && 'Confirm Reset Violation Logs'}
                     </h3>
@@ -743,7 +782,17 @@ export default function TeacherSettingsView({ profile }: TeacherSettingsViewProp
               <div className="space-y-3 text-xs text-slate-600">
                 {resetType === 'all' && (
                   <p className="leading-relaxed bg-rose-50 p-3.5 rounded-2xl border border-rose-100 text-rose-950 font-medium">
-                    This action will clear all student assessment scores, diagnostic results, formative quiz records, and Alt-Tab violation logs from the database, and restore default accounts.
+                    This action will clear all student assessment scores, lesson progress, activity submissions, diagnostic results, formative quiz records, and Alt-Tab violation logs from the database, and restore default accounts.
+                  </p>
+                )}
+                {resetType === 'lessons' && (
+                  <p className="leading-relaxed bg-emerald-50 p-3.5 rounded-2xl border border-emerald-100 text-emerald-950 font-medium">
+                    This action will reset custom drafted lesson plans, restore standard DepEd Grade 11 ILAW lesson templates, reset student step completion progress, and clear slide presentation views.
+                  </p>
+                )}
+                {resetType === 'activities' && (
+                  <p className="leading-relaxed bg-sky-50 p-3.5 rounded-2xl border border-sky-100 text-sky-950 font-medium">
+                    This action will purge all student performance task submissions, problem sets, oral recitation recordings, daily challenge records, and math sprint leaderboard entries.
                   </p>
                 )}
                 {resetType === 'results' && (

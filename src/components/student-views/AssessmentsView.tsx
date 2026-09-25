@@ -22,6 +22,7 @@ import {
 import { Topic, QuizResult, UserProfile, Quiz, SummativeAssessment, isValidatedOrActive } from '../../types';
 import { getIntegritySettings } from '../../lib/integritySettings';
 import StudentViolationReportModal from '../StudentViolationReportModal';
+import QuizResultReviewModal from '../QuizResultReviewModal';
 
 interface AssessmentsViewProps {
   topics: Topic[];
@@ -45,6 +46,7 @@ export default function AssessmentsView({
   const [activeSubTab, setActiveSubTab] = useState<'quizzes' | 'exams' | 'results'>(initialTab);
   const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
   const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedResultForReview, setSelectedResultForReview] = useState<QuizResult | null>(null);
 
   // Filter topics
   const displayedTopics = topics.filter(t => {
@@ -527,11 +529,13 @@ export default function AssessmentsView({
                     return (
                       <div
                         key={idx}
-                        className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
+                        onClick={() => setSelectedResultForReview(res)}
+                        className="p-4 bg-slate-50/80 hover:bg-indigo-50/40 rounded-2xl border border-slate-200/80 hover:border-indigo-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs transition-all cursor-pointer group"
+                        title="Click to review question item breakdown and explanations"
                       >
                         <div className="space-y-1 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-black text-slate-900 text-sm">
+                            <span className="font-black text-slate-900 group-hover:text-indigo-900 text-sm transition-colors">
                               {res.quizId.replace('custom-', '').replace('adaptive-', 'Adaptive: ')}
                             </span>
                             <span className="text-[10px] uppercase font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
@@ -540,6 +544,7 @@ export default function AssessmentsView({
                           </div>
                           <p className="text-[11px] text-slate-500 flex items-center gap-2">
                             <span>Completed {new Date(res.timestamp).toLocaleDateString()} at {new Date(res.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="text-indigo-600 font-bold group-hover:underline">• Click to Review Solutions</span>
                           </p>
                         </div>
 
@@ -583,6 +588,14 @@ export default function AssessmentsView({
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
         student={profile}
+      />
+
+      {/* Quiz Result Review Modal */}
+      <QuizResultReviewModal
+        isOpen={!!selectedResultForReview}
+        onClose={() => setSelectedResultForReview(null)}
+        result={selectedResultForReview}
+        topics={topics}
       />
     </div>
   );

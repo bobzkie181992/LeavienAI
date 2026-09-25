@@ -207,6 +207,14 @@ export function useUserProfile(uid: string | undefined) {
     };
 
     fetchProfile();
+
+    const handleReset = () => {
+      fetchProfile();
+    };
+    window.addEventListener('mathquest_database_reset', handleReset);
+    return () => {
+      window.removeEventListener('mathquest_database_reset', handleReset);
+    };
   }, [uid]);
 
   const createProfile = async (
@@ -772,6 +780,14 @@ export function useQuizHistory(uid: string | undefined) {
       }
     };
     fetchResults();
+
+    const handleReset = () => {
+      fetchResults();
+    };
+    window.addEventListener('mathquest_database_reset', handleReset);
+    return () => {
+      window.removeEventListener('mathquest_database_reset', handleReset);
+    };
   }, [uid]);
 
   const saveResult = async (result: Omit<QuizResult, 'timestamp'>) => {
