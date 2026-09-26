@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Topic, QuizResult, UserProfile } from '../../types';
 import { ILAW_LESSON_PLANS } from '../../data/ilawLessons';
+import { useIlawLessons } from '../../hooks/useIlawLessons';
 import { GRADE_11_SUBJECTS } from '../../data/grade11SampleData';
 import { SubjectCard } from '../ui/SubjectCard';
 
@@ -46,6 +47,7 @@ export default function CurriculumView({
   onSaveQuizResult,
   onAddXP
 }: CurriculumViewProps) {
+  const { lessons: ilawLessons } = useIlawLessons();
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'ilaw' | 'subjects' | 'competencies'>(initialTab);
   const [selectedTermFilter, setSelectedTermFilter] = useState<string>('all');
 
@@ -196,7 +198,8 @@ export default function CurriculumView({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredTopics.map((topic, index) => {
               const stats = getTopicStats(topic);
-              const plan = topic.lessonPlan?.ilaw ? topic.lessonPlan : (ILAW_LESSON_PLANS[topic.id] || topic.lessonPlan);
+              const livePlan = ilawLessons.find(l => (l.topicId === topic.id || l.id === topic.id) && l.status !== 'Draft');
+              const plan = livePlan || (topic.lessonPlan?.ilaw ? topic.lessonPlan : (ILAW_LESSON_PLANS[topic.id] || topic.lessonPlan));
 
               return (
                 <div
@@ -284,7 +287,7 @@ export default function CurriculumView({
 
           <div className="grid gap-4">
             {topics.map((topic, idx) => {
-              const ilawPlan = ILAW_LESSON_PLANS[topic.id] || topic.lessonPlan;
+              const ilawPlan = ilawLessons.find(l => (l.topicId === topic.id || l.id === topic.id) && l.status !== 'Draft') || ILAW_LESSON_PLANS[topic.id] || topic.lessonPlan;
               const ilawData = ilawPlan?.ilaw;
 
               return (
@@ -420,8 +423,9 @@ export default function CurriculumView({
 
             <div className="grid gap-2.5 pt-2">
               {topics.flatMap(t => {
-                const ilaw = ILAW_LESSON_PLANS[t.id]?.ilaw || t.lessonPlan?.ilaw;
-                const comps = ilaw?.intentions.competencies || t.lessonPlan?.learningCompetencies || [t.title];
+                const livePlan = ilawLessons.find(l => (l.topicId === t.id || l.id === t.id) && l.status !== 'Draft');
+                const ilaw = livePlan?.ilaw || ILAW_LESSON_PLANS[t.id]?.ilaw || t.lessonPlan?.ilaw;
+                const comps = ilaw?.intentions.competencies || livePlan?.learningCompetencies || t.lessonPlan?.learningCompetencies || [t.title];
                 return comps.map(c => ({ competency: c, topic: t }));
               }).map((item, cIdx) => (
                 <div 

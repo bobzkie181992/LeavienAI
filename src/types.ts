@@ -397,6 +397,8 @@ export interface LessonPlan {
   };
   assessmentPlan: string;
   reflectionNotes?: string;
+  status?: 'Published' | 'Draft';
+  updatedAt?: string;
 }
 
 export interface Topic {

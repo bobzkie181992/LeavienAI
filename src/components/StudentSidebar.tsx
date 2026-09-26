@@ -33,6 +33,10 @@ import { UserProfile } from '../types';
 
 export type StudentNavSection = 
   | 'dashboard'
+  | 'lessons'
+  | 'lessons-my'
+  | 'lessons-ilaw'
+  | 'lessons-topics'
   | 'curriculum'
   | 'curriculum-overview'
   | 'curriculum-ilaw'
@@ -101,6 +105,7 @@ export default function StudentSidebar({
 }: StudentSidebarProps) {
   // Expanded groups state
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    lessons: true,
     curriculum: true,
     activities: false,
     assessments: false,
@@ -122,12 +127,22 @@ export default function StudentSidebar({
       icon: <Home className="w-4 h-4" />
     },
     {
+      id: 'lessons',
+      label: 'My Lessons',
+      icon: <BookOpen className="w-4 h-4 text-emerald-500" />,
+      subItems: [
+        { id: 'lessons-my', label: 'All Lessons (DLP)', icon: <FileText className="w-3.5 h-3.5 text-emerald-600" /> },
+        { id: 'lessons-ilaw', label: 'ILAW Exemplars', icon: <Compass className="w-3.5 h-3.5 text-amber-500" /> },
+        { id: 'lessons-topics', label: 'Topic Modules', icon: <Layers className="w-3.5 h-3.5 text-indigo-500" /> }
+      ]
+    },
+    {
       id: 'curriculum',
       label: 'Curriculum',
-      icon: <BookOpen className="w-4 h-4 text-indigo-500" />,
+      icon: <Layers className="w-4 h-4 text-indigo-500" />,
       subItems: [
         { id: 'curriculum-overview', label: 'Overview', icon: <Layers className="w-3.5 h-3.5" /> },
-        { id: 'curriculum-ilaw', label: 'ILAW Lessons', icon: <Compass className="w-3.5 h-3.5 text-amber-500" /> },
+        { id: 'curriculum-ilaw', label: 'ILAW Framework', icon: <Compass className="w-3.5 h-3.5 text-amber-500" /> },
         { id: 'curriculum-subjects', label: 'My Subjects', icon: <GraduationCap className="w-3.5 h-3.5" /> },
         { id: 'curriculum-competencies', label: 'Learning Competencies', icon: <Sigma className="w-3.5 h-3.5" /> }
       ]

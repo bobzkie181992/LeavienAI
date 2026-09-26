@@ -58,17 +58,18 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
   const getSectionTitle = (sec: TeacherNavSection) => {
     switch (sec) {
       case 'dashboard': return { title: 'Faculty Dashboard', subtitle: 'Academic Command & Monitoring Overview' };
-      // Curriculum
-      case 'curriculum-overview': return { title: 'Curriculum • Overview', subtitle: 'Master course outline across all Grade 11 terms' };
-      case 'curriculum-ilaw': return { title: 'Curriculum • DepEd ILAW Lessons', subtitle: 'DepEd Order No. 016, s. 2024 four-pillar lesson frameworks' };
-      case 'curriculum-competencies': return { title: 'Curriculum • Learning Competencies', subtitle: 'Most Essential Learning Competencies (MELCs) directory' };
-      case 'curriculum-map': return { title: 'Curriculum • Course Map & Pacing', subtitle: 'Sequential progression and 18-week term distribution' };
-      // Lesson Management
-      case 'lessons-my': return { title: 'Lesson Management • My Lessons', subtitle: 'Teacher-authored Daily Lesson Plans (DLP)' };
-      case 'lessons-create': return { title: 'Lesson Management • Create Lesson', subtitle: 'Author new DepEd ILAW lesson plan and link diagnostics' };
-      case 'lessons-drafts': return { title: 'Lesson Management • Drafts', subtitle: 'Work-in-progress lesson plans' };
-      case 'lessons-published': return { title: 'Lesson Management • Published Lessons', subtitle: 'Active lessons available to students' };
-      case 'lessons-templates': return { title: 'Lesson Management • Lesson Templates', subtitle: 'Standard DepEd DLP, DLL, and 4-A templates' };
+      // Curriculum & Lessons
+      case 'curriculum-overview': return { title: 'Curriculum & Lessons • Overview', subtitle: 'Master course outline and quarterly pacing across Grade 11 General Mathematics' };
+      case 'curriculum-ilaw': 
+      case 'lessons-my': return { title: 'Curriculum & Lessons • DepEd ILAW Lessons & DLP', subtitle: 'DepEd Order No. 016, s. 2024 four-pillar lesson plans and printable DLPs' };
+      case 'lessons-create': return { title: 'Curriculum & Lessons • Create Lesson', subtitle: 'Author new DepEd ILAW lesson plan with Intentions, Experience, Assessing & Ways Forward' };
+      case 'lessons-import': return { title: 'Curriculum & Lessons • Import from DOCX', subtitle: 'Extract and import DepEd ILAW Daily Lesson Plans directly from Microsoft Word documents' };
+      case 'lessons-drafts': return { title: 'Curriculum & Lessons • Draft Lessons', subtitle: 'Work-in-progress lesson plans' };
+      case 'lessons-published': return { title: 'Curriculum & Lessons • Published Lessons', subtitle: 'Active lessons available to students' };
+      case 'curriculum-competencies': return { title: 'Curriculum & Lessons • Learning Competencies', subtitle: 'Most Essential Learning Competencies (MELCs) directory' };
+      case 'curriculum-map': return { title: 'Curriculum & Lessons • Course Map & Pacing', subtitle: 'Sequential progression and 18-week term distribution' };
+      case 'curriculum-hierarchy': return { title: 'Curriculum & Lessons • Structure Tree', subtitle: 'Grade 11 curriculum hierarchy by strand, term, and unit' };
+      case 'lessons-templates': return { title: 'Curriculum & Lessons • Lesson Templates', subtitle: 'Standard DepEd DLP, DLL, and 4-A templates' };
       // Activities
       case 'activities-create': return { title: 'Activities • Create Activity', subtitle: 'Assign performance tasks, case studies, or worksheets' };
       case 'activities-active': return { title: 'Activities • Active Activities', subtitle: 'Class activities and submission deadlines' };
@@ -160,9 +161,9 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
                   onOpenLesson={(lessonId) => setCurrentSection('lessons-my')}
                 />
               </motion.div>
-            ) : currentSection.startsWith('curriculum') ? (
+            ) : (currentSection.startsWith('curriculum') || currentSection.startsWith('lessons')) ? (
               <motion.div
-                key={`curriculum-${currentSection}`}
+                key={`curriculum-lessons-${currentSection}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -171,33 +172,20 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
                 <TeacherCurriculumView
                   topics={topics}
                   initialSubTab={
-                    currentSection === 'curriculum-ilaw' ? 'ilaw' :
+                    currentSection === 'curriculum-ilaw' || currentSection === 'lessons-my' ? 'ilaw' :
+                    currentSection === 'lessons-create' ? 'create' :
+                    currentSection === 'lessons-import' ? 'import' :
+                    currentSection === 'lessons-drafts' ? 'drafts' :
+                    currentSection === 'lessons-published' ? 'published' :
                     currentSection === 'curriculum-competencies' ? 'competencies' :
                     currentSection === 'curriculum-map' ? 'map' :
+                    currentSection === 'curriculum-hierarchy' ? 'hierarchy' :
+                    currentSection === 'lessons-templates' ? 'templates' :
                     'overview'
                   }
                   onSelectTopicForEdit={(topic) => {
                     setCurrentSection('lessons-create');
                   }}
-                />
-              </motion.div>
-            ) : currentSection.startsWith('lessons') ? (
-              <motion.div
-                key={`lessons-${currentSection}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15 }}
-              >
-                <TeacherLessonManagerView
-                  topics={topics}
-                  initialSubTab={
-                    currentSection === 'lessons-create' ? 'create' :
-                    currentSection === 'lessons-drafts' ? 'drafts' :
-                    currentSection === 'lessons-published' ? 'published' :
-                    currentSection === 'lessons-templates' ? 'templates' :
-                    'my'
-                  }
                 />
               </motion.div>
             ) : currentSection.startsWith('activities') ? (

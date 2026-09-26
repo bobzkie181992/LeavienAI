@@ -253,6 +253,30 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["title", "category", "quarter", "targetType", "grade", "section", "rating", "summary", "teacherUid", "teacherName", "createdAt"]
+    },
+    "ILAWLesson": {
+      "title": "DepEd ILAW Lesson Plan",
+      "description": "DepEd Order No. 016, s. 2024 ILAW instructional lesson plan with the 4 pillars (Intentions, Learning Experience, Assessing Learning, Ways Forward)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "topicId": { "type": "string" },
+        "title": { "type": "string" },
+        "gradeLevel": { "type": "string" },
+        "duration": { "type": "string" },
+        "subject": { "type": "string" },
+        "term": { "type": "string" },
+        "week": { "type": "string" },
+        "section": { "type": "string" },
+        "status": { "type": "string" },
+        "framework": { "type": "string" },
+        "learningCompetencies": { "type": "array" },
+        "objectives": { "type": "object" },
+        "ilaw": { "type": "object" },
+        "weeklySchedule": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "topicId", "title", "subject", "gradeLevel"]
     }
   },
   "firestore": {
@@ -283,6 +307,10 @@
     "/curriculum/{topicId}": {
       "schema": "object",
       "description": "Grade 11 curriculum topics, quizzes, and problems"
+    },
+    "/ilaw_lessons/{lessonId}": {
+      "schema": "ILAWLesson",
+      "description": "DepEd D.O. 016 ILAW lesson plans created, edited, or maintained by faculty"
     },
     "/study_requests/{requestId}": {
       "schema": "StudyRequest",

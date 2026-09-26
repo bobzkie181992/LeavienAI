@@ -416,6 +416,10 @@ export default function StudentModule({
   const getSectionTitle = (sec: StudentNavSection) => {
     switch (sec) {
       case 'dashboard': return 'Dashboard';
+      case 'lessons':
+      case 'lessons-my': return 'My Lessons • All Daily Lessons';
+      case 'lessons-ilaw': return 'My Lessons • DepEd ILAW Exemplars';
+      case 'lessons-topics': return 'My Lessons • Topic Modules';
       case 'curriculum':
       case 'curriculum-overview': return 'Curriculum • Overview';
       case 'curriculum-ilaw': return 'Curriculum • DepEd ILAW Lessons';
@@ -702,6 +706,28 @@ export default function StudentModule({
                     }
                   }}
                   onCancel={() => setIsTakingDiagnostic(false)}
+                />
+              </motion.div>
+            ) : currentSection.startsWith('lessons') ? (
+              <motion.div
+                key={`sec-lessons-${currentSection}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <CurriculumView
+                  topics={topics}
+                  results={results}
+                  profile={profile}
+                  initialTab={
+                    currentSection === 'lessons-topics' ? 'overview' :
+                    'ilaw'
+                  }
+                  onSelectTopic={setSelectedTopic}
+                  onOpenTopicDLP={setSelectedTopic}
+                  onStartCompetencyPractice={handleStartAdaptivePractice}
+                  onSaveQuizResult={saveResult}
+                  onAddXP={addXP}
                 />
               </motion.div>
             ) : currentSection.startsWith('curriculum') ? (

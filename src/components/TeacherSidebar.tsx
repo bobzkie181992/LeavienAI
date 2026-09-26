@@ -32,14 +32,15 @@ import { UserProfile } from '../types';
 
 export type TeacherNavSection = 
   | 'dashboard'
-  // Curriculum
+  // Curriculum & Lessons (Merged)
   | 'curriculum-overview'
   | 'curriculum-ilaw'
+  | 'curriculum-hierarchy'
   | 'curriculum-competencies'
   | 'curriculum-map'
-  // Lesson Management
   | 'lessons-my'
   | 'lessons-create'
+  | 'lessons-import'
   | 'lessons-drafts'
   | 'lessons-published'
   | 'lessons-templates'
@@ -108,30 +109,22 @@ export default function TeacherSidebar({
   onCloseMobile,
   onLogout
 }: TeacherSidebarProps) {
-  // Navigation groups definition exactly matching the user request
+  // Navigation groups definition: Unified Curriculum & Lesson Management
   const navGroups: NavGroup[] = [
     {
-      id: 'curriculum',
-      label: 'Curriculum',
-      icon: <BookOpen className="w-4 h-4 text-sky-400" />,
-      defaultOpen: currentSection.startsWith('curriculum'),
+      id: 'curriculum-lessons',
+      label: 'Curriculum & Lessons',
+      icon: <BookOpen className="w-4 h-4 text-emerald-400" />,
+      defaultOpen: currentSection.startsWith('curriculum') || currentSection.startsWith('lessons'),
       children: [
         { id: 'curriculum-overview', label: 'Curriculum Overview' },
-        { id: 'curriculum-ilaw', label: 'ILAW Lessons' },
-        { id: 'curriculum-competencies', label: 'Learning Competencies' },
-        { id: 'curriculum-map', label: 'Curriculum Map' }
-      ]
-    },
-    {
-      id: 'lessons',
-      label: 'Lesson Management',
-      icon: <Edit3 className="w-4 h-4 text-emerald-400" />,
-      defaultOpen: currentSection.startsWith('lessons'),
-      children: [
-        { id: 'lessons-my', label: 'My Lessons' },
-        { id: 'lessons-create', label: 'Create Lesson' },
-        { id: 'lessons-drafts', label: 'Drafts' },
+        { id: 'lessons-my', label: 'DepEd ILAW Lessons & DLP' },
+        { id: 'lessons-create', label: 'Create ILAW Lesson' },
+        { id: 'lessons-drafts', label: 'Draft Lessons' },
         { id: 'lessons-published', label: 'Published Lessons' },
+        { id: 'curriculum-competencies', label: 'MELCs Competencies' },
+        { id: 'curriculum-map', label: 'Curriculum Progression Map' },
+        { id: 'curriculum-hierarchy', label: 'Curriculum Structure Tree' },
         { id: 'lessons-templates', label: 'Lesson Templates' }
       ]
     },

@@ -27,6 +27,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // DepEd D.O. 016 ILAW lesson plans
+    match /ilaw_lessons/{lessonId} {
+      allow read, write: if true;
+    }
+
     // Collaborative study requests between students
     match /study_requests/{requestId} {
       allow read, write: if true;
