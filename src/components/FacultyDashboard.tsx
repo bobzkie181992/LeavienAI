@@ -12,6 +12,7 @@ import { getIntegritySettings } from '../lib/integritySettings';
 
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import StudentViolationReportModal from './StudentViolationReportModal';
+import { useSections } from '../hooks/useSections';
 
 interface FacultyDashboardProps {
   facultyProfile?: UserProfile;
@@ -19,6 +20,7 @@ interface FacultyDashboardProps {
 
 export default function FacultyDashboard({ facultyProfile }: FacultyDashboardProps = {}) {
   const { students, loading, addStudent, deleteStudent, editStudent, exportResearchData, awardOralRecitation } = useAllStudents();
+  const { sections: availableSections } = useSections();
   const [deletingStudentUid, setDeletingStudentUid] = useState<string | null>(null);
   const [deletingStudentName, setDeletingStudentName] = useState<string>('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -150,7 +152,10 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
       (s.email && s.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (s.lrn && s.lrn.includes(searchTerm));
     const matchesGrade = gradeFilter === 'All' || (s.grade || 'Grade 11') === gradeFilter;
-    const matchesSection = sectionFilter === 'All' || (s.section || 'STEM-A') === sectionFilter;
+    const matchesSection = sectionFilter === 'All' || 
+      (s.section || 'STEM-A') === sectionFilter ||
+      (s.section && sectionFilter.toLowerCase().includes(s.section.toLowerCase())) ||
+      (s.section && s.section.toLowerCase().includes(sectionFilter.toLowerCase()));
     return matchesSearch && matchesGrade && matchesSection;
   });
 
@@ -434,13 +439,12 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
             <select
               value={sectionFilter}
               onChange={(e) => setSectionFilter(e.target.value)}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500"
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 max-w-[180px] truncate"
             >
               <option value="All">All Sections</option>
-              <option value="STEM-A">STEM-A</option>
-              <option value="STEM-B">STEM-B</option>
-              <option value="ABM-1">ABM-1</option>
-              <option value="HUMSS-1">HUMSS-1</option>
+              {availableSections.map((sec) => (
+                <option key={sec.id} value={sec.name}>{sec.name}</option>
+              ))}
             </select>
 
             {(gradeFilter !== 'All' || sectionFilter !== 'All') && (
@@ -722,11 +726,17 @@ export default function FacultyDashboard({ facultyProfile }: FacultyDashboardPro
                     <input
                       type="text"
                       required
+                      list="faculty-sections-datalist"
                       value={newStudentSection}
                       onChange={(e) => setNewStudentSection(e.target.value)}
-                      placeholder="e.g. STEM-A"
+                      placeholder="e.g. Grade 11 - STEM A (Gauss)"
                       className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 text-sm"
                     />
+                    <datalist id="faculty-sections-datalist">
+                      {availableSections.map((sec) => (
+                        <option key={sec.id} value={sec.name} />
+                      ))}
+                    </datalist>
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
