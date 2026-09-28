@@ -38,6 +38,8 @@ import {
   isValidatedOrActive,
   SummativeAssessment 
 } from '../types';
+import { logAltTabViolation } from '../lib/violationLogger';
+import { getIntegritySettings } from '../lib/integritySettings';
 
 import StudentSidebar, { StudentNavSection } from '../components/StudentSidebar';
 import TopNavHeader from '../components/TopNavHeader';
@@ -105,7 +107,7 @@ interface StudentModuleProps {
   userUid: string;
   addXP: (amount: number) => void;
   saveResult: (result: Omit<QuizResult, 'timestamp'>) => void;
-  saveDiagnosticResult: (ability: string, scores: Record<string, number>, pathway?: LearningPathway, violations?: number) => void;
+  saveDiagnosticResult: (ability: string, scores: Record<string, number>, pathway?: LearningPathway, violations?: number, testType?: 'pre-test' | 'post-test', totalItems?: number) => void;
   savePathwayProgress: (pathway: LearningPathway | null) => void;
   updateDisplayName?: (newName: string) => Promise<void>;
   updateProfileDetails?: (newName: string, grade: string, section: string, lrn?: string) => Promise<void>;
@@ -137,6 +139,7 @@ export default function StudentModule({
   const [quizInitialMode, setQuizInitialMode] = useState<'diagnostic' | 'assessment' | 'adaptive' | 'standard' | 'timed' | undefined>(undefined);
   const [isViewingPathway, setIsViewingPathway] = useState(false);
   const [isTakingDiagnostic, setIsTakingDiagnostic] = useState(false);
+  const [diagnosticTestType, setDiagnosticTestType] = useState<'pre-test' | 'post-test'>('pre-test');
   const [activeSummativeAssessment, setActiveSummativeAssessment] = useState<SummativeAssessment | null>(null);
 
   const currentUserId = userUid || profile.uid;
@@ -171,52 +174,95 @@ export default function StudentModule({
   const [showAltTabWarning, setShowAltTabWarning] = useState(false);
 
   useEffect(() => {
-    const isTesting = !!(activeQuiz || isTakingDiagnostic || activeSummativeAssessment || isSprintArenaOpen || isDailyChallengeOpen);
+    // Only monitor standalone testing activities in StudentModule that don't have their own built-in integrity engine
+    const isStandaloneTesting = !activeQuiz && !isTakingDiagnostic && !activeSummativeAssessment && !!(isSprintArenaOpen || isDailyChallengeOpen);
     
-    if (!isTesting) {
+    if (!isStandaloneTesting) {
       setTabOutCount(0);
       setShowAltTabWarning(false);
       return;
     }
 
     let wasAway = false;
+    let awayStartTime = 0;
+    let lastViolationTime = 0;
+
+    const triggerStandaloneViolation = () => {
+      const now = Date.now();
+      if (now - lastViolationTime < 1500) return;
+      lastViolationTime = now;
+
+      const timeAway = awayStartTime > 0 ? Math.max(1, Math.round((now - awayStartTime) / 1000)) : 3;
+      playWarningSound();
+      setTabOutCount(prev => prev + 1);
+      setShowAltTabWarning(true);
+
+      const activeUserId = userUid || profile.uid;
+      if (activeUserId) {
+        logAltTabViolation(
+          activeUserId,
+          'Formative',
+          isSprintArenaOpen ? 'Math Sprint Arena' : 'Daily Challenge',
+          undefined,
+          undefined,
+          timeAway
+        );
+      }
+    };
+
+    const handleUserLeft = () => {
+      if (!wasAway) {
+        wasAway = true;
+        awayStartTime = Date.now();
+      }
+    };
+
+    const handleUserReturned = () => {
+      if (wasAway) {
+        triggerStandaloneViolation();
+        wasAway = false;
+        awayStartTime = 0;
+      }
+    };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        wasAway = true;
+        handleUserLeft();
       } else {
-        if (wasAway) {
-          wasAway = false;
-          playWarningSound();
-          setTabOutCount(prev => prev + 1);
-          setShowAltTabWarning(true);
-        }
+        handleUserReturned();
       }
     };
 
-    const handleWindowBlur = () => {
-      wasAway = true;
+    const handleBlur = () => {
+      handleUserLeft();
     };
 
-    const handleWindowFocus = () => {
-      if (wasAway) {
-        wasAway = false;
-        playWarningSound();
-        setTabOutCount(prev => prev + 1);
-        setShowAltTabWarning(true);
-      }
+    const handleFocus = () => {
+      handleUserReturned();
+    };
+
+    const handlePageHide = () => {
+      handleUserLeft();
+    };
+
+    const handlePageShow = () => {
+      handleUserReturned();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('blur', handleWindowBlur);
-    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('pageshow', handlePageShow);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('blur', handleWindowBlur);
-      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
     };
-  }, [activeQuiz, isTakingDiagnostic, activeSummativeAssessment, isSprintArenaOpen, isDailyChallengeOpen]);
+  }, [activeQuiz, isTakingDiagnostic, activeSummativeAssessment, isSprintArenaOpen, isDailyChallengeOpen, userUid, profile.uid]);
 
   const currentRank = useMemo(() => {
     return getRankByLevel(profile.level);
@@ -326,10 +372,11 @@ export default function StudentModule({
   };
 
   // Handler for Retaking Diagnostic
-  const handleRetakeDiagnostic = () => {
+  const handleRetakeDiagnostic = (type: 'pre-test' | 'post-test' = 'pre-test') => {
     setSelectedTopic(null);
     setActiveQuiz(null);
     setIsViewingPathway(false);
+    setDiagnosticTestType(type);
     setIsTakingDiagnostic(true);
   };
 
@@ -416,10 +463,6 @@ export default function StudentModule({
   const getSectionTitle = (sec: StudentNavSection) => {
     switch (sec) {
       case 'dashboard': return 'Dashboard';
-      case 'lessons':
-      case 'lessons-my': return 'My Lessons • All Daily Lessons';
-      case 'lessons-ilaw': return 'My Lessons • DepEd ILAW Exemplars';
-      case 'lessons-topics': return 'My Lessons • Topic Modules';
       case 'curriculum':
       case 'curriculum-overview': return 'Curriculum • Overview';
       case 'curriculum-ilaw': return 'Curriculum • DepEd ILAW Lessons';
@@ -432,7 +475,6 @@ export default function StudentModule({
       case 'assessments':
       case 'assessments-diagnostic': return 'Assessments • Diagnostic Assessment';
       case 'assessments-formative': return 'Assessments • Formative Assessment';
-      case 'assessments-quizzes': return 'Assessments • Quizzes';
       case 'assessments-exams': return 'Assessments • Summative Exams (TOS)';
       case 'assessments-results': return 'Assessments • My Results';
       case 'resources':
@@ -616,17 +658,25 @@ export default function StudentModule({
                     setActiveQuiz(null);
                     setQuizInitialMode(undefined);
                   }}
-                  onComplete={(xp, score, total, itemResponses, abilityEstimate, mathAbilityDiagnosis, violations, isCompetent, modeUsed) => {
+                  onComplete={(xp, score, total, itemResponses, abilityEstimate, mathAbilityDiagnosis, violations, isCompetent, modeUsed, rawScore) => {
+                    const deductionRate = getIntegritySettings().violationDeductionPoints;
+                    const vCount = violations || 0;
+                    const penaltyPts = vCount * deductionRate;
+                    const trueRawScore = typeof rawScore === 'number' ? rawScore : (score + penaltyPts);
+
                     addXP(xp);
                     saveResult({
                       userId: userUid,
                       quizId: activeQuiz.id,
-                      score,
+                      score, // Net deducted score
+                      rawScore: trueRawScore,
+                      scoreDeduction: penaltyPts,
+                      deductionRate,
                       total,
                       itemResponses,
                       abilityEstimate,
                       mathAbilityDiagnosis,
-                      violations,
+                      violations: vCount,
                       isCompetent,
                       quizMode: (modeUsed as any) || quizInitialMode
                     });
@@ -698,36 +748,16 @@ export default function StudentModule({
               >
                 <DiagnosticAssessment 
                   topics={topics}
-                  onComplete={(ability, scores, pathway, violations) => {
-                    saveDiagnosticResult(ability, scores, pathway, violations);
+                  diagnosticType={diagnosticTestType}
+                  profile={profile}
+                  onComplete={(ability, scores, pathway, violations, testType, totalItems) => {
+                    saveDiagnosticResult(ability, scores, pathway, violations, testType || diagnosticTestType, totalItems);
                     setIsTakingDiagnostic(false);
                     if (pathway) {
                       setIsViewingPathway(true);
                     }
                   }}
                   onCancel={() => setIsTakingDiagnostic(false)}
-                />
-              </motion.div>
-            ) : currentSection.startsWith('lessons') ? (
-              <motion.div
-                key={`sec-lessons-${currentSection}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-              >
-                <CurriculumView
-                  topics={topics}
-                  results={results}
-                  profile={profile}
-                  initialTab={
-                    currentSection === 'lessons-topics' ? 'overview' :
-                    'ilaw'
-                  }
-                  onSelectTopic={setSelectedTopic}
-                  onOpenTopicDLP={setSelectedTopic}
-                  onStartCompetencyPractice={handleStartAdaptivePractice}
-                  onSaveQuizResult={saveResult}
-                  onAddXP={addXP}
                 />
               </motion.div>
             ) : currentSection.startsWith('curriculum') ? (
@@ -790,8 +820,10 @@ export default function StudentModule({
                 <StudentDiagnosticAssessmentPage
                   topics={topics}
                   profile={profile}
-                  onStartDiagnosticTest={() => setIsTakingDiagnostic(true)}
-                  onSaveDiagnosticResult={saveDiagnosticResult}
+                  onStartDiagnosticTest={(testType) => handleRetakeDiagnostic(testType)}
+                  onSaveDiagnosticResult={(ability, scores, pathway, violations, testType, totalItems) => {
+                    saveDiagnosticResult(ability, scores, pathway, violations, testType, totalItems);
+                  }}
                   onBackToOverview={() => setCurrentSection('dashboard')}
                 />
               </motion.div>
@@ -918,6 +950,10 @@ export default function StudentModule({
                   results={results}
                   onSelectTopic={setSelectedTopic}
                   onStartDiagnostic={handleRetakeDiagnostic}
+                  onOpenDiagnostic={() => setCurrentSection('assessments-diagnostic')}
+                  onOpenFormative={() => setCurrentSection('assessments-formative')}
+                  onOpenSummative={() => setCurrentSection('assessments-exams')}
+                  onStartSummativeAssessment={(summative) => setActiveSummativeAssessment(summative)}
                   onOpenActivities={() => setCurrentSection('activities-todo')}
                   onOpenCurriculum={() => setCurrentSection('curriculum-overview')}
                   onOpenProgress={() => setCurrentSection('progress')}
@@ -1175,8 +1211,11 @@ export default function StudentModule({
                 <p className="text-xs text-rose-700 font-semibold leading-relaxed">
                   Focus Warning Counter: <strong className="text-rose-900 text-sm font-extrabold">{tabOutCount}</strong>
                 </p>
+                <p className="text-[11px] text-rose-800 font-bold">
+                  Penalty: -{tabOutCount * getIntegritySettings().violationDeductionPoints} Pt(s) deducted from your final score.
+                </p>
                 <p className="text-[10px] text-rose-600/90 leading-tight">
-                  Please stay focused on your test questions. Navigating away during formal classroom assessments is logged for subject teachers.
+                  Please stay focused on your test questions. Navigating away during formal classroom assessments is logged for subject teachers and recorded to your permanent transcript.
                 </p>
               </div>
 

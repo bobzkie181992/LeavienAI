@@ -21,6 +21,7 @@ import {
   Users,
   Target,
   ShieldCheck,
+  ShieldAlert,
   BookOpen,
   ChevronDown,
   ChevronUp,
@@ -49,6 +50,7 @@ import {
 import { generateAIMistakeGuidance, fetchAIMistakeDiagnosis } from '../utils/aiTutorCoach';
 import { AIMistakeGuidance } from '../types';
 import ErrorRemediationModal from './ErrorRemediationModal';
+import AcademicIntegrityWarningModal from './AcademicIntegrityWarningModal';
 import { getLocalUser } from '../lib/localAuth';
 import { logAltTabViolation } from '../lib/violationLogger';
 import { playWarningSound } from '../utils/audioEffects';
@@ -70,7 +72,8 @@ interface QuizEngineProps {
     mathAbilityDiagnosis?: string, 
     violations?: number,
     isCompetent?: boolean,
-    modeUsed?: string
+    modeUsed?: string,
+    rawScore?: number
   ) => void;
   onSuggestAIQuiz?: () => void;
   onProceedNextLevel?: (nextQuiz: Quiz) => void;
@@ -182,65 +185,91 @@ export default function QuizEngine({
 
   const [showAltTabWarning, setShowAltTabWarning] = useState<boolean>(false);
 
-  // Violation detection (Counts and warns when returning back to the app)
+  // Violation detection (Monitors Alt+Tab, desktop window blur, and mobile app/tab switches)
   useEffect(() => {
     if (showSummary) return;
 
-    let wasAway = false;
+    let isAway = false;
+    let awayStartTime = 0;
+    let lastViolationTime = 0;
     const currentUser = getLocalUser();
+
+    const triggerViolation = () => {
+      const now = Date.now();
+      // Debounce: prevent duplicate count if multiple events fire in short succession
+      if (now - lastViolationTime < 1200) {
+        return;
+      }
+      lastViolationTime = now;
+
+      const timeAway = awayStartTime > 0 ? Math.max(1, Math.round((now - awayStartTime) / 1000)) : 3;
+      playWarningSound();
+      setViolationCount(prev => prev + 1);
+      setShowAltTabWarning(true);
+
+      if (currentUser?.uid) {
+        logAltTabViolation(
+          currentUser.uid,
+          quiz.quizType === 'diagnostic' || mode === 'diagnostic' ? 'Diagnostic' : 'Formative',
+          quiz.title || 'Mathematics Quiz',
+          currentStep + 1,
+          problems[currentStep]?.question,
+          timeAway
+        );
+      }
+    };
+
+    const handleUserLeft = () => {
+      if (!isAway) {
+        isAway = true;
+        awayStartTime = Date.now();
+      }
+    };
+
+    const handleUserReturned = () => {
+      if (isAway) {
+        triggerViolation();
+        isAway = false;
+        awayStartTime = 0;
+      }
+    };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        wasAway = true;
+        handleUserLeft();
       } else {
-        if (wasAway) {
-          wasAway = false;
-          playWarningSound();
-          setViolationCount(prev => prev + 1);
-          setShowAltTabWarning(true);
-          if (currentUser?.uid) {
-            logAltTabViolation(
-              currentUser.uid,
-              quiz.quizType === 'diagnostic' || mode === 'diagnostic' ? 'Diagnostic' : 'Formative',
-              quiz.title || 'Mathematics Quiz',
-              currentStep + 1,
-              problems[currentStep]?.question
-            );
-          }
-        }
+        handleUserReturned();
       }
     };
 
-    const handleWindowBlur = () => {
-      wasAway = true;
+    const handleBlur = () => {
+      handleUserLeft();
     };
 
-    const handleWindowFocus = () => {
-      if (wasAway) {
-        wasAway = false;
-        playWarningSound();
-        setViolationCount(prev => prev + 1);
-        setShowAltTabWarning(true);
-        if (currentUser?.uid) {
-          logAltTabViolation(
-            currentUser.uid,
-            quiz.quizType === 'diagnostic' || mode === 'diagnostic' ? 'Diagnostic' : 'Formative',
-            quiz.title || 'Mathematics Quiz',
-            currentStep + 1,
-            problems[currentStep]?.question
-          );
-        }
-      }
+    const handleFocus = () => {
+      handleUserReturned();
+    };
+
+    const handlePageHide = () => {
+      handleUserLeft();
+    };
+
+    const handlePageShow = () => {
+      handleUserReturned();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('blur', handleWindowBlur);
-    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('pageshow', handlePageShow);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('blur', handleWindowBlur);
-      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, [showSummary, currentStep, problems, quiz, mode]);
 
@@ -675,22 +704,28 @@ export default function QuizEngine({
   // Summary / Completion View
   if (showSummary) {
     const totalQuestions = problems.length;
-    let xpEarned = Math.round((score / totalQuestions) * quiz.xpReward);
-    const hasBonus = (mode === 'timed' || timerActivated) && timeLeft > 0 && score > 0;
+    const rawScore = score;
+    const integritySettings = getIntegritySettings();
+    const deductionRate = integritySettings.violationDeductionPoints;
+    const totalDeductionPoints = violationCount * deductionRate;
+    const netScore = Math.max(0, rawScore - totalDeductionPoints);
+
+    let xpEarned = Math.round((netScore / totalQuestions) * quiz.xpReward);
+    const hasBonus = (mode === 'timed' || timerActivated) && timeLeft > 0 && netScore > 0;
     if (hasBonus) {
       xpEarned += Math.round(xpEarned * 0.5);
     }
-    if (mode === 'assessment' && score >= Math.ceil(totalQuestions * 0.75)) {
+    if (mode === 'assessment' && netScore >= Math.ceil(totalQuestions * 0.75)) {
       xpEarned += 50; // Competency bonus
     }
-    if (mode === 'adaptive' && score >= 3) {
+    if (mode === 'adaptive' && netScore >= 3) {
       xpEarned += 50; // Adaptive mastery bonus
     }
     if (collaborativeSession) {
       xpEarned += 50; // Collaborative study bonus
     }
 
-    const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
+    const percentage = totalQuestions > 0 ? Math.round((netScore / totalQuestions) * 100) : 0;
     const finalAbilityBand = mode === 'adaptive' ? convertThetaToAbilityBand(theta) : undefined;
     
     const getProficiencyLevel = (scoreNum: number, total: number) => {
@@ -702,7 +737,7 @@ export default function QuizEngine({
       return 'Novice';
     };
     
-    const diagnosis = mode === 'adaptive' ? finalAbilityBand : getProficiencyLevel(score, totalQuestions);
+    const diagnosis = mode === 'adaptive' ? finalAbilityBand : getProficiencyLevel(netScore, totalQuestions);
     const isCompetent = percentage >= 75 || diagnosis === 'Proficient' || diagnosis === 'Advanced' || diagnosis === 'Expert';
 
     return (
@@ -741,6 +776,27 @@ export default function QuizEngine({
           <p className="text-slate-500 text-sm mb-3">
             {quiz.title} • {mode === 'adaptive' ? 'Dynamic IRT Adaptive Assessment' : mode === 'diagnostic' ? 'Diagnostic Guided Practice' : 'Competency Assessment'}
           </p>
+
+          {/* Academic Integrity Deduction Summary Callout */}
+          {violationCount > 0 ? (
+            <div className="p-4 mb-5 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl flex flex-col items-center gap-1.5 shadow-2xs text-xs font-bold text-center">
+              <div className="flex items-center gap-2 text-rose-700 font-black">
+                <ShieldAlert className="w-4 h-4 text-rose-600 animate-pulse shrink-0" />
+                <span>Academic Integrity Policy: -{deductionRate} Pt(s) per Violation</span>
+              </div>
+              <span className="text-[11px] text-rose-900 font-semibold">
+                {violationCount} Violation{violationCount > 1 ? 's' : ''} Recorded • Penalty: -{totalDeductionPoints} Pts ({rawScore} Raw Correct → {netScore} Final Score)
+              </span>
+              <p className="text-[10px] text-rose-600 font-normal">
+                Leaving the active assessment, switching browser tabs, or navigating away is recorded on your student record and teacher audit log.
+              </p>
+            </div>
+          ) : (
+            <div className="p-3 mb-5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold shadow-2xs">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Academic Integrity: Clean Record (0 Violations Logged)</span>
+            </div>
+          )}
 
           {/* Adaptive Ability Display Banner */}
           {mode === 'adaptive' && (
@@ -791,8 +847,10 @@ export default function QuizEngine({
           {/* Stats Bar */}
           <div className="grid grid-cols-3 gap-3 mb-6">
             <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-              <div className="text-2xl font-black text-indigo-600">{score}/{totalQuestions}</div>
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Score</div>
+              <div className="text-2xl font-black text-indigo-600">{netScore}/{totalQuestions}</div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                {violationCount > 0 ? `Final Score (Raw: ${rawScore})` : 'Score'}
+              </div>
             </div>
             <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
               <div className="text-2xl font-black text-emerald-600">{percentage}%</div>
@@ -939,7 +997,7 @@ export default function QuizEngine({
             {mode === 'assessment' && isCompetent && nextQuiz && onProceedNextLevel && (
               <button
                 onClick={() => {
-                  onComplete(xpEarned, score, totalQuestions, itemResponses, finalAbilityBand, diagnosis, violationCount, isCompetent, mode);
+                  onComplete(xpEarned, netScore, totalQuestions, itemResponses, finalAbilityBand, diagnosis, violationCount, isCompetent, mode, rawScore);
                   onProceedNextLevel(nextQuiz);
                 }}
                 className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200 active:scale-95 transition-all text-base flex items-center justify-center gap-2"
@@ -973,7 +1031,7 @@ export default function QuizEngine({
 
             {/* Standard Complete & Return */}
             <button
-              onClick={() => onComplete(xpEarned, score, totalQuestions, itemResponses, finalAbilityBand, diagnosis, violationCount, isCompetent, mode)}
+              onClick={() => onComplete(xpEarned, netScore, totalQuestions, itemResponses, finalAbilityBand, diagnosis, violationCount, isCompetent, mode, rawScore)}
               className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl active:scale-95 transition-all text-sm flex items-center justify-center gap-2"
             >
               <Award className="w-4 h-4" />
@@ -1117,10 +1175,10 @@ export default function QuizEngine({
                       </div>
                       <div className="text-xs">
                         <span className="font-black text-rose-900 block uppercase tracking-wider">
-                          Academic Integrity Warning: Window Tab-Out Detected ({violationCount} Violation{violationCount > 1 ? 's' : ''})
+                          Academic Integrity Warning: Window Tab-Out / App Switch ({violationCount} Violation{violationCount > 1 ? 's' : ''})
                         </span>
                         <span className="text-rose-700">
-                          Leaving the active test window is recorded on your official scorecard. Score deduction is applied automatically.
+                          Leaving the active test window, switching browser tabs, or opening other apps is logged for your teacher. Penalty: -{violationCount * getIntegritySettings().violationDeductionPoints} Pt(s) applied to final score.
                         </span>
                       </div>
                     </div>

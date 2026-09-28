@@ -121,31 +121,38 @@ export default function StudentFormativeAssessmentPage({
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
           parsed.forEach((cf: any) => {
-            // Check if already in list to avoid duplicates
-            if (!list.some(item => item.id === cf.id)) {
-              list.unshift({
-                id: cf.id,
-                title: cf.title,
-                type: 'Knowledge Check',
-                ilawLesson: cf.topicTitle,
-                subject: 'General Mathematics',
-                competency: cf.topicTitle,
-                targetSection: cf.targetSection,
-                scheduleWindow: cf.schedule,
-                status: 'assigned',
-                questions: cf.questions.map((q: any, idx: number) => ({
-                  id: q.id || `q-excel-${idx}`,
-                  question: q.question,
-                  options: q.options,
-                  correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
-                  explanation: q.correctFeedback || '✓ Correct! Well done evaluating this step.',
-                  remediationHint: q.incorrectFeedback || '✗ Review the key formula in the ILAW lesson discussion.',
-                  competency: q.competency || 'M11GM-DepEd-MELC'
-                }))
-              });
+            // Check if already in list to avoid duplicates, and ensure published
+            if (cf.published !== false && cf.status !== 'Draft' && !list.some(item => item.id === cf.id)) {
+              const activeQuestions = (cf.questions || []).filter((q: any) => q.published !== false);
+              if (activeQuestions.length > 0) {
+                list.unshift({
+                  id: cf.id,
+                  title: cf.title,
+                  type: cf.assessmentType || 'Knowledge Check',
+                  ilawLesson: cf.ilawLesson || cf.topicTitle || 'General Mathematics Lesson',
+                  subject: cf.subject || 'General Mathematics',
+                  competency: cf.learningCompetency || cf.topicTitle || 'M11GM-DepEd-MELC',
+                  targetSection: cf.targetSection || 'Grade 11 - STEM A',
+                  scheduleWindow: cf.scheduleWindow || (cf.startDate ? `${cf.startDate} • ${cf.startTime} - ${cf.endTime}` : 'Today • 8:00 AM - 5:00 PM'),
+                  status: 'assigned',
+                  questions: activeQuestions.map((q: any, idx: number) => ({
+                    id: q.id || `q-form-${idx}`,
+                    question: q.question,
+                    options: q.options || [],
+                    correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : (typeof q.correctAnswer === 'string' && q.options ? q.options.indexOf(q.correctAnswer) : 0),
+                    explanation: q.correctAnswerFeedback || q.correctFeedback || q.explanation || '✓ Correct! Well done evaluating this step.',
+                    remediationHint: q.incorrectAnswerFeedback || q.incorrectFeedback || q.remediationHint || '✗ Review the key formula in the ILAW lesson discussion.',
+                    competency: cf.learningCompetency || q.competency || 'M11GM-DepEd-MELC'
+                  }))
+                });
+              }
             }
           });
         }
+      }
+      const activeId = localStorage.getItem('mathquest_active_formative_id');
+      if (activeId) {
+        list.sort((a, b) => (a.id === activeId ? -1 : b.id === activeId ? 1 : 0));
       }
     } catch (e) {}
     return list;

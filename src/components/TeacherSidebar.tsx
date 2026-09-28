@@ -51,11 +51,9 @@ export type TeacherNavSection =
   // Assessments
   | 'assessments-diagnostic'
   | 'assessments-formative'
-  | 'assessments-bank'
   | 'assessments-create'
   | 'assessments-diagnostic-results'
   | 'assessments-formative-results'
-  | 'assessments-quizzes'
   | 'assessments-exams'
   // My Classes
   | 'classes-sections'
@@ -120,6 +118,7 @@ export default function TeacherSidebar({
         { id: 'curriculum-overview', label: 'Curriculum Overview' },
         { id: 'lessons-my', label: 'DepEd ILAW Lessons & DLP' },
         { id: 'lessons-create', label: 'Create ILAW Lesson' },
+        { id: 'lessons-import', label: 'Import from DOCX' },
         { id: 'lessons-drafts', label: 'Draft Lessons' },
         { id: 'lessons-published', label: 'Published Lessons' },
         { id: 'curriculum-competencies', label: 'MELCs Competencies' },
@@ -146,13 +145,11 @@ export default function TeacherSidebar({
       icon: <FileText className="w-4 h-4 text-violet-400" />,
       defaultOpen: currentSection.startsWith('assessments'),
       children: [
-        { id: 'assessments-diagnostic', label: 'Diagnostic Assessments' },
+        { id: 'assessments-diagnostic', label: 'Diagnostic Assessments (Pre & Post)' },
         { id: 'assessments-formative', label: 'Formative Assessments' },
-        { id: 'assessments-bank', label: 'Question Bank' },
-        { id: 'assessments-diagnostic-results', label: 'Diagnostic Results' },
-        { id: 'assessments-formative-results', label: 'Formative Results' },
-        { id: 'assessments-quizzes', label: 'Quizzes' },
-        { id: 'assessments-exams', label: 'Exams (TOS)' }
+        { id: 'assessments-exams', label: 'Summative Tests (TOS)' },
+        { id: 'assessments-diagnostic-results', label: 'Diagnostic Results (Pre vs Post)' },
+        { id: 'assessments-formative-results', label: 'Formative Results' }
       ]
     },
     {
@@ -197,7 +194,7 @@ export default function TeacherSidebar({
       curriculum: true,
       lessons: true,
       activities: false,
-      assessments: false,
+      assessments: true,
       classes: false,
       analytics: false,
       resources: false

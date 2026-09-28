@@ -211,9 +211,16 @@ export function useUserProfile(uid: string | undefined) {
     const handleReset = () => {
       fetchProfile();
     };
+    const handleViolation = (e: any) => {
+      if (e.detail?.userUid === uid && e.detail?.updatedUser) {
+        setProfile(prev => prev ? { ...prev, ...e.detail.updatedUser } : e.detail.updatedUser);
+      }
+    };
     window.addEventListener('mathquest_database_reset', handleReset);
+    window.addEventListener('mathquest_violation_logged', handleViolation);
     return () => {
       window.removeEventListener('mathquest_database_reset', handleReset);
+      window.removeEventListener('mathquest_violation_logged', handleViolation);
     };
   }, [uid]);
 
@@ -370,29 +377,105 @@ export function useUserProfile(uid: string | undefined) {
     }
   };
 
-  const saveDiagnosticResult = async (ability: string, scores: Record<string, number>, pathway?: LearningPathway, violations?: number) => {
+  const saveDiagnosticResult = async (
+    ability: string, 
+    scores: Record<string, number>, 
+    pathway?: LearningPathway, 
+    violations?: number,
+    testType: 'pre-test' | 'post-test' = 'pre-test',
+    totalItems: number = 26
+  ) => {
     if (!uid || !profile) return;
+    const diagViolations = typeof violations === 'number' ? violations : (profile.diagnosticViolations || 0);
+    const rawScore = scores['generalRaw'] ?? scores['general'] ?? 12;
+    const netScore = scores['general'] !== undefined ? scores['general'] : rawScore;
+    const totalV = diagViolations + (profile.formativeViolations || 0) + (profile.summativeViolations || 0);
+
+    const isPostTest = testType === 'post-test';
+    const nowIso = new Date().toISOString();
+
     const updated: UserProfile = {
       ...profile,
       diagnosticCompleted: true,
       diagnosticAbility: ability,
-      diagnosticScores: scores,
-      diagnosticViolations: violations,
+      diagnosticScores: {
+        ...scores,
+        general: netScore,
+        generalRaw: rawScore
+      },
+      diagnosticScore: netScore,
+      diagnosticViolations: diagViolations,
+      totalViolations: totalV,
       mathAbility: ability,
       competencyScores: scores,
+      ...(isPostTest ? {
+        postTestCompleted: true,
+        postTestScore: netScore,
+        postTestTotal: totalItems,
+        postTestAbility: ability,
+        postTestScores: scores,
+        postTestDate: nowIso
+      } : {
+        preTestCompleted: true,
+        preTestScore: netScore,
+        preTestTotal: totalItems,
+        preTestAbility: ability,
+        preTestScores: scores,
+        preTestDate: nowIso
+      }),
       ...(pathway ? { activePathway: pathway } : {})
     };
     saveLocalUser(updated);
     setProfile(updated);
+
+    // Update teacher cached list immediately so faculty views update
+    try {
+      const cachedRaw = localStorage.getItem('mathquest_custom_students');
+      if (cachedRaw) {
+        const list: UserProfile[] = JSON.parse(cachedRaw);
+        const idx = list.findIndex(s => s.uid === uid);
+        if (idx >= 0) {
+          list[idx] = { ...list[idx], ...updated };
+          localStorage.setItem('mathquest_custom_students', JSON.stringify(list));
+        }
+      }
+    } catch (e) {}
+
+    // Dispatch real-time event for student and teacher listeners
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mathquest_violation_logged', { detail: { userUid: uid, updatedUser: updated } }));
+    }
+
     try {
       const docRef = doc(db, 'users', uid);
       await updateDoc(docRef, sanitizeForFirestore({
         diagnosticCompleted: true,
         diagnosticAbility: ability,
-        diagnosticScores: scores,
-        diagnosticViolations: violations,
+        diagnosticScores: {
+          ...scores,
+          general: netScore,
+          generalRaw: rawScore
+        },
+        diagnosticScore: netScore,
+        diagnosticViolations: diagViolations,
+        totalViolations: totalV,
         mathAbility: ability,
         competencyScores: scores,
+        ...(isPostTest ? {
+          postTestCompleted: true,
+          postTestScore: netScore,
+          postTestTotal: totalItems,
+          postTestAbility: ability,
+          postTestScores: scores,
+          postTestDate: nowIso
+        } : {
+          preTestCompleted: true,
+          preTestScore: netScore,
+          preTestTotal: totalItems,
+          preTestAbility: ability,
+          preTestScores: scores,
+          preTestDate: nowIso
+        }),
         ...(pathway ? { activePathway: pathway } : {})
       }));
     } catch (err) {
@@ -493,9 +576,16 @@ export function useAllStudents() {
     const handleReset = () => {
       fetchStudents();
     };
+    const handleViolation = (e: any) => {
+      if (e.detail?.userUid && e.detail?.updatedUser) {
+        setStudents(prev => prev.map(s => s.uid === e.detail.userUid ? { ...s, ...e.detail.updatedUser } : s));
+      }
+    };
     window.addEventListener('mathquest_database_reset', handleReset);
+    window.addEventListener('mathquest_violation_logged', handleViolation);
     return () => {
       window.removeEventListener('mathquest_database_reset', handleReset);
+      window.removeEventListener('mathquest_violation_logged', handleViolation);
     };
   }, []);
 
@@ -1024,6 +1114,33 @@ export function useCurriculum() {
   const saveProblem = async (topicId: string, quizId: string, problem: Problem) => {
     const topic = topics.find(t => t.id === topicId);
     if (!topic) throw new Error("Topic not found");
+
+    if (quizId.startsWith('summative-') || (!topic.quizzes.some(q => q.id === quizId) && topic.summativeAssessment)) {
+      if (topic.summativeAssessment) {
+        const summativeProblems = [...(topic.summativeAssessment.problems || [])];
+        const pIdx = summativeProblems.findIndex(p => p.id === problem.id);
+        const summativeProblemItem = {
+          ...problem,
+          intendedOutcomeId: (problem as any).intendedOutcomeId || topic.summativeAssessment.intendedOutcomes?.[0]?.id || 'out-1',
+          outcomeCode: (problem as any).outcomeCode || topic.summativeAssessment.intendedOutcomes?.[0]?.code || 'M11GM-Ia-1'
+        };
+        if (pIdx >= 0) {
+          summativeProblems[pIdx] = summativeProblemItem;
+        } else {
+          summativeProblems.push(summativeProblemItem);
+        }
+        const updatedTopic = {
+          ...topic,
+          summativeAssessment: {
+            ...topic.summativeAssessment,
+            problems: summativeProblems
+          }
+        };
+        await saveTopic(updatedTopic);
+        return;
+      }
+    }
+
     const quizIndex = topic.quizzes.findIndex(q => q.id === quizId);
     if (quizIndex === -1) throw new Error("Quiz not found");
 
@@ -1046,6 +1163,21 @@ export function useCurriculum() {
   const deleteProblem = async (topicId: string, quizId: string, problemId: string) => {
     const topic = topics.find(t => t.id === topicId);
     if (!topic) throw new Error("Topic not found");
+
+    if (quizId.startsWith('summative-') || (topic.summativeAssessment && topic.summativeAssessment.problems.some(p => p.id === problemId))) {
+      if (topic.summativeAssessment) {
+        const updatedTopic = {
+          ...topic,
+          summativeAssessment: {
+            ...topic.summativeAssessment,
+            problems: topic.summativeAssessment.problems.filter(p => p.id !== problemId)
+          }
+        };
+        await saveTopic(updatedTopic);
+        return;
+      }
+    }
+
     const quizIndex = topic.quizzes.findIndex(q => q.id === quizId);
     if (quizIndex === -1) throw new Error("Quiz not found");
 
@@ -1062,6 +1194,21 @@ export function useCurriculum() {
   const updateProblemStatus = async (topicId: string, quizId: string, problemId: string, status: ItemStatus) => {
     const topic = topics.find(t => t.id === topicId);
     if (!topic) throw new Error("Topic not found");
+
+    if (quizId.startsWith('summative-') || (topic.summativeAssessment && topic.summativeAssessment.problems.some(p => p.id === problemId))) {
+      if (topic.summativeAssessment) {
+        const updatedTopic = {
+          ...topic,
+          summativeAssessment: {
+            ...topic.summativeAssessment,
+            problems: topic.summativeAssessment.problems.map(p => p.id === problemId ? { ...p, status } : p)
+          }
+        };
+        await saveTopic(updatedTopic);
+        return;
+      }
+    }
+
     const quizIndex = topic.quizzes.findIndex(q => q.id === quizId);
     if (quizIndex === -1) throw new Error("Quiz not found");
 

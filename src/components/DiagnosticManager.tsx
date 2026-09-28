@@ -15,6 +15,10 @@ export default function DiagnosticManager() {
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedSuccess, setSeedSuccess] = useState(false);
 
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ id: string; text: string } | null>(null);
+  const [showSeedConfirm, setShowSeedConfirm] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   // Question form modal states
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
@@ -139,7 +143,8 @@ export default function DiagnosticManager() {
         cognitiveLevel,
         explanation: explanationText.trim(),
         hint1: hint1Text.trim() || undefined,
-        hint2: hint2Text.trim() || undefined
+        hint2: hint2Text.trim() || undefined,
+        published: editingQuestion ? (editingQuestion.published !== false) : true
       });
       setIsFormOpen(false);
     } catch (err: any) {
@@ -189,13 +194,22 @@ export default function DiagnosticManager() {
     }
   };
 
-  const handleDelete = async (id: string, text: string) => {
-    if (window.confirm(`Are you sure you want to delete this diagnostic question?\n\n"${text.substring(0, 60)}..."`)) {
-      try {
-        await deleteQuestion(id);
-      } catch (err) {
-        console.error("Error deleting question:", err);
-      }
+  const handleDelete = (id: string, text: string) => {
+    setDeleteConfirmTarget({ id, text });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmTarget) return;
+    try {
+      await deleteQuestion(deleteConfirmTarget.id);
+      setToastMessage('Question successfully deleted from diagnostic pool.');
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err: any) {
+      console.error("Error deleting question:", err);
+      setToastMessage('Failed to delete question: ' + err.message);
+      setTimeout(() => setToastMessage(null), 4000);
+    } finally {
+      setDeleteConfirmTarget(null);
     }
   };
 
@@ -578,21 +592,45 @@ export default function DiagnosticManager() {
                   )}
                 </div>
 
-                <div className="flex md:flex-col gap-2 shrink-0 self-end md:self-start">
+                <div className="flex flex-col md:flex-row gap-2 shrink-0 self-end md:self-start items-center">
                   <button
-                    onClick={() => openEditModal(q)}
-                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                    title="Edit Item"
+                    onClick={async () => {
+                      try {
+                        await saveQuestion({
+                          ...q,
+                          published: q.published === false ? true : false
+                        });
+                      } catch (err) {
+                        console.error("Error toggling publication status:", err);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      q.published !== false 
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
+                        : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+                    }`}
+                    title={q.published !== false ? 'Click to unpublish (hide from students)' : 'Click to publish'}
                   >
-                    <Icons.Edit3 className="w-4 h-4" />
+                    {q.published !== false ? <Icons.CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Icons.EyeOff className="w-4 h-4 text-amber-600" />}
+                    <span>{q.published !== false ? 'Published' : 'Unpublished'}</span>
                   </button>
-                  <button
-                    onClick={() => handleDelete(q.id, q.question)}
-                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                    title="Delete Item"
-                  >
-                    <Icons.Trash2 className="w-4 h-4" />
-                  </button>
+
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => openEditModal(q)}
+                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all cursor-pointer"
+                      title="Edit Item"
+                    >
+                      <Icons.Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(q.id, q.question)}
+                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                      title="Delete Item"
+                    >
+                      <Icons.Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -886,6 +924,58 @@ export default function DiagnosticManager() {
         title={isFormOpen ? "AI Generate / Auto-Fill Form" : "AI Diagnostic Question Generator"}
         subtitle="Generates mathematically sound Grade 11 diagnostic items with rigorous DepEd competency alignment, distractors, and step-by-step solutions."
       />
+
+      {/* Delete Question In-App Confirmation Modal */}
+      {deleteConfirmTarget && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Icons.Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Delete Diagnostic Question</h3>
+                <p className="text-xs text-slate-500 mt-0.5">This item will be permanently removed.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed italic">
+              "{deleteConfirmTarget.text.substring(0, 120)}{deleteConfirmTarget.text.length > 120 ? '...' : ''}"
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmTarget(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md shadow-rose-200 transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Icons.Trash2 className="w-4 h-4" />
+                <span>Delete Permanently</span>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+          <Icons.CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

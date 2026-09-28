@@ -33,7 +33,11 @@ interface ModernStudentDashboardProps {
   results: QuizResult[];
   onSelectTopic: (topic: Topic) => void;
   onStartQuiz?: (quiz: Quiz) => void;
-  onStartDiagnostic?: () => void;
+  onStartDiagnostic?: (type?: 'pre-test' | 'post-test') => void;
+  onOpenDiagnostic?: () => void;
+  onOpenFormative?: () => void;
+  onOpenSummative?: () => void;
+  onStartSummativeAssessment?: (assessment: any) => void;
   onOpenActivities?: () => void;
   onOpenCurriculum?: () => void;
   onOpenProgress?: () => void;
@@ -46,6 +50,10 @@ export default function ModernStudentDashboard({
   onSelectTopic,
   onStartQuiz,
   onStartDiagnostic,
+  onOpenDiagnostic,
+  onOpenFormative,
+  onOpenSummative,
+  onStartSummativeAssessment,
   onOpenActivities,
   onOpenProgress
 }: ModernStudentDashboardProps) {
@@ -226,19 +234,16 @@ export default function ModernStudentDashboard({
   const upcomingActivities = [
     {
       id: 'act-1',
-      title: 'Diagnostic Checkpoint: Rational Functions & Domain Constraints',
+      title: 'Practice Checkpoint: Rational Functions & Domain Constraints',
       subject: 'General Mathematics',
       dueDate: 'Tomorrow, Oct 24 • 11:59 PM',
-      type: 'Formative Assessment',
+      type: 'Guided Practice',
       urgent: true,
       status: 'Pending',
-      actionLabel: 'Start Assessment',
+      actionLabel: 'Open Practice',
       onClick: () => {
-        if (onStartDiagnostic) onStartDiagnostic();
-        else {
-          const target = topics.find(t => t.id === 'rational-functions') || topics[0];
-          if (target) onSelectTopic(target);
-        }
+        const target = topics.find(t => t.id === 'rational-functions') || topics[0];
+        if (target) onSelectTopic(target);
       }
     },
     {
@@ -329,6 +334,47 @@ export default function ModernStudentDashboard({
           )}
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 1.5. PRE-TEST DIAGNOSTIC ONBOARDING CARD FOR NEW STUDENTS                */}
+      {/* ========================================================================= */}
+      {(!profile.preTestCompleted && !profile.diagnosticCompleted) && (
+        <section aria-labelledby="pretest-onboarding-heading">
+          <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-amber-300 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+              <div className="space-y-2 max-w-2xl">
+                <div className="flex items-center gap-2">
+                  <span className="bg-slate-950 text-amber-300 text-[10px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1.5 shadow-xs">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>STEP 1: INITIAL PRE-TEST REQUIRED</span>
+                  </span>
+                  <span className="bg-white/20 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+                    App Start Baseline
+                  </span>
+                </div>
+                <h2 id="pretest-onboarding-heading" className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  Take your Pre-Test Diagnostic Assessment
+                </h2>
+                <p className="text-xs sm:text-sm text-amber-100 leading-relaxed">
+                  Welcome to LeavienAI! Before starting your Grade 11 lessons, complete your Pre-Test to evaluate your baseline readiness, detect prerequisite learning gaps, and build your personalized study roadmap.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (onStartDiagnostic) onStartDiagnostic('pre-test');
+                  else if (onOpenDiagnostic) onOpenDiagnostic();
+                }}
+                className="px-6 py-3.5 bg-slate-950 hover:bg-slate-900 text-amber-300 font-black rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shrink-0 cursor-pointer active:scale-95 transition-all"
+              >
+                <Play className="w-4 h-4 fill-amber-300" />
+                <span>Start Pre-Test Diagnostic</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ========================================================================= */}
       {/* 2. CONTINUE LEARNING CARD                                                 */}
@@ -483,6 +529,178 @@ export default function ModernStudentDashboard({
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* ========================================================================= */}
+      {/* 3.5. ASSESSMENTS & TESTING HUB                                           */}
+      {/* ========================================================================= */}
+      <section aria-labelledby="assessments-hub-heading" className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <div>
+            <h2 id="assessments-hub-heading" className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-indigo-600" />
+              <span>Assessments & Testing Hub</span>
+            </h2>
+            <p className="text-xs text-slate-400">Diagnostic baselines, in-lesson formative quizzes, and DepEd TOS summative exams</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Card 1: Diagnostic Assessment (Pre & Post Test) */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs hover:border-amber-300 transition-all flex flex-col justify-between space-y-4 group">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border bg-amber-50 text-amber-800 border-amber-200 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-600" />
+                  <span>Pre & Post Diagnostic</span>
+                </span>
+                <span className="text-[11px] font-bold text-slate-400">
+                  26 Baseline Items
+                </span>
+              </div>
+
+              <div>
+                <h3 className="font-black text-slate-900 text-base group-hover:text-amber-600 transition-colors">
+                  Diagnostic Assessment
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Initial baseline check when starting the app, plus exit evaluation to measure competency growth.
+                </p>
+              </div>
+
+              {/* Status Badges */}
+              <div className="space-y-1.5 pt-1 text-xs">
+                <div className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-100">
+                  <span className="text-slate-500 font-semibold">Pre-Test:</span>
+                  <span className={`font-bold ${profile.preTestCompleted || profile.diagnosticCompleted ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {profile.preTestCompleted || profile.diagnosticCompleted
+                      ? `✓ ${profile.preTestScore ?? profile.diagnosticScore}/26 (${profile.preTestAbility ?? profile.diagnosticAbility ?? 'Done'})`
+                      : 'Pending (Start Here)'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-100">
+                  <span className="text-slate-500 font-semibold">Post-Test:</span>
+                  <span className={`font-bold ${profile.postTestCompleted ? 'text-purple-700' : 'text-slate-500'}`}>
+                    {profile.postTestCompleted
+                      ? `✓ ${profile.postTestScore}/26 (${profile.postTestAbility})`
+                      : (profile.preTestCompleted || profile.diagnosticCompleted ? 'Ready for Exit Check' : 'Locked')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex gap-2">
+              <button
+                onClick={() => {
+                  if (onOpenDiagnostic) onOpenDiagnostic();
+                  else if (onStartDiagnostic) onStartDiagnostic('pre-test');
+                }}
+                className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>{profile.preTestCompleted || profile.diagnosticCompleted ? 'Open Diagnostic Hub' : 'Take Pre-Test'}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Formative Assessment */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs hover:border-indigo-300 transition-all flex flex-col justify-between space-y-4 group">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1">
+                  <CheckSquare className="w-3 h-3 text-indigo-600" />
+                  <span>Formative Checks</span>
+                </span>
+                <span className="text-[11px] font-bold text-slate-400">
+                  Lesson Item Bank
+                </span>
+              </div>
+
+              <div>
+                <h3 className="font-black text-slate-900 text-base group-hover:text-indigo-600 transition-colors">
+                  Formative Assessment
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  In-lesson knowledge checks, exit tickets, and practice exercises with instant step-by-step remediation.
+                </p>
+              </div>
+
+              <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 text-xs text-indigo-950 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Active Competencies</span>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Evaluate skills on piecewise functions, rational models, and algebraic operations.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  if (onOpenFormative) onOpenFormative();
+                }}
+                className="w-full py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              >
+                <span>Open Formative Assessments</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Card 3: Summative Test (TOS) */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs hover:border-violet-300 transition-all flex flex-col justify-between space-y-4 group">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border bg-violet-50 text-violet-800 border-violet-200 flex items-center gap-1">
+                  <Award className="w-3 h-3 text-violet-600" />
+                  <span>Summative Test (TOS)</span>
+                </span>
+                <span className="text-[11px] font-bold text-slate-400">
+                  Quarter 1 Exam
+                </span>
+              </div>
+
+              <div>
+                <h3 className="font-black text-slate-900 text-base group-hover:text-violet-600 transition-colors">
+                  Summative Test (TOS)
+                </h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  DepEd Table of Specifications examination evaluating core competencies with weighted cognitive domains.
+                </p>
+              </div>
+
+              <div className="p-3 bg-violet-50/60 rounded-xl border border-violet-100 text-xs text-violet-950 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <GraduationCap className="w-3.5 h-3.5 text-violet-600" />
+                  <span>Standardized Evaluation</span>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Timed exam with Bloom's taxonomy outcomes analysis and formal scorecard.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  const summative = topics[0]?.summativeAssessment;
+                  if (summative && onStartSummativeAssessment) {
+                    onStartSummativeAssessment(summative);
+                  } else if (onOpenSummative) {
+                    onOpenSummative();
+                  }
+                }}
+                className="w-full py-2.5 px-3 bg-slate-900 hover:bg-violet-900 text-white font-black rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              >
+                <span>Take Summative Test</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 

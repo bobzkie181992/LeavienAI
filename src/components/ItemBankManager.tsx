@@ -84,6 +84,8 @@ export default function ItemBankManager() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAIGenerateOpen, setIsAIGenerateOpen] = useState(false);
   const [isDepEdExcelOpen, setIsDepEdExcelOpen] = useState(false);
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<FlatItem | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const handleImportDepEdExcel = async (imported: ParsedDepEdQuestion[]) => {
     if (imported.length === 0) return;
@@ -159,7 +161,7 @@ export default function ItemBankManager() {
     });
   };
 
-  // Flatten all items across topics and quizzes
+  // Flatten all items across topics, quizzes, and summative exams
   const allItems: FlatItem[] = useMemo(() => {
     const list: FlatItem[] = [];
     topics.forEach(topic => {
@@ -178,6 +180,21 @@ export default function ItemBankManager() {
           });
         });
       });
+      // Also include summative assessment problems from central Item Bank
+      if (topic.summativeAssessment && topic.summativeAssessment.problems) {
+        topic.summativeAssessment.problems.forEach(problem => {
+          list.push({
+            ...problem,
+            status: problem.status || 'Active',
+            assessmentType: 'summative',
+            assessmentLevel: problem.assessmentLevel || `${topic.term} Summative TOS Item`,
+            topicId: topic.id,
+            topicTitle: topic.title,
+            quizId: `summative-${topic.summativeAssessment!.id}`,
+            quizTitle: topic.summativeAssessment!.title || `${topic.term} Summative Exam`
+          });
+        });
+      }
     });
     return list;
   }, [topics]);
@@ -228,13 +245,21 @@ export default function ItemBankManager() {
     }
   };
 
-  const handleDeleteItem = async (item: FlatItem) => {
-    if (window.confirm(`Are you sure you want to permanently delete item "${item.id}"? This cannot be undone.`)) {
-      try {
-        await deleteProblem(item.topicId, item.quizId, item.id);
-      } catch (err) {
-        alert('Error deleting item: ' + (err as Error).message);
-      }
+  const handleDeleteItem = (item: FlatItem) => {
+    setDeleteConfirmItem(item);
+  };
+
+  const handleConfirmDeleteItem = async () => {
+    if (!deleteConfirmItem) return;
+    try {
+      await deleteProblem(deleteConfirmItem.topicId, deleteConfirmItem.quizId, deleteConfirmItem.id);
+      setToastMsg(`Item "${deleteConfirmItem.itemId || deleteConfirmItem.id}" successfully deleted.`);
+      setTimeout(() => setToastMsg(null), 3500);
+    } catch (err: any) {
+      setToastMsg('Error deleting item: ' + (err as Error).message);
+      setTimeout(() => setToastMsg(null), 4000);
+    } finally {
+      setDeleteConfirmItem(null);
     }
   };
 
@@ -512,6 +537,7 @@ export default function ItemBankManager() {
             <option value="All">All Assessment Types</option>
             <option value="diagnostic">🩺 Diagnostic Assessment</option>
             <option value="formative">📝 Formative Assessment</option>
+            <option value="summative">🎓 Summative Examination (TOS)</option>
           </select>
 
           {/* Assessment Level Filter */}
@@ -597,6 +623,7 @@ export default function ItemBankManager() {
             const stats = statsMap[item.id];
             const isLive = item.status === 'Active' || item.status === 'Validated';
             const isDiagnostic = item.assessmentType === 'diagnostic';
+            const isSummative = item.assessmentType === 'summative';
 
             return (
               <motion.div
@@ -620,12 +647,19 @@ export default function ItemBankManager() {
                       <span className={`px-3 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 border shadow-2xs ${
                         isDiagnostic 
                           ? 'bg-purple-50 text-purple-800 border-purple-200' 
+                          : isSummative
+                          ? 'bg-amber-50 text-amber-900 border-amber-300'
                           : 'bg-cyan-50 text-cyan-900 border-cyan-200'
                       }`}>
                         {isDiagnostic ? (
                           <>
                             <Stethoscope className="w-3.5 h-3.5 text-purple-600" />
                             <span>Diagnostic</span>
+                          </>
+                        ) : isSummative ? (
+                          <>
+                            <GraduationCap className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Summative (TOS)</span>
                           </>
                         ) : (
                           <>
@@ -634,7 +668,7 @@ export default function ItemBankManager() {
                           </>
                         )}
                         <span className="text-slate-300">•</span>
-                        <span className="font-bold">{item.assessmentLevel || (isDiagnostic ? 'Level 2 - Core Concept Baseline' : 'Level 2 - Guided Skill Application')}</span>
+                        <span className="font-bold">{item.assessmentLevel || (isDiagnostic ? 'Level 2 - Core Concept Baseline' : isSummative ? 'Summative TOS Item' : 'Level 2 - Guided Skill Application')}</span>
                       </span>
 
                       <span className="px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg">
@@ -779,7 +813,7 @@ export default function ItemBankManager() {
                     </div>
 
                     {/* Buttons row */}
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
                       <button
                         onClick={() => setEditingItem({
                           item: { ...item },
@@ -787,7 +821,7 @@ export default function ItemBankManager() {
                           quizId: item.quizId,
                           isNew: false
                         })}
-                        className="flex-1 py-2 px-3 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
+                        className="flex-1 py-2 px-3 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                       >
                         <Edit2 className="w-3.5 h-3.5" /> Edit
                       </button>
@@ -796,7 +830,7 @@ export default function ItemBankManager() {
                         <button
                           onClick={() => handleQuickStatusChange(item, 'Inactive')}
                           title="Deactivate item"
-                          className="py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition-colors"
+                          className="py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
                         >
                           <Power className="w-3.5 h-3.5" /> Deactivate
                         </button>
@@ -804,7 +838,7 @@ export default function ItemBankManager() {
                         <button
                           onClick={() => handleQuickStatusChange(item, 'Active')}
                           title="Activate item for official assessments"
-                          className="py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition-colors"
+                          className="py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition-colors cursor-pointer"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" /> Activate
                         </button>
@@ -812,10 +846,11 @@ export default function ItemBankManager() {
 
                       <button
                         onClick={() => handleDeleteItem(item)}
-                        title="Delete permanently"
-                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                        title={`Delete ${item.assessmentType || ''} item permanently`}
+                        className="py-2 px-3 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white rounded-xl transition-all border border-rose-200 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </div>
@@ -840,6 +875,16 @@ export default function ItemBankManager() {
                 setEditingItem(null);
               } catch (err) {
                 alert('Failed to save item: ' + (err as Error).message);
+              }
+            }}
+            onDelete={async (topicId, quizId, problemId) => {
+              if (window.confirm(`Are you sure you want to permanently delete this item? This action cannot be undone.`)) {
+                try {
+                  await deleteProblem(topicId, quizId, problemId);
+                  setEditingItem(null);
+                } catch (err) {
+                  alert('Error deleting item: ' + (err as Error).message);
+                }
               }
             }}
           />
@@ -893,6 +938,58 @@ export default function ItemBankManager() {
         title="AI Assessment Item Generator"
         subtitle="Generate DepEd curriculum-aligned diagnostic or formative items with psychometric calibrations, distractors, and multi-tier scaffolding."
       />
+
+      {/* Delete In-App Confirmation Modal */}
+      {deleteConfirmItem && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Delete Item from Item Bank</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Item ID: {deleteConfirmItem.itemId || deleteConfirmItem.id}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              "{deleteConfirmItem.question}"
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmItem(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteItem}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md shadow-rose-200 transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Permanently</span>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toastMsg && (
+        <div className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -911,9 +1008,10 @@ interface ItemEditorModalProps {
   onOpenAIGenerate?: () => void;
   onClose: () => void;
   onSave: (topicId: string, quizId: string, item: Problem) => Promise<void>;
+  onDelete?: (topicId: string, quizId: string, problemId: string) => Promise<void>;
 }
 
-function ItemEditorModal({ editingItem, topics, onOpenAIGenerate, onClose, onSave }: ItemEditorModalProps) {
+function ItemEditorModal({ editingItem, topics, onOpenAIGenerate, onClose, onSave, onDelete }: ItemEditorModalProps) {
   const [topicId, setTopicId] = useState(editingItem.topicId);
   const [quizId, setQuizId] = useState(editingItem.quizId);
   const [item, setItem] = useState<Problem>({
@@ -1099,11 +1197,11 @@ function ItemEditorModal({ editingItem, topics, onOpenAIGenerate, onClose, onSav
             </div>
 
             {/* Assessment Type Selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => handleAssessmentTypeChange('diagnostic')}
-                className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${
+                className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-2.5 ${
                   item.assessmentType === 'diagnostic'
                     ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-100'
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-purple-50/40'
@@ -1111,9 +1209,9 @@ function ItemEditorModal({ editingItem, topics, onOpenAIGenerate, onClose, onSav
               >
                 <Stethoscope className={`w-5 h-5 mt-0.5 shrink-0 ${item.assessmentType === 'diagnostic' ? 'text-white' : 'text-purple-600'}`} />
                 <div>
-                  <div className="text-xs font-black">Diagnostic Assessment</div>
-                  <div className={`text-[11px] mt-0.5 ${item.assessmentType === 'diagnostic' ? 'text-purple-100' : 'text-slate-500'}`}>
-                    Baseline evaluation, pre-requisite discovery & knowledge gap diagnosis
+                  <div className="text-xs font-black">Diagnostic</div>
+                  <div className={`text-[10px] mt-0.5 ${item.assessmentType === 'diagnostic' ? 'text-purple-100' : 'text-slate-500'}`}>
+                    Baseline knowledge check
                   </div>
                 </div>
               </button>
@@ -1121,7 +1219,7 @@ function ItemEditorModal({ editingItem, topics, onOpenAIGenerate, onClose, onSav
               <button
                 type="button"
                 onClick={() => handleAssessmentTypeChange('formative')}
-                className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${
+                className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-2.5 ${
                   item.assessmentType === 'formative'
                     ? 'bg-cyan-700 text-white border-cyan-700 shadow-md shadow-cyan-100'
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-cyan-50/40'
@@ -1129,9 +1227,27 @@ function ItemEditorModal({ editingItem, topics, onOpenAIGenerate, onClose, onSav
               >
                 <GraduationCap className={`w-5 h-5 mt-0.5 shrink-0 ${item.assessmentType === 'formative' ? 'text-white' : 'text-cyan-700'}`} />
                 <div>
-                  <div className="text-xs font-black">Formative Assessment</div>
-                  <div className={`text-[11px] mt-0.5 ${item.assessmentType === 'formative' ? 'text-cyan-100' : 'text-slate-500'}`}>
-                    Lesson checkpoints, active practice drills & progressive mastery checks
+                  <div className="text-xs font-black">Formative</div>
+                  <div className={`text-[10px] mt-0.5 ${item.assessmentType === 'formative' ? 'text-cyan-100' : 'text-slate-500'}`}>
+                    In-lesson quick checks
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleAssessmentTypeChange('summative')}
+                className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-2.5 ${
+                  item.assessmentType === 'summative'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-100'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-50/40'
+                }`}
+              >
+                <FileText className={`w-5 h-5 mt-0.5 shrink-0 ${item.assessmentType === 'summative' ? 'text-white' : 'text-amber-600'}`} />
+                <div>
+                  <div className="text-xs font-black">Summative (TOS)</div>
+                  <div className={`text-[10px] mt-0.5 ${item.assessmentType === 'summative' ? 'text-amber-100' : 'text-slate-500'}`}>
+                    Quarterly examination item
                   </div>
                 </div>
               </button>
@@ -1506,21 +1622,36 @@ function ItemEditorModal({ editingItem, topics, onOpenAIGenerate, onClose, onSav
           </div>
 
           {/* Modal Footer */}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl text-sm transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-7 py-2.5 bg-indigo-600 text-white font-bold rounded-xl text-sm shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-colors disabled:opacity-50"
-            >
-              {isSaving ? 'Saving...' : 'Save Assessment Item'}
-            </button>
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+            <div>
+              {!editingItem.isNew && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(topicId, quizId, item.id)}
+                  className="px-4 py-2.5 bg-rose-50 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete Question</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl text-sm transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="px-7 py-2.5 bg-indigo-600 text-white font-bold rounded-xl text-sm shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {isSaving ? 'Saving...' : 'Save Assessment Item'}
+              </button>
+            </div>
           </div>
         </form>
       </motion.div>

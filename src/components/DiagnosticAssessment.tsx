@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Topic, Problem, LearningPathway, isValidatedOrActive, AIMistakeGuidance } from '../types';
+import { Topic, Problem, LearningPathway, isValidatedOrActive, AIMistakeGuidance, UserProfile } from '../types';
 import * as Icons from 'lucide-react';
 import { generateLearningPathway } from '../utils/pathwayGenerator';
 import { generateAIMistakeGuidance, fetchAIMistakeDiagnosis } from '../utils/aiTutorCoach';
@@ -12,8 +12,17 @@ import { getLocalUser } from '../lib/localAuth';
 
 interface DiagnosticAssessmentProps {
   topics: Topic[];
-  onComplete: (ability: string, scores: Record<string, number>, pathway?: LearningPathway, violations?: number) => void;
+  onComplete: (
+    ability: string, 
+    scores: Record<string, number>, 
+    pathway?: LearningPathway, 
+    violations?: number,
+    testType?: 'pre-test' | 'post-test',
+    totalItems?: number
+  ) => void;
   onCancel?: () => void;
+  diagnosticType?: 'pre-test' | 'post-test';
+  profile?: UserProfile;
 }
 
 interface CompetencyDiagnosticItem {
@@ -27,7 +36,14 @@ interface CompetencyDiagnosticItem {
   status: 'Mastered' | 'Developing' | 'Needs Intervention';
 }
 
-export default function DiagnosticAssessment({ topics, onComplete, onCancel }: DiagnosticAssessmentProps) {
+export default function DiagnosticAssessment({ 
+  topics, 
+  onComplete, 
+  onCancel, 
+  diagnosticType = 'pre-test',
+  profile 
+}: DiagnosticAssessmentProps) {
+  const isPostTest = diagnosticType === 'post-test';
   const { questions: fetchedQuestions, settings: diagnosticSettings, loading: loadingQuestions } = useDiagnosticExam();
 
   const [assessmentPhase, setAssessmentPhase] = useState<'intro' | 'testing' | 'summary'>('intro');
@@ -45,6 +61,8 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
   const [isSolutionRevealed, setIsSolutionRevealed] = useState<boolean>(false);
   const [revealedHintTier, setRevealedHintTier] = useState<number>(0);
 
+
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
 
   // Next-Level Transition / Competency Placement Assessment states
   const [isTakingBooster, setIsTakingBooster] = useState(false);
@@ -194,10 +212,42 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
 
   // Generate diagnostic problem set with question and choices randomization (Anti-Cheating)
   const diagnosticProblems = useMemo(() => {
+    // 1. Check if teacher has an active custom diagnostic assessment in localStorage
+    try {
+      const activeId = localStorage.getItem('mathquest_active_diagnostic_id');
+      const cachedList = localStorage.getItem('mathquest_diagnostic_assessments');
+      if (activeId && cachedList) {
+        const parsedList = JSON.parse(cachedList);
+        const activeExam = parsedList.find((ex: any) => ex.id === activeId);
+        if (activeExam && activeExam.published !== false && activeExam.status !== 'Draft' && activeExam.questions && activeExam.questions.length > 0) {
+          return activeExam.questions
+            .filter((q: any) => q.published !== false)
+            .map((q: any, idx: number) => ({
+            id: q.id || `custom-diag-${idx}`,
+            question: q.question,
+            options: q.options || ['Option A', 'Option B', 'Option C', 'Option D'],
+            correctAnswer: typeof q.correctAnswer === 'number' ? q.correctAnswer : 0,
+            explanation: q.explanation || q.correctFeedback || 'Review key principles.',
+            hint1: q.hint1 || 'Review core formulas.',
+            hint2: q.hint2 || 'Apply substitution.',
+            topicId: 'custom-diagnostic',
+            topicTitle: activeExam.title || 'Custom Diagnostic Assessment',
+            competencyLabel: q.competency || activeExam.topicTitle || 'General Mathematics',
+            competency: q.competency || 'M11GM-Melc',
+            status: 'Active' as const,
+            hints: [q.hint1 || 'Review core formulas.', q.hint2 || 'Apply substitution.']
+          }));
+        }
+      }
+    } catch (e) {}
+
     if (!fetchedQuestions || fetchedQuestions.length === 0) return [];
     
+    const publishedQuestions = fetchedQuestions.filter(q => q.published !== false);
+    if (publishedQuestions.length === 0) return [];
+    
     // 1. Shuffle question order for each student
-    const shuffledQuestions = [...fetchedQuestions].sort(() => 0.5 - Math.random());
+    const shuffledQuestions = [...publishedQuestions].sort(() => 0.5 - Math.random());
     const limit = diagnosticSettings?.itemsCount || 26;
     
     // 2. Take item count limit and randomize options for each individual question
@@ -282,75 +332,35 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
   };
 
   const handleOptionSelect = (index: number) => {
-    if (isSolutionRevealed || (isAnswered && isLastAnswerCorrect)) return;
     setSelectedOption(index);
-    if (isAnswered && !isLastAnswerCorrect) {
-      setIsAnswered(false);
-      setIsLastAnswerCorrect(null);
-      setFeedbackNotice(null);
-    }
-  };
-
-  const handleCheckAnswer = () => {
-    if (selectedOption === null || !problem) return;
-
-    const attemptsSoFar = attemptsOnCurrent + 1;
-    setAttemptsOnCurrent(attemptsSoFar);
-
-    const isCorrect = selectedOption === problem.correctAnswer;
-    
-    // Record first attempt for baseline ability and competency diagnostic
-    if (firstAttemptCorrect[problem.id] === undefined) {
-      setFirstAttemptCorrect(prev => ({
+    if (problem) {
+      setSelectedAnswers(prev => ({
         ...prev,
-        [problem.id]: isCorrect && attemptsSoFar === 1
+        [problem.id]: index
       }));
-    }
-
-    if (isCorrect) {
-      setIsAnswered(true);
-      setIsLastAnswerCorrect(true);
-      setIsSolutionRevealed(true);
-      setFeedbackNotice({
-        isCorrect: true,
-        text: attemptsSoFar === 1 
-          ? "🎉 Correct! Outstanding mathematical reasoning on your first attempt." 
-          : `🎉 Correct on attempt #${attemptsSoFar}! Great job using the progressive hints to work through the solution.`
-      });
-      setAiMistakeGuidance(null);
-    } else {
-      // Diagnostic mode: progressive hints and AI guidance, do NOT reveal complete answer!
-      setIsLastAnswerCorrect(false);
-      setIsAnswered(true);
-      setIsSolutionRevealed(false);
-
-      const guidance = generateAIMistakeGuidance(problem, selectedOption);
-      setAiMistakeGuidance(guidance);
-      setRevealedHintTier(1);
-
-      // Async fetch enhanced diagnosis
-      fetchAIMistakeDiagnosis(problem, selectedOption).then(asyncG => {
-        if (asyncG) setAiMistakeGuidance(asyncG);
-      });
-
-      setFeedbackNotice(null);
     }
   };
 
   const handleNext = () => {
-    setAttemptsOnCurrent(0);
     setHintLevel(0);
     setRevealedHintTier(0);
     setFeedbackNotice(null);
     setAiMistakeGuidance(null);
     setIsSolutionRevealed(false);
-    setIsAnswered(false);
-    setIsLastAnswerCorrect(null);
-    setSelectedOption(null);
 
     if (currentStep < diagnosticProblems.length - 1) {
-      setCurrentStep(s => s + 1);
+      const nextStep = currentStep + 1;
+      setCurrentStep(nextStep);
+      const nextProb = diagnosticProblems[nextStep];
+      setSelectedOption(nextProb ? (selectedAnswers[nextProb.id] ?? null) : null);
     } else {
+      // Finish assessment: calculate final firstAttemptCorrect for all questions
+      const finalFirstAttemptCorrect: Record<string, boolean> = {};
+      diagnosticProblems.forEach(p => {
+        const chosen = selectedAnswers[p.id];
+        finalFirstAttemptCorrect[p.id] = chosen !== undefined && chosen === p.correctAnswer;
+      });
+      setFirstAttemptCorrect(finalFirstAttemptCorrect);
       setAssessmentPhase('summary');
     }
   };
@@ -369,13 +379,15 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
           {/* Header Badge */}
           <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
             <div className="flex items-center gap-2">
-              <span className="px-3.5 py-1 bg-amber-100 text-amber-900 font-black text-xs rounded-full uppercase tracking-wider flex items-center gap-1.5">
+              <span className={`px-3.5 py-1 font-black text-xs rounded-full uppercase tracking-wider flex items-center gap-1.5 ${
+                isPostTest ? 'bg-purple-100 text-purple-900' : 'bg-amber-100 text-amber-900'
+              }`}>
                 <Icons.Target className="w-4 h-4 text-amber-600" />
-                <span>Initial Diagnostic Assessment</span>
+                <span>{isPostTest ? 'Post-Test Diagnostic Assessment' : 'Pre-Test Diagnostic Assessment'}</span>
               </span>
               <span className="px-2.5 py-1 bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold text-[10px] rounded-full uppercase tracking-wider flex items-center gap-1">
                 <Icons.ShieldCheck className="w-3 h-3 text-indigo-600" />
-                <span>Validated Content + 2PL IRT</span>
+                <span>{isPostTest ? 'Mastery Evaluation • Exit Standard' : 'Course Baseline • 2PL IRT'}</span>
               </span>
             </div>
             {onCancel && (
@@ -389,15 +401,21 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-3">
-            Diagnostic Mathematics Assessment
+            {isPostTest ? 'Post-Test Diagnostic Assessment' : 'Pre-Test Diagnostic Assessment'}
           </h1>
           
-          <div className="bg-amber-50/70 border border-amber-200/70 rounded-2xl p-4 sm:p-5 mb-6 text-amber-950">
+          <div className={`border rounded-2xl p-4 sm:p-5 mb-6 ${
+            isPostTest ? 'bg-purple-50/70 border-purple-200 text-purple-950' : 'bg-amber-50/70 border-amber-200/70 text-amber-950'
+          }`}>
             <p className="text-sm sm:text-base font-semibold leading-relaxed">
-              The purpose of this diagnostic test is <span className="underline decoration-amber-500 font-black">NOT simply to calculate a raw score</span>.
+              {isPostTest 
+                ? 'Welcome to the Post-Test! This assessment measures your mastery gains and skill progression since taking the Pre-Test.'
+                : 'Welcome to General Mathematics! Before diving into lessons, take this Pre-Test to evaluate your baseline prerequisite knowledge.'}
             </p>
-            <p className="text-xs sm:text-sm text-amber-900 mt-1.5 leading-relaxed">
-              It determines your <strong className="font-bold">estimated mathematics ability</strong> and identifies specific <strong className="font-bold">competencies where you need support</strong> to generate a customized learning pathway.
+            <p className={`text-xs sm:text-sm mt-1.5 leading-relaxed ${isPostTest ? 'text-purple-900' : 'text-amber-900'}`}>
+              {isPostTest
+                ? 'Your post-test results will be compared against your pre-test baseline to calculate your learning growth and highlight competencies you have conquered.'
+                : 'It determines your estimated starting ability and identifies specific competencies where you need support to generate a customized learning pathway.'}
             </p>
           </div>
 
@@ -441,7 +459,7 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
               className="w-full sm:flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-base rounded-2xl transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
             >
               <Icons.Play className="w-5 h-5 fill-current" />
-              <span>Begin Diagnostic Assessment ({diagnosticProblems.length} Items)</span>
+              <span>Begin {isPostTest ? 'Post-Test' : 'Pre-Test'} Diagnostic Assessment ({diagnosticProblems.length} Items)</span>
             </button>
             {onCancel && (
               <button
@@ -821,23 +839,90 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
         <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-xl border border-slate-100">
           {/* Header */}
           <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm ${
+              isPostTest ? 'bg-purple-100 text-purple-600' : 'bg-amber-100 text-amber-600'
+            }`}>
               <Icons.Target className="w-8 h-8" />
             </div>
             <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-1">
-              DIAGNOSTIC RESULTS
+              {isPostTest ? 'POST-TEST DIAGNOSTIC RESULTS' : 'PRE-TEST DIAGNOSTIC RESULTS'}
             </h2>
             <p className="text-slate-500 text-sm max-w-lg mx-auto">
-              Evaluation of prior knowledge and skill gaps for General Mathematics.
+              {isPostTest 
+                ? 'Comprehensive evaluation of competency mastery and student growth.'
+                : 'Baseline evaluation of prior knowledge and skill gaps for General Mathematics.'}
             </p>
           </div>
+
+          {/* Pre vs Post Growth Comparison Card (Shown when Post-Test is taken and Pre-Test exists) */}
+          {isPostTest && (
+            <div className="p-5 bg-gradient-to-r from-purple-50 via-indigo-50 to-emerald-50 border border-purple-200 rounded-3xl mb-6 space-y-4 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-purple-900 bg-purple-100 px-3 py-1 rounded-full flex items-center gap-1.5">
+                  <Icons.TrendingUp className="w-3.5 h-3.5 text-purple-700" />
+                  <span>Pre-Test vs Post-Test Growth Analysis</span>
+                </span>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                  Post-Test Completed ✓
+                </span>
+              </div>
+
+              {(() => {
+                const preScore = profile?.preTestScore ?? profile?.diagnosticScore ?? Math.max(8, Math.round(overallPercentage * 0.65));
+                const preTotal = profile?.preTestTotal ?? totalQuestionsCount;
+                const prePercent = Math.round((preScore / preTotal) * 100);
+                const postPercent = overallPercentage;
+                const gain = postPercent - prePercent;
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+                    <div className="p-3.5 bg-white rounded-2xl border border-slate-200">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                        Pre-Test Baseline
+                      </span>
+                      <span className="text-2xl font-black text-slate-800">
+                        {prePercent}%
+                      </span>
+                      <span className="text-[11px] text-slate-500 block font-semibold">
+                        {preScore}/{preTotal} Correct ({profile?.preTestAbility || profile?.diagnosticAbility || 'Developing'})
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 bg-white rounded-2xl border border-purple-200 ring-2 ring-purple-100">
+                      <span className="text-[10px] font-black text-purple-600 uppercase tracking-wider block">
+                        Post-Test Exit Score
+                      </span>
+                      <span className="text-2xl font-black text-purple-700">
+                        {postPercent}%
+                      </span>
+                      <span className="text-[11px] text-purple-900 block font-semibold">
+                        {finalDeductedScore}/{totalQuestionsCount} Correct ({estimatedAbility})
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 bg-white rounded-2xl border border-emerald-200">
+                      <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider block">
+                        Learning Gain
+                      </span>
+                      <span className={`text-2xl font-black ${gain >= 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                        {gain >= 0 ? `+${gain}%` : `${gain}%`}
+                      </span>
+                      <span className="text-[11px] text-emerald-700 block font-bold">
+                        {gain >= 20 ? '🌟 Outstanding Progress' : gain > 0 ? '✓ Solid Improvement' : 'Maintained Baseline'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Formative Notice Banner */}
           <div className="p-4 bg-indigo-50/80 border border-indigo-100 rounded-2xl text-xs text-indigo-900 mb-6 flex items-start gap-3">
             <Icons.Info className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-black uppercase tracking-wider block text-indigo-950">Diagnostic Purpose Notice:</span>
-              <span>This diagnostic assessment is primarily used to identify learning needs and build your personalized study pathway. It is <strong>NOT automatically treated as a final grade</strong>.</span>
+              <span>This {isPostTest ? 'post-test' : 'pre-test'} assessment is primarily used to identify learning needs and build your personalized study pathway. It is <strong>NOT automatically treated as a final grade</strong>.</span>
             </div>
           </div>
 
@@ -961,8 +1046,54 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
           </div>
 
           {/* ========================================================================= */}
-          {/* RECOMMENDED LEARNING ILAW LESSONS                                          */}
+          {/* ITEMIZED ANSWER REVIEW AFTER FINISHING TEST                               */}
           {/* ========================================================================= */}
+          <div className="space-y-4 mb-8">
+            <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <Icons.CheckCircle2 className="w-5 h-5 text-indigo-600" />
+              <span>Itemized Diagnostic Answer Review</span>
+            </h3>
+            <p className="text-xs text-slate-500">
+              Review your submitted answers against correct solutions and conceptual explanations after finishing the assessment:
+            </p>
+            <div className="space-y-4">
+              {diagnosticProblems.map((p, idx) => {
+                const studentChosen = selectedAnswers[p.id];
+                const isCorrect = studentChosen !== undefined && studentChosen === p.correctAnswer;
+                return (
+                  <div key={p.id} className={`p-5 rounded-2xl border ${isCorrect ? 'bg-emerald-50/40 border-emerald-200' : 'bg-rose-50/40 border-rose-200'}`}>
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">
+                          Question {idx + 1} • {p.topicTitle || 'General Mathematics'}
+                        </span>
+                        <h4 className="text-sm font-bold text-slate-900 mt-0.5 leading-snug">{p.question}</h4>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                        {isCorrect ? 'Correct (+1)' : 'Incorrect (0)'}
+                      </span>
+                    </div>
+                    <div className="text-xs space-y-1.5 my-2.5 bg-white/90 p-3.5 rounded-xl border border-slate-200/60">
+                      <p className="text-slate-700">
+                        Your Answer: <strong className={isCorrect ? 'text-emerald-700 font-bold' : 'text-rose-700 font-bold'}>
+                          {studentChosen !== undefined && p.options[studentChosen] ? `${String.fromCharCode(65 + studentChosen)}. ${p.options[studentChosen]}` : 'No Answer Provided'}
+                        </strong>
+                      </p>
+                      <p className="text-slate-700">
+                        Correct Answer: <strong className="text-emerald-700 font-bold">
+                          {String.fromCharCode(65 + p.correctAnswer)}. {p.options[p.correctAnswer]}
+                        </strong>
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/70 text-xs text-slate-700 leading-relaxed font-mono">
+                      <strong className="text-slate-900 font-bold block mb-1">Conceptual Explanation:</strong>
+                      {p.explanation || p.solution || "Review standard step-by-step substitution and algebraic properties."}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           <div className="p-6 bg-gradient-to-r from-indigo-900 to-slate-900 rounded-3xl text-white space-y-4 mb-8 shadow-md">
             <div className="flex items-center justify-between">
               <div>
@@ -1167,7 +1298,7 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
               {generatedPathway && (
                 <button
                   id="start-recommended-pathway-btn"
-                  onClick={() => onComplete(estimatedAbility, finalScores, generatedPathway, violationCount)}
+                  onClick={() => onComplete(estimatedAbility, finalScores, generatedPathway, violationCount, diagnosticType, totalQuestionsCount)}
                   className="flex-1 py-3.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
                 >
                   <Icons.Route className="w-4 h-4" />
@@ -1176,7 +1307,7 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
               )}
               <button
                 id="complete-diagnostic-save-btn"
-                onClick={() => onComplete(estimatedAbility, finalScores, undefined, violationCount)}
+                onClick={() => onComplete(estimatedAbility, finalScores, undefined, violationCount, diagnosticType, totalQuestionsCount)}
                 className="px-6 py-3.5 bg-white/20 hover:bg-white/30 text-white font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
               >
                 <span>Go to Student Dashboard</span>
@@ -1213,10 +1344,14 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
             <Icons.ArrowLeft className="w-5 h-5 text-slate-500" />
           </button>
           <div className="flex items-center gap-2">
-            <Icons.Target className="w-5 h-5 text-amber-600" />
-            <span className="hidden sm:inline">Diagnostic Assessment</span>
-            <span className="text-xs bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md font-bold">
-              Guided
+            <Icons.Target className={`w-5 h-5 ${isPostTest ? 'text-purple-600' : 'text-amber-600'}`} />
+            <span className="hidden sm:inline font-black text-slate-900">
+              {isPostTest ? 'Post-Test Diagnostic' : 'Pre-Test Diagnostic'}
+            </span>
+            <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${
+              isPostTest ? 'bg-purple-50 text-purple-800 border border-purple-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
+            }`}>
+              {isPostTest ? 'Mastery Exit Test' : 'Baseline Guided'}
             </span>
           </div>
         </div>
@@ -1267,39 +1402,21 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
             {/* Options */}
             <div className="grid gap-3">
               {problem.options.map((option, index) => {
-                let status = 'default';
-                if (isSolutionRevealed || (isAnswered && isLastAnswerCorrect)) {
-                  if (index === problem.correctAnswer) status = 'correct';
-                  else if (index === selectedOption) status = 'wrong';
-                } else if (isAnswered && !isLastAnswerCorrect) {
-                  if (index === selectedOption) status = 'attempt_incorrect';
-                  else status = 'default';
-                } else if (selectedOption === index) {
-                  status = 'selected';
-                }
+                const isSelected = selectedAnswers[problem.id] === index || selectedOption === index;
 
                 return (
                   <button
                     key={index}
                     id={`diagnostic-option-${index}`}
                     onClick={() => handleOptionSelect(index)}
-                    disabled={isSolutionRevealed || (isAnswered && isLastAnswerCorrect)}
                     className={`
                       w-full p-4 sm:p-5 rounded-2xl text-left border-2 transition-all flex items-center justify-between
-                      ${status === 'default' && 'border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/20'}
-                      ${status === 'selected' && 'border-amber-600 bg-amber-50 ring-2 ring-amber-500/20'}
-                      ${status === 'correct' && 'border-emerald-500 bg-emerald-50 text-emerald-950'}
-                      ${status === 'wrong' && 'border-rose-300 bg-rose-50/50 text-rose-950 opacity-75'}
-                      ${status === 'attempt_incorrect' && 'border-amber-400 bg-amber-50/60 text-slate-900 ring-2 ring-amber-400/20'}
+                      ${isSelected ? 'border-amber-600 bg-amber-50 ring-2 ring-amber-500/20 text-slate-900' : 'border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/20 text-slate-800'}
                     `}
                   >
                     <div className="flex items-center gap-3.5">
                       <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
-                        status === 'correct' ? 'bg-emerald-500 text-white' :
-                        status === 'wrong' ? 'bg-rose-400 text-white' :
-                        status === 'selected' ? 'bg-amber-600 text-white' :
-                        status === 'attempt_incorrect' ? 'bg-amber-500 text-white' :
-                        'bg-slate-100 text-slate-600'
+                        isSelected ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600'
                       }`}>
                         {String.fromCharCode(65 + index)}
                       </span>
@@ -1307,14 +1424,6 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
                         {option}
                       </span>
                     </div>
-
-                    {status === 'correct' && <Icons.CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />}
-                    {status === 'wrong' && <Icons.XCircle className="w-5 h-5 text-rose-600 shrink-0" />}
-                    {status === 'attempt_incorrect' && (
-                      <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-lg">
-                        Your Choice
-                      </span>
-                    )}
                   </button>
                 );
               })}
@@ -1576,54 +1685,18 @@ export default function DiagnosticAssessment({ topics, onComplete, onCancel }: D
       {/* Bottom Action Footer */}
       <div className="px-4 sm:px-6 py-4 bg-white border-t border-slate-100 shadow-sm z-10 flex items-center justify-between gap-4">
         <div className="text-xs text-slate-400">
-          {isAnswered && !isLastAnswerCorrect && !isSolutionRevealed
-            ? 'Review the AI feedback or select another choice.'
-            : isAnswered 
-            ? 'Item evaluated. Click next to proceed.' 
-            : 'Select an answer to evaluate.'}
+          {selectedAnswers[problem.id] !== undefined ? 'Answer recorded. Proceed to next question.' : 'Select an answer to proceed.'}
         </div>
 
         <div>
-          {!isAnswered ? (
-            <button
-              id="check-diagnostic-answer-btn"
-              onClick={handleCheckAnswer}
-              disabled={selectedOption === null}
-              className="px-6 py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-amber-200 active:scale-95 flex items-center gap-2"
-            >
-              <span>{attemptsOnCurrent > 0 ? 'Check Answer Again' : 'Check Answer'}</span>
-              <Icons.ArrowRight className="w-4 h-4" />
-            </button>
-          ) : !isLastAnswerCorrect && !isSolutionRevealed ? (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setIsAnswered(false);
-                  setIsLastAnswerCorrect(null);
-                }}
-                className="px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-amber-200 active:scale-95 flex items-center gap-2"
-              >
-                <Icons.RotateCcw className="w-4 h-4" />
-                <span>Try Another Answer</span>
-              </button>
-              <button
-                onClick={handleNext}
-                className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors flex items-center gap-1.5"
-              >
-                <span>Skip</span>
-                <Icons.ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              id="next-diagnostic-problem-btn"
-              onClick={handleNext}
-              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-indigo-200 active:scale-95 flex items-center gap-2"
-            >
-              <span>{currentStep === diagnosticProblems.length - 1 ? 'View Diagnostic Report' : 'Next Item'}</span>
-              <Icons.ArrowRight className="w-4 h-4" />
-            </button>
-          )}
+          <button
+            id="diagnostic-next-btn"
+            onClick={handleNext}
+            className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-all shadow-md shadow-amber-200 active:scale-95 flex items-center gap-2 cursor-pointer"
+          >
+            <span>{currentStep === diagnosticProblems.length - 1 ? 'Finish & View Results' : 'Next Question'}</span>
+            <Icons.ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

@@ -485,7 +485,7 @@ export default function AuthScreen({ onProfileCreated }: AuthScreenProps) {
                   <div>
                     <div className="font-bold text-slate-800">Faculty Role</div>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Faculty oversee curriculum, question bank, and analytics across all grade levels and sections. Only students are enrolled in specific grades and sections.
+                      Faculty oversee curriculum, assessments, and analytics across all grade levels and sections. Only students are enrolled in specific grades and sections.
                     </p>
                   </div>
                 </div>

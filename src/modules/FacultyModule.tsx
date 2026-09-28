@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Users, 
@@ -77,11 +77,9 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
       // Assessments
       case 'assessments-diagnostic': return { title: 'Assessments • Diagnostic Assessments', subtitle: 'Pre-learning baseline checks to measure prior student knowledge' };
       case 'assessments-formative': return { title: 'Assessments • Formative Assessments', subtitle: 'In-lesson continuous learning and immediate feedback checks' };
-      case 'assessments-bank': return { title: 'Assessments • Question Bank', subtitle: 'Author, search, filter, and calibrate assessment items' };
       case 'assessments-create': return { title: 'Assessments • Create Assessment', subtitle: 'Author new Diagnostic or Formative assessments' };
       case 'assessments-diagnostic-results': return { title: 'Assessments • Diagnostic Results', subtitle: 'Pre-learning baseline analytics and student diagnostic scoreboards' };
       case 'assessments-formative-results': return { title: 'Assessments • Formative Results', subtitle: 'In-lesson continuous quiz results and formative performance scoreboards' };
-      case 'assessments-quizzes': return { title: 'Assessments • Quizzes', subtitle: 'Formative unit assessment modules' };
       case 'assessments-exams': return { title: 'Assessments • Summative Exams', subtitle: 'Table of Specifications (TOS) examination blueprints' };
       // My Classes
       case 'classes-sections': return { title: 'My Classes • Sections & Strands', subtitle: 'STEM, ABM, HUMSS, TVL section distribution' };
@@ -220,11 +218,10 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
                     currentSection === 'assessments-diagnostic' ? 'diagnostic' :
                     currentSection === 'assessments-formative' ? 'formative' :
                     currentSection === 'assessments-create' ? 'diagnostic' :
-                    currentSection === 'assessments-bank' ? 'bank' :
                     currentSection === 'assessments-diagnostic-results' ? 'diagnostic-results' :
                     currentSection === 'assessments-formative-results' ? 'formative-results' :
                     currentSection === 'assessments-exams' ? 'exams' :
-                    'quizzes'
+                    'diagnostic'
                   }
                 />
               </motion.div>

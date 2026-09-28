@@ -26,7 +26,7 @@ interface DashboardProps {
   onStartCompetencyPractice?: (quiz: Quiz) => void;
   onStartAdaptivePractice?: (competencyName?: string) => void;
   onRetakeQuiz?: (quizId: string) => void;
-  onRetakeDiagnostic?: () => void;
+  onRetakeDiagnostic?: (type?: 'pre-test' | 'post-test') => void;
   onOpenPeerChat?: (peerId?: string, topicId?: string) => void;
   unreadChatCount?: number;
   onOpenAIQuizModal?: () => void;
@@ -525,11 +525,11 @@ export default function Dashboard({
         </div>
 
         {/* Math Ability & Diagnostic Status Card */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between">
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between space-y-2">
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                Diagnostic Ability
+                Diagnostic Status
               </span>
               <div className="w-7 h-7 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                 <Icons.Brain className="w-4 h-4" />
@@ -539,19 +539,30 @@ export default function Dashboard({
             <div className="text-2xl font-black text-slate-900 mb-1">
               {profile.mathAbility || profile.diagnosticAbility || 'Pending'}
             </div>
-            <p className="text-xs text-slate-400">
-              {profile.diagnosticCompleted ? 'Baseline evaluated' : 'Assessment pending'}
-            </p>
+            <div className="space-y-0.5 text-[11px] text-slate-500 font-semibold">
+              <div>Pre-Test: <strong className={profile.preTestCompleted || profile.diagnosticCompleted ? 'text-emerald-700' : 'text-amber-700'}>{profile.preTestCompleted || profile.diagnosticCompleted ? 'Completed ✓' : 'Pending (Take on App Start)'}</strong></div>
+              <div>Post-Test: <strong className={profile.postTestCompleted ? 'text-purple-700' : 'text-slate-500'}>{profile.postTestCompleted ? `Completed (${profile.postTestScore}/26)` : 'Exit Evaluation'}</strong></div>
+            </div>
           </div>
 
           {onRetakeDiagnostic && (
-            <button
-              onClick={onRetakeDiagnostic}
-              className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 pt-2 border-t border-slate-100"
-            >
-              <Icons.RotateCcw className="w-3.5 h-3.5" />
-              <span>{profile.diagnosticCompleted ? 'Retake Diagnostic' : 'Take Diagnostic'}</span>
-            </button>
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => onRetakeDiagnostic('pre-test')}
+                className="text-xs font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 cursor-pointer"
+              >
+                <Icons.Sparkles className="w-3 h-3 text-amber-600" />
+                <span>Pre-Test</span>
+              </button>
+              <span className="text-slate-300">•</span>
+              <button
+                onClick={() => onRetakeDiagnostic('post-test')}
+                className="text-xs font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1 cursor-pointer"
+              >
+                <Icons.Award className="w-3 h-3 text-purple-600" />
+                <span>Post-Test</span>
+              </button>
+            </div>
           )}
         </div>
 

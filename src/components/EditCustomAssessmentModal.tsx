@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  X, Save, Trash2, Plus, Sparkles, HelpCircle, AlertCircle, Edit3, Check, RefreshCw 
+  X, Save, Trash2, Plus, Sparkles, HelpCircle, AlertCircle, Edit3, Check, RefreshCw, EyeOff 
 } from 'lucide-react';
 import { ParsedDepEdQuestion } from './DepEdExcelImporter';
 
@@ -18,22 +18,29 @@ interface EditCustomAssessmentModalProps {
     schedule: string;
     questions: ParsedDepEdQuestion[];
     createdAt: string;
+    published?: boolean;
+    status?: string;
   } | null;
   onSave: (updatedAssessment: any) => void;
+  onDelete?: (assessmentId: string) => void;
 }
 
 export default function EditCustomAssessmentModal({
   isOpen,
   onClose,
   assessment,
-  onSave
+  onSave,
+  onDelete
 }: EditCustomAssessmentModalProps) {
   const [title, setTitle] = useState('');
   const [targetSection, setTargetSection] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [schedule, setSchedule] = useState('');
+  const [published, setPublished] = useState<boolean>(true);
   const [questions, setQuestions] = useState<ParsedDepEdQuestion[]>([]);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
+
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   // Load assessment values on open
   useEffect(() => {
@@ -42,8 +49,10 @@ export default function EditCustomAssessmentModal({
       setTargetSection(assessment.targetSection);
       setAccessCode(assessment.accessCode);
       setSchedule(assessment.schedule);
+      setPublished(assessment.published !== false && assessment.status !== 'Draft');
       setQuestions(JSON.parse(JSON.stringify(assessment.questions || []))); // deep clone
       setExpandedIndex(0);
+      setShowRemoveConfirm(false);
     }
   }, [assessment, isOpen]);
 
@@ -64,8 +73,24 @@ export default function EditCustomAssessmentModal({
     }));
   };
 
+  const handleToggleQuestionPublished = (qId: string) => {
+    setQuestions(prev => prev.map(q => {
+      if (q.id === qId) {
+        return { ...q, published: q.published === false ? true : false };
+      }
+      return q;
+    }));
+  };
+
   const handleDeleteQuestion = (qId: string) => {
     setQuestions(prev => prev.filter(q => q.id !== qId));
+  };
+
+  const handleConfirmRemoveAssessment = () => {
+    if (onDelete && assessment) {
+      onDelete(assessment.id);
+    }
+    onClose();
   };
 
   const handleAddQuestion = () => {
@@ -78,7 +103,8 @@ export default function EditCustomAssessmentModal({
       competency: 'M11GM-Ia-1',
       difficulty: 'medium',
       correctFeedback: 'Excellent explanation!',
-      incorrectFeedback: 'Review basic properties.'
+      incorrectFeedback: 'Review basic properties.',
+      published: true
     };
     setQuestions(prev => [...prev, newQ]);
     setExpandedIndex(questions.length); // Expand the newly added question
@@ -102,6 +128,8 @@ export default function EditCustomAssessmentModal({
       schedule,
       questionsCount: questions.length,
       questions,
+      published,
+      status: published ? 'Published' : 'Draft',
       updatedAt: new Date().toISOString()
     });
     onClose();
@@ -192,6 +220,32 @@ export default function EditCustomAssessmentModal({
                 <span className="bg-indigo-600 text-white px-2.5 py-0.5 rounded-lg font-black">{questions.length}</span>
               </div>
             </div>
+
+            {/* Assessment Student Visibility Toggle */}
+            <div className="sm:col-span-2 space-y-1 flex items-end">
+              <div className="p-2.5 bg-white rounded-xl border border-slate-200 text-xs w-full flex items-center justify-between gap-3 shadow-2xs">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                    Student Visibility Status
+                  </span>
+                  <span className="text-xs font-bold text-slate-800 truncate block">
+                    {published ? 'Published to Students' : 'Not Published (Draft)'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPublished(!published)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
+                    published 
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                      : 'bg-amber-500 hover:bg-amber-600 text-slate-950'
+                  }`}
+                >
+                  {published ? <Check className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  <span>{published ? 'Published to Student' : 'Not Published'}</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Question List Header */}
@@ -209,7 +263,7 @@ export default function EditCustomAssessmentModal({
           </div>
 
           {/* Question List Map */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             {questions.map((q, idx) => {
               const isExpanded = expandedIndex === idx;
 
@@ -223,33 +277,62 @@ export default function EditCustomAssessmentModal({
                   {/* Question Header Accordion */}
                   <div 
                     onClick={() => setExpandedIndex(isExpanded ? null : idx)}
-                    className="p-4 flex items-center justify-between gap-4 cursor-pointer select-none"
+                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer select-none"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
-                        isExpanded ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
+                        isExpanded ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'
                       }`}>
                         {idx + 1}
                       </span>
-                      <p className="text-xs sm:text-sm font-bold text-slate-800 truncate">
+                      <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">
                         {q.question || <em className="text-slate-400 font-normal">Untitled Question</em>}
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-[10px] font-black uppercase bg-slate-200/80 text-slate-700 px-2 py-0.5 rounded tracking-wide">
+                    <div className="flex items-center gap-2 flex-wrap shrink-0 justify-end">
+                      {/* Published to Student Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleQuestionPublished(q.id);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                          q.published !== false
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                            : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                        }`}
+                        title={q.published !== false ? 'Click to hide this question from students' : 'Click to publish this question to students'}
+                      >
+                        {q.published !== false ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Published</span>
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Draft</span>
+                          </>
+                        )}
+                      </button>
+
+                      <span className="text-[10px] font-black uppercase bg-slate-200 text-slate-700 px-2 py-1 rounded-md tracking-wide">
                         {q.difficulty}
                       </span>
-                      <span className="text-[10px] font-bold text-indigo-600 truncate max-w-28 hidden sm:inline">
-                        {q.competency}
-                      </span>
+                      {q.competency && (
+                        <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md truncate max-w-32 hidden md:inline">
+                          {q.competency}
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteQuestion(q.id);
                         }}
-                        className="p-1.5 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                        className="p-1.5 hover:bg-rose-100 text-rose-500 hover:text-rose-700 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-200"
                         title="Delete Question"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -259,15 +342,15 @@ export default function EditCustomAssessmentModal({
 
                   {/* Question Expanded Fields */}
                   {isExpanded && (
-                    <div className="p-4 sm:p-5 border-t border-slate-100 space-y-4 bg-white animate-in slide-in-from-top-2 duration-150">
+                    <div className="p-5 sm:p-6 border-t border-slate-100 space-y-4 bg-white animate-in slide-in-from-top-2 duration-150">
                       {/* Question Text */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Question Stem</label>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">Question Stem & Prompt</label>
                         <textarea
                           rows={2}
                           value={q.question}
                           onChange={(e) => handleUpdateQuestion(q.id, 'question', e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-indigo-500"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"
                         />
                       </div>
 
@@ -276,24 +359,32 @@ export default function EditCustomAssessmentModal({
                         {q.options.map((opt, oIdx) => (
                           <div key={oIdx} className="space-y-1">
                             <div className="flex items-center justify-between">
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                Choice {String.fromCharCode(65 + oIdx)}
+                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                                Option {String.fromCharCode(65 + oIdx)}
                               </label>
                               {Number(q.correctAnswer) === oIdx && (
-                                <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded-full uppercase flex items-center gap-0.5">
-                                  <Check className="w-2.5 h-2.5" /> Correct Answer
+                                <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md uppercase flex items-center gap-1">
+                                  <Check className="w-3 h-3 text-emerald-600" /> Correct Answer
                                 </span>
                               )}
                             </div>
                             <div className="flex gap-2">
-                              <span className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-black border border-slate-200 text-slate-500 uppercase shrink-0">
+                              <span className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black border uppercase shrink-0 ${
+                                Number(q.correctAnswer) === oIdx 
+                                  ? 'bg-emerald-600 text-white border-emerald-700' 
+                                  : 'bg-slate-100 border-slate-200 text-slate-700'
+                              }`}>
                                 {String.fromCharCode(65 + oIdx)}
                               </span>
                               <input
                                 type="text"
                                 value={opt}
                                 onChange={(e) => handleUpdateOption(q.id, oIdx, e.target.value)}
-                                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none"
+                                className={`w-full px-3 py-2 bg-white border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                                  Number(q.correctAnswer) === oIdx
+                                    ? 'border-emerald-400 text-emerald-950 bg-emerald-50/30'
+                                    : 'border-slate-300 text-slate-800'
+                                }`}
                               />
                             </div>
                           </div>
@@ -303,41 +394,56 @@ export default function EditCustomAssessmentModal({
                       {/* Details & Metadata row */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                         <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Syllabus Competency (MELC)</label>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Curriculum Competency (MELC)</label>
                           <input
                             type="text"
                             value={q.competency}
                             onChange={(e) => handleUpdateQuestion(q.id, 'competency', e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:outline-none"
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           />
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Correct Choice (A-D)</label>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Correct Key (A-D)</label>
                           <select
                             value={q.correctAnswer}
                             onChange={(e) => handleUpdateQuestion(q.id, 'correctAnswer', Number(e.target.value))}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:outline-none"
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
-                            <option value={0}>Choice A</option>
-                            <option value={1}>Choice B</option>
-                            <option value={2}>Choice C</option>
-                            <option value={3}>Choice D</option>
+                            <option value={0}>Option A</option>
+                            <option value={1}>Option B</option>
+                            <option value={2}>Option C</option>
+                            <option value={3}>Option D</option>
                           </select>
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Difficulty Scale</label>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block">Difficulty Rating</label>
                           <select
                             value={q.difficulty}
                             onChange={(e) => handleUpdateQuestion(q.id, 'difficulty', e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:outline-none"
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
                             <option value="easy">Easy (Foundational)</option>
                             <option value="medium">Medium (Analytical)</option>
                             <option value="hard">Hard (Mastery Challenge)</option>
                           </select>
                         </div>
+                      </div>
+
+                      {/* Explicit Delete Question Button inside editor */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-xs text-slate-500 font-semibold">
+                          Item ID: <strong className="text-slate-800 font-mono">{q.itemId || q.id}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteQuestion(q.id)}
+                          className="px-3.5 py-2 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete Question #{idx + 1}</span>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -347,14 +453,51 @@ export default function EditCustomAssessmentModal({
           </div>
         </div>
 
+        {/* In-Modal Remove Assessment Confirmation */}
+        {showRemoveConfirm && (
+          <div className="p-4 mx-6 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-rose-900 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>Are you sure you want to permanently remove <strong>"{title}"</strong> and all {questions.length} questions?</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowRemoveConfirm(false)}
+                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemoveAssessment}
+                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-lg shadow-sm cursor-pointer"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer Actions */}
         <div className="p-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
-          <button
-            onClick={onClose}
-            className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowRemoveConfirm(true)}
+              className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              title="Permanently remove this assessment from the list"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              <span>Remove Assessment</span>
+            </button>
+          </div>
 
           <button
             onClick={handleSave}

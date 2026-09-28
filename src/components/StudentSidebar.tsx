@@ -49,7 +49,6 @@ export type StudentNavSection =
   | 'assessments'
   | 'assessments-diagnostic'
   | 'assessments-formative'
-  | 'assessments-quizzes'
   | 'assessments-exams'
   | 'assessments-results'
   | 'resources'
@@ -108,7 +107,7 @@ export default function StudentSidebar({
     lessons: true,
     curriculum: true,
     activities: false,
-    assessments: false,
+    assessments: true,
     resources: false,
     progress: false
   });
@@ -164,11 +163,10 @@ export default function StudentSidebar({
       label: 'Assessments',
       icon: <BarChart3 className="w-4 h-4 text-violet-500" />,
       subItems: [
-        { id: 'assessments-diagnostic', label: 'Diagnostic Assessment', icon: <Sparkles className="w-3.5 h-3.5 text-amber-500" /> },
+        { id: 'assessments-diagnostic', label: 'Diagnostic Assessment', icon: <Sparkles className="w-3.5 h-3.5 text-amber-500" />, badge: 'Pre & Post' },
         { id: 'assessments-formative', label: 'Formative Assessment', icon: <CheckSquare className="w-3.5 h-3.5 text-indigo-500" /> },
-        { id: 'assessments-quizzes', label: 'Quizzes', icon: <FileText className="w-3.5 h-3.5" /> },
-        { id: 'assessments-exams', label: 'Exams (TOS)', icon: <Award className="w-3.5 h-3.5 text-amber-500" /> },
-        { id: 'assessments-results', label: 'My Results', icon: <PieChart className="w-3.5 h-3.5" /> }
+        { id: 'assessments-exams', label: 'Summative Test (TOS)', icon: <Award className="w-3.5 h-3.5 text-amber-500" /> },
+        { id: 'assessments-results', label: 'Assessment Results', icon: <PieChart className="w-3.5 h-3.5 text-emerald-500" /> }
       ]
     },
     {

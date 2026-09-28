@@ -212,6 +212,9 @@ export interface QuizResult {
   userId: string;
   quizId: string;
   score: number;
+  rawScore?: number;
+  scoreDeduction?: number;
+  deductionRate?: number;
   total: number;
   timestamp: string;
   itemResponses?: ItemResponse[];
@@ -293,6 +296,9 @@ export interface SummativeTranscript {
   topicId: string;
   topicTitle: string;
   score: number;
+  rawScore?: number;
+  violations?: number;
+  violationDeductionPoints?: number;
   total: number;
   percentage: number;
   passed: boolean;
@@ -459,7 +465,21 @@ export interface UserProfile {
   diagnosticScores?: Record<string, number>;
   diagnosticScore?: number;
   diagnosticViolations?: number;
+  preTestCompleted?: boolean;
+  preTestScore?: number;
+  preTestTotal?: number;
+  preTestAbility?: string;
+  preTestScores?: Record<string, number>;
+  preTestDate?: string;
+  postTestCompleted?: boolean;
+  postTestScore?: number;
+  postTestTotal?: number;
+  postTestAbility?: string;
+  postTestScores?: Record<string, number>;
+  postTestDate?: string;
   formativeViolations?: number;
+  summativeViolations?: number;
+  totalViolations?: number;
   customViolationDeduction?: number;
   violationLogs?: AltTabViolationLog[];
   completedQuizzes?: string[];
@@ -757,6 +777,7 @@ export interface DiagnosticQuestion {
   assessmentLevel?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
   cognitiveLevel?: string;
+  published?: boolean;
 }
 
 export interface DiagnosticSettings {
