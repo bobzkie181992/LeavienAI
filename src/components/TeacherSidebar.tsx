@@ -135,6 +135,17 @@ export default function TeacherSidebar({
       ]
     },
     {
+      id: 'resources',
+      label: 'Resources',
+      icon: <FolderOpen className="w-4 h-4 text-teal-400" />,
+      defaultOpen: currentSection.startsWith('resources'),
+      children: [
+        { id: 'resources-teaching', label: 'Teaching Materials' },
+        { id: 'resources-worksheets', label: 'Worksheets' },
+        { id: 'resources-shared', label: 'Shared Resources' }
+      ]
+    },
+    {
       id: 'activities',
       label: 'Activities',
       icon: <ClipboardList className="w-4 h-4 text-amber-400" />,
@@ -187,17 +198,6 @@ export default function TeacherSidebar({
         { id: 'analytics-progress', label: 'Student Progress' },
         { id: 'analytics-competency', label: 'Competency Tracking' },
         { id: 'analytics-reports', label: 'Assessment Reports' }
-      ]
-    },
-    {
-      id: 'resources',
-      label: 'Resources',
-      icon: <FolderOpen className="w-4 h-4 text-teal-400" />,
-      defaultOpen: currentSection.startsWith('resources'),
-      children: [
-        { id: 'resources-teaching', label: 'Teaching Materials' },
-        { id: 'resources-worksheets', label: 'Worksheets' },
-        { id: 'resources-shared', label: 'Shared Resources' }
       ]
     }
   ];

@@ -143,6 +143,17 @@ export default function StudentSidebar({
       ]
     },
     {
+      id: 'resources',
+      label: 'Learning Resources',
+      icon: <FolderOpen className="w-4 h-4 text-sky-500" />,
+      subItems: [
+        { id: 'resources-modules', label: 'Modules', icon: <Layers className="w-3.5 h-3.5 text-indigo-500" /> },
+        { id: 'resources-worksheets', label: 'Worksheets', icon: <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> },
+        { id: 'resources-videos', label: 'Videos', icon: <Video className="w-3.5 h-3.5 text-rose-500" /> },
+        { id: 'resources-references', label: 'References', icon: <BookOpen className="w-3.5 h-3.5 text-teal-500" /> }
+      ]
+    },
+    {
       id: 'activities',
       label: 'Activities',
       icon: <CheckSquare className="w-4 h-4 text-emerald-500" />,
@@ -170,17 +181,6 @@ export default function StudentSidebar({
         { id: 'assessments-formative', label: 'Formative Assessment', icon: <CheckSquare className="w-3.5 h-3.5 text-indigo-500" /> },
         { id: 'assessments-exams', label: 'Summative Test (TOS)', icon: <Award className="w-3.5 h-3.5 text-amber-500" /> },
         { id: 'assessments-results', label: 'Assessment Results', icon: <PieChart className="w-3.5 h-3.5 text-emerald-500" /> }
-      ]
-    },
-    {
-      id: 'resources',
-      label: 'Learning Resources',
-      icon: <FolderOpen className="w-4 h-4 text-sky-500" />,
-      subItems: [
-        { id: 'resources-modules', label: 'Modules', icon: <Layers className="w-3.5 h-3.5 text-indigo-500" /> },
-        { id: 'resources-worksheets', label: 'Worksheets', icon: <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> },
-        { id: 'resources-videos', label: 'Videos', icon: <Video className="w-3.5 h-3.5 text-rose-500" /> },
-        { id: 'resources-references', label: 'References', icon: <BookOpen className="w-3.5 h-3.5 text-teal-500" /> }
       ]
     },
     {
