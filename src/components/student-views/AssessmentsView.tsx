@@ -17,18 +17,23 @@ import {
   ShieldAlert,
   ShieldCheck,
   AlertTriangle,
-  Info
+  Info,
+  Zap,
+  Trophy,
+  Compass
 } from 'lucide-react';
 import { Topic, QuizResult, UserProfile, Quiz, SummativeAssessment, isValidatedOrActive } from '../../types';
 import { getIntegritySettings } from '../../lib/integritySettings';
 import StudentViolationReportModal from '../StudentViolationReportModal';
 import QuizResultReviewModal from '../QuizResultReviewModal';
 
+type AssessmentTabType = 'quizzes' | 'exams' | 'results' | 'quarterly' | 'performance' | 'written' | 'oral' | 'authentic';
+
 interface AssessmentsViewProps {
   topics: Topic[];
   results: QuizResult[];
   profile: UserProfile;
-  initialTab?: 'quizzes' | 'exams' | 'results';
+  initialTab?: AssessmentTabType;
   onStartQuiz: (quiz: Quiz, mode?: 'diagnostic' | 'assessment') => void;
   onStartSummativeAssessment?: (assessment: SummativeAssessment) => void;
   onOpenPerformanceModal?: () => void;
@@ -43,10 +48,25 @@ export default function AssessmentsView({
   onStartSummativeAssessment,
   onOpenPerformanceModal
 }: AssessmentsViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'quizzes' | 'exams' | 'results'>(initialTab);
+  const [activeSubTab, setActiveSubTab] = useState<AssessmentTabType>(initialTab);
   const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedResultForReview, setSelectedResultForReview] = useState<QuizResult | null>(null);
+
+  const isQ1Deleted = typeof window !== 'undefined' && localStorage.getItem('mathquest_default_q1_deleted') === 'true';
+  const isQ2Deleted = typeof window !== 'undefined' && localStorage.getItem('mathquest_default_q2_deleted') === 'true';
+  const isPerformanceDeleted = typeof window !== 'undefined' && localStorage.getItem('mathquest_default_performance_deleted') === 'true';
+  const isWrittenDeleted = typeof window !== 'undefined' && localStorage.getItem('mathquest_default_written_deleted') === 'true';
+  const isOralDeleted = typeof window !== 'undefined' && localStorage.getItem('mathquest_default_oral_deleted') === 'true';
+  const isAuthenticDeleted = typeof window !== 'undefined' && localStorage.getItem('mathquest_default_authentic_deleted') === 'true';
+
+  const deletedSummativeExamIds: string[] = (() => {
+    try {
+      const cached = localStorage.getItem('mathquest_deleted_summative_exam_ids');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return [];
+  })();
 
   // Filter topics
   const displayedTopics = topics.filter(t => {
@@ -57,7 +77,7 @@ export default function AssessmentsView({
   // Collect all summative assessments
   const summativeExams: { topic: Topic; exam: SummativeAssessment; isCompleted: boolean; bestScore?: number }[] = [];
   topics.forEach(topic => {
-    if (topic.summativeAssessment) {
+    if (topic.summativeAssessment && !deletedSummativeExamIds.includes(topic.summativeAssessment.id)) {
       const match = results.find(r => r.quizId === topic.summativeAssessment?.id);
       summativeExams.push({
         topic,
@@ -137,7 +157,7 @@ export default function AssessmentsView({
 
         <button
           onClick={() => setActiveSubTab('results')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
             activeSubTab === 'results'
               ? 'bg-white text-emerald-900 shadow-sm font-extrabold border border-slate-200/80'
               : 'text-slate-600 hover:text-slate-900'
@@ -145,6 +165,56 @@ export default function AssessmentsView({
         >
           <PieChart className="w-4 h-4 text-emerald-500" />
           <span>My Results & Analytics</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('quarterly')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === 'quarterly' ? 'bg-white text-amber-900 shadow-sm font-extrabold border border-slate-200/80' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Award className="w-4 h-4 text-amber-500" />
+          <span>Quarterly Assessment</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('performance')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === 'performance' ? 'bg-white text-emerald-900 shadow-sm font-extrabold border border-slate-200/80' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Zap className="w-4 h-4 text-emerald-500" />
+          <span>Performance Assessment</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('written')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === 'written' ? 'bg-white text-blue-900 shadow-sm font-extrabold border border-slate-200/80' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <FileText className="w-4 h-4 text-blue-500" />
+          <span>Written Assessment</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('oral')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === 'oral' ? 'bg-white text-teal-900 shadow-sm font-extrabold border border-slate-200/80' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-teal-500" />
+          <span>Oral Assessment</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('authentic')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === 'authentic' ? 'bg-white text-rose-900 shadow-sm font-extrabold border border-slate-200/80' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4 text-rose-500" />
+          <span>Authentic Assessment</span>
         </button>
       </div>
 
@@ -181,6 +251,241 @@ export default function AssessmentsView({
       </div>
 
       {/* 1. FORMATIVE QUIZZES */}
+      {/* 4. QUARTERLY ASSESSMENT */}
+      {activeSubTab === 'quarterly' && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-amber-600 to-amber-800 text-white p-6 rounded-3xl shadow-lg space-y-2">
+            <span className="bg-white/20 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              DepEd Standardized Examination
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black">Quarterly Assessment (Quarter 1 & 2 Comprehensive)</h2>
+            <p className="text-xs text-amber-100 max-w-2xl leading-relaxed">
+              Official DepEd summative quarterly examinations covering all core General Mathematics competencies, functions, rational expressions, and financial math.
+            </p>
+          </div>
+          {isQ1Deleted && isQ2Deleted ? (
+            <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 font-bold text-sm">
+              📭 No quarterly assessments are currently assigned to you.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {!isQ1Deleted && (
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black bg-amber-100 text-amber-900 px-3 py-1 rounded-full">Quarter 1 Examination</span>
+                    <span className="text-xs font-bold text-slate-500">40 Items • 60 Mins</span>
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900">General Mathematics Quarter 1 Comprehensive Exam</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Covers functions, rational functions, one-to-one functions, inverse functions, and exponential/logarithmic equations.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const t = topics[0];
+                      if (t && t.summativeAssessment) {
+                        onStartSummativeAssessment && onStartSummativeAssessment(t.summativeAssessment);
+                      } else if (t && t.quizzes[0]) {
+                        onStartQuiz(t.quizzes[0], 'assessment');
+                      }
+                    }}
+                    className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>Take Quarter 1 Examination</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {!isQ2Deleted && (
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black bg-indigo-100 text-indigo-900 px-3 py-1 rounded-full">Quarter 2 Examination</span>
+                    <span className="text-xs font-bold text-slate-500">40 Items • 60 Mins</span>
+                  </div>
+                  <h3 className="text-lg font-black text-slate-900">General Mathematics Quarter 2 Comprehensive Exam</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Covers simple & compound interest, annuities, stocks, bonds, business loans, and consumer mathematics.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const t = topics[1] || topics[0];
+                      if (t && t.quizzes[0]) {
+                        onStartQuiz(t.quizzes[0], 'assessment');
+                      }
+                    }}
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>Take Quarter 2 Examination</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 5. PERFORMANCE ASSESSMENT */}
+      {activeSubTab === 'performance' && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-800 text-white p-6 rounded-3xl shadow-lg space-y-2">
+            <span className="bg-white/20 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              DepEd Performance Tasks (PT)
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black">Performance Assessment Tasks</h2>
+            <p className="text-xs text-emerald-100 max-w-2xl leading-relaxed">
+              Output-based performance tasks evaluating real-world mathematical modeling, function sketching portfolios, and financial investment plans.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {isPerformanceDeleted ? (
+              <div className="p-8 text-center bg-white rounded-3xl border border-slate-200 text-slate-500 font-bold text-sm">
+                📭 No performance tasks are currently assigned to you.
+              </div>
+            ) : (
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black bg-emerald-100 text-emerald-900 px-3 py-1 rounded-full">Task #1 (30% of Grade)</span>
+                  <span className="text-xs font-bold text-slate-500">Due: End of Quarter</span>
+                </div>
+                <h3 className="text-base font-black text-slate-900">Real-World Mathematical Modeling Portfolio</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Construct a comprehensive function model representing real-world population growth or business cost functions, complete with graphical analysis and interpretations.
+                </p>
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={() => onOpenPerformanceModal && onOpenPerformanceModal()}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    View Rubric & Submit Task
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 6. WRITTEN ASSESSMENT */}
+      {activeSubTab === 'written' && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-800 text-white p-6 rounded-3xl shadow-lg space-y-2">
+            <span className="bg-white/20 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Written Works (WW)
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black">Written Assessment Exercises</h2>
+            <p className="text-xs text-blue-100 max-w-2xl leading-relaxed">
+              Step-by-step problem sets, algebraic proofs, equation solving, and formula derivation exercises.
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <h3 className="text-base font-black text-slate-900">Available Written Problem Sets</h3>
+            {isWrittenDeleted ? (
+              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-500 font-bold text-xs">
+                📭 No written assessment exercises are currently assigned to you.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {topics.slice(0, 3).map((t, idx) => (
+                  <div key={t.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-[10px] font-bold text-blue-600 uppercase">Written Work #{idx + 1}</span>
+                      <h4 className="font-bold text-slate-900 text-sm">{t.title} Problem Set</h4>
+                      <p className="text-xs text-slate-500">{t.quizzes.length} Exercises • Computation & Proofs</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (t.quizzes[0]) onStartQuiz(t.quizzes[0], 'standard');
+                      }}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer shrink-0"
+                    >
+                      Start Written Task
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 7. ORAL ASSESSMENT */}
+      {activeSubTab === 'oral' && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-teal-600 to-emerald-800 text-white p-6 rounded-3xl shadow-lg space-y-2">
+            <span className="bg-white/20 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Oral Recitation & Defense
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black">Oral Assessment Tasks</h2>
+            <p className="text-xs text-teal-100 max-w-2xl leading-relaxed">
+              Interactive conceptual defense prompts and oral problem explanations evaluated by AI rubric or teacher review.
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            {isOralDeleted ? (
+              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-500 font-bold text-xs">
+                📭 No oral recitation defense prompts are currently assigned to you.
+              </div>
+            ) : (
+              <div className="p-4 bg-teal-50 border border-teal-200 rounded-2xl space-y-2">
+                <h3 className="font-black text-teal-900 text-sm">Oral Prompt: Explain the Vertical Line Test</h3>
+                <p className="text-xs text-teal-800 leading-relaxed">
+                  Record your explanation or type a detailed conceptual defense of why the vertical line test determines whether a relation is a function.
+                </p>
+                <button
+                  onClick={() => alert("Oral Assessment prompt activated! You can record or explain your reasoning.")}
+                  className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  Start Oral Defense Prompt
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 8. AUTHENTIC ASSESSMENT */}
+      {activeSubTab === 'authentic' && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-rose-600 to-pink-800 text-white p-6 rounded-3xl shadow-lg space-y-2">
+            <span className="bg-white/20 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Authentic Real-World Tasks
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black">Authentic Assessment</h2>
+            <p className="text-xs text-rose-100 max-w-2xl leading-relaxed">
+              Contextualized real-world mathematical scenarios reflecting authentic community problems, consumer finance, and exponential spread modeling.
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            {isAuthenticDeleted ? (
+              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-500 font-bold text-xs">
+                📭 No authentic contextualized tasks are currently assigned to you.
+              </div>
+            ) : (
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
+                <h3 className="font-black text-rose-900 text-sm">Scenario: Opening a Small Business & Compound Interest Investment</h3>
+                <p className="text-xs text-rose-800 leading-relaxed">
+                  Calculate the optimal loan repayment schedule and investment growth for a local cooperative using exponential and logarithmic compound interest models.
+                </p>
+                <button
+                  onClick={() => {
+                    const t = topics[0];
+                    if (t && t.quizzes[0]) onStartQuiz(t.quizzes[0], 'assessment');
+                  }}
+                  className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  Launch Authentic Task
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {activeSubTab === 'quizzes' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">

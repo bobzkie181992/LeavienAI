@@ -14,7 +14,8 @@ import {
   HelpCircle,
   Zap,
   Target,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Trash2
 } from 'lucide-react';
 import { UserProfile, Topic } from '../types';
 import { useUserProfile } from '../hooks/useFirebase';
@@ -217,6 +218,26 @@ export default function StudentFormativeAssessmentPage({
     }
   };
 
+  const handleDeleteAssessment = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this imported formative questionnaire?")) return;
+    
+    // Remove from state
+    setAssessments(prev => prev.filter(a => a.id !== id));
+    
+    // Remove from localStorage
+    try {
+      const cached = localStorage.getItem('mathquest_formative_assessments');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const filtered = parsed.filter((p: any) => p.id !== id);
+        localStorage.setItem('mathquest_formative_assessments', JSON.stringify(filtered));
+      }
+    } catch (err) {
+      console.error("Failed to delete formative assessment:", err);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header Banner */}
@@ -347,15 +368,28 @@ export default function StudentFormativeAssessmentPage({
                   <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                     {a.type}
                   </span>
-                  {a.status === 'completed' ? (
-                    <span className="text-xs font-black text-emerald-600 flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" /> Score: {a.score}/{a.total}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                      Assigned
-                    </span>
-                  )}
+                  
+                  <div className="flex items-center gap-2">
+                    {a.status === 'completed' ? (
+                      <span className="text-xs font-black text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4" /> Score: {a.score}/{a.total}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        Assigned
+                      </span>
+                    )}
+
+                    {!a.id.startsWith('formative-') && (
+                      <button
+                        onClick={(e) => handleDeleteAssessment(a.id, e)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                        title="Delete Imported Formative Questionnaire"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <h3 className="text-base font-black text-slate-900 leading-snug">{a.title}</h3>

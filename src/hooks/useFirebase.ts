@@ -394,6 +394,10 @@ export function useUserProfile(uid: string | undefined) {
     const isPostTest = testType === 'post-test';
     const nowIso = new Date().toISOString();
 
+    // XP calculation: 30 XP if perfect score (netScore === totalItems), or proportional calculation in 30 XP if not perfect
+    const earnedXP = netScore >= totalItems ? 30 : Math.max(0, Math.round((netScore / totalItems) * 30));
+    await addXP(earnedXP);
+
     const updated: UserProfile = {
       ...profile,
       diagnosticCompleted: true,
@@ -461,6 +465,7 @@ export function useUserProfile(uid: string | undefined) {
         totalViolations: totalV,
         mathAbility: ability,
         competencyScores: scores,
+        xp: increment(earnedXP),
         ...(isPostTest ? {
           postTestCompleted: true,
           postTestScore: netScore,
@@ -506,6 +511,11 @@ export function useUserProfile(uid: string | undefined) {
   const saveFormativeResult = async (score: number, total: number, violations: number) => {
     if (!uid || !profile) return;
     const currentFormativeViolations = profile.formativeViolations || 0;
+    
+    // XP calculation: 30 XP if perfect score (score === total), or proportional calculation in 30 XP if not perfect
+    const earnedXP = score >= total ? 30 : Math.max(0, Math.round((score / total) * 30));
+    await addXP(earnedXP);
+
     const updated: UserProfile = {
       ...profile,
       formativeViolations: currentFormativeViolations + violations
@@ -515,10 +525,11 @@ export function useUserProfile(uid: string | undefined) {
     try {
       const docRef = doc(db, 'users', uid);
       await updateDoc(docRef, {
-        formativeViolations: increment(violations)
+        formativeViolations: increment(violations),
+        xp: increment(earnedXP)
       });
     } catch (err) {
-      console.warn("Remote formative violation save deferred:", err);
+      console.warn("Remote formative result save deferred:", err);
     }
   };
 

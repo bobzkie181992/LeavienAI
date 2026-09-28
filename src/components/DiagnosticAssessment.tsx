@@ -212,10 +212,14 @@ export default function DiagnosticAssessment({
 
   // Generate diagnostic problem set with question and choices randomization (Anti-Cheating)
   const diagnosticProblems = useMemo(() => {
-    // 1. Check if teacher has an active custom diagnostic assessment in localStorage
+    // 1. Check if teacher has an active custom assessment in localStorage
     try {
-      const activeId = localStorage.getItem('mathquest_active_diagnostic_id');
-      const cachedList = localStorage.getItem('mathquest_diagnostic_assessments');
+      const activeIdKey = isPostTest ? 'mathquest_active_posttest_id' : 'mathquest_active_pretest_id';
+      const listKey = isPostTest ? 'mathquest_posttest_assessments' : 'mathquest_pretest_assessments';
+      
+      const activeId = localStorage.getItem(activeIdKey) || localStorage.getItem('mathquest_active_diagnostic_id');
+      const cachedList = localStorage.getItem(listKey) || localStorage.getItem('mathquest_diagnostic_assessments');
+      
       if (activeId && cachedList) {
         const parsedList = JSON.parse(cachedList);
         const activeExam = parsedList.find((ex: any) => ex.id === activeId);

@@ -76,6 +76,13 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
       case 'activities-submissions': return { title: 'Activities • Submissions & Grading', subtitle: 'Evaluate student work and assign rubric grades' };
       // Assessments
       case 'assessments-diagnostic': return { title: 'Assessments • Diagnostic Assessments', subtitle: 'Pre-learning baseline checks to measure prior student knowledge' };
+      case 'assessments-pretest': return { title: 'Assessments • Pre-Test Manager', subtitle: 'Author and manage entry baseline pre-tests for student diagnosis' };
+      case 'assessments-posttest': return { title: 'Assessments • Post-Test Manager', subtitle: 'Author and manage exit post-tests for student mastery evaluation' };
+      case 'assessments-quarterly': return { title: 'Assessments • Quarterly Assessment', subtitle: 'DepEd standardized Quarter 1 & Quarter 2 comprehensive examinations' };
+      case 'assessments-performance': return { title: 'Assessments • Performance Assessment', subtitle: 'Output-based performance tasks, modeling projects, and rubrics' };
+      case 'assessments-written': return { title: 'Assessments • Written Assessment', subtitle: 'Written works, computational exercises, and problem sets' };
+      case 'assessments-oral': return { title: 'Assessments • Oral Assessment', subtitle: 'Oral recitation prompts, conceptual defense, and student explanations' };
+      case 'assessments-authentic': return { title: 'Assessments • Authentic Assessment', subtitle: 'Contextualized real-world mathematical scenarios and community projects' };
       case 'assessments-formative': return { title: 'Assessments • Formative Assessments', subtitle: 'In-lesson continuous learning and immediate feedback checks' };
       case 'assessments-create': return { title: 'Assessments • Create Assessment', subtitle: 'Author new Diagnostic or Formative assessments' };
       case 'assessments-diagnostic-results': return { title: 'Assessments • Diagnostic Results', subtitle: 'Pre-learning baseline analytics and student diagnostic scoreboards' };
@@ -216,6 +223,13 @@ export default function FacultyModule({ profile, onLogout }: FacultyModuleProps)
                   topics={topics}
                   initialSubTab={
                     currentSection === 'assessments-diagnostic' ? 'diagnostic' :
+                    currentSection === 'assessments-pretest' ? 'pretest' :
+                    currentSection === 'assessments-posttest' ? 'posttest' :
+                    currentSection === 'assessments-quarterly' ? 'quarterly' :
+                    currentSection === 'assessments-performance' ? 'performance' :
+                    currentSection === 'assessments-written' ? 'written' :
+                    currentSection === 'assessments-oral' ? 'oral' :
+                    currentSection === 'assessments-authentic' ? 'authentic' :
                     currentSection === 'assessments-formative' ? 'formative' :
                     currentSection === 'assessments-create' ? 'diagnostic' :
                     currentSection === 'assessments-diagnostic-results' ? 'diagnostic-results' :

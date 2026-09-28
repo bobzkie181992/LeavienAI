@@ -376,76 +376,7 @@ export default function ModernStudentDashboard({
         </section>
       )}
 
-      {/* ========================================================================= */}
-      {/* 2. CONTINUE LEARNING CARD                                                 */}
-      {/* ========================================================================= */}
-      {recentLesson && (
-        <section aria-labelledby="continue-learning-heading">
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h2 id="continue-learning-heading" className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <Clock className="w-5 h-5 text-indigo-600" />
-              <span>Continue Learning</span>
-            </h2>
-            <span className="text-xs font-semibold text-slate-400">
-              Most Recently Accessed ILAW Lesson
-            </span>
-          </div>
 
-          <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-md relative overflow-hidden border border-indigo-500/20">
-            {/* Subtle background glow */}
-            <div className="absolute top-0 right-0 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="space-y-3 max-w-2xl">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-black uppercase tracking-wider bg-white/10 text-indigo-200 border border-white/10 px-3 py-1 rounded-xl">
-                    General Mathematics
-                  </span>
-                  <span className="text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2.5 py-1 rounded-xl">
-                    DepEd ILAW Framework
-                  </span>
-                </div>
-
-                <div>
-                  <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                    {recentLesson.topic.title || 'Functions and Their Graphs'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-300 mt-1 line-clamp-2">
-                    {recentLesson.topic.description || 'Represents real-life situations using functions, including piece-wise functions, and evaluates functions accurately.'}
-                  </p>
-                </div>
-
-                {/* Progress bar */}
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex justify-between text-xs font-bold">
-                    <span className="text-indigo-200">Progress: {recentLesson.progressPercent}%</span>
-                    <span className="text-slate-400 capitalize">Current Step: {recentLesson.sectionName}</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-black/40 rounded-full overflow-hidden border border-white/10">
-                    <div
-                      className="h-full bg-gradient-to-r from-amber-400 via-amber-300 to-emerald-400 rounded-full transition-all duration-500"
-                      style={{ width: `${recentLesson.progressPercent}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <div className="shrink-0 flex items-center">
-                <button
-                  id="btn-continue-lesson"
-                  onClick={() => onSelectTopic(recentLesson.topic)}
-                  className="w-full sm:w-auto px-6 py-3.5 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white font-black rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/40 cursor-pointer transition-all"
-                >
-                  <Play className="w-4 h-4 fill-white" />
-                  <span>Continue Lesson</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* ========================================================================= */}
       {/* 3. MY SUBJECTS                                                            */}

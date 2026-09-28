@@ -27,14 +27,19 @@ import {
   ChevronDown,
   ChevronUp,
   HelpCircle,
-  Info
+  Info,
+  Trophy,
+  Zap,
+  Compass,
+  Send
 } from 'lucide-react';
 import { Topic, Quiz, Problem, SummativeAssessment, isValidatedOrActive } from '../../types';
 import CreateDiagnosticModal from '../CreateDiagnosticModal';
 import CreateFormativeModal from '../CreateFormativeModal';
+import CreateAssessmentModal from '../CreateAssessmentModal';
 import PrintableAssessmentModal from '../PrintableAssessmentModal';
 import TeacherAssessmentResults from '../TeacherAssessmentResults';
-import DepEdExcelImporter, { ParsedDepEdQuestion, SecurityGateConfig } from '../DepEdExcelImporter';
+import DepEdExcelImporter, { ParsedDepEdQuestion, SecurityGateConfig, AssessmentMode } from '../DepEdExcelImporter';
 import EditCustomAssessmentModal from '../EditCustomAssessmentModal';
 import { useCurriculum } from '../../hooks/useFirebase';
 import { getIntegritySettings, saveIntegritySettings, IntegritySettings } from '../../lib/integritySettings';
@@ -49,7 +54,14 @@ export default function TeacherAssessmentsView({
   initialSubTab = 'diagnostic'
 }: TeacherAssessmentsViewProps) {
   const { importProblems, deleteProblem, saveTopic } = useCurriculum();
-  const [subTab, setSubTab] = useState<'diagnostic' | 'formative' | 'diagnostic-results' | 'formative-results' | 'exams'>(initialSubTab);
+  const [subTab, setSubTab] = useState<
+    'diagnostic' | 'pretest' | 'posttest' | 'formative' | 'summative' | 'quarterly' | 'performance' | 'written' | 'oral' | 'authentic' | 'diagnostic-results' | 'formative-results' | 'exams'
+  >(initialSubTab as any);
+
+  const handleRepostAssessment = (title: string, category: string) => {
+    setExcelSuccessNotification(`📢 Successfully reposted "${title}" (${category}) to all assigned student streams and notifications!`);
+    setTimeout(() => setExcelSuccessNotification(null), 4000);
+  };
   const [expandedSummativeExamId, setExpandedSummativeExamId] = useState<string | null>(null);
   const [expandedDiagnosticId, setExpandedDiagnosticId] = useState<string | null>(null);
   const [expandedFormativeId, setExpandedFormativeId] = useState<string | null>(null);
@@ -87,6 +99,8 @@ export default function TeacherAssessmentsView({
   const [isDiagnosticExcelOpen, setIsDiagnosticExcelOpen] = useState(false);
   const [isFormativeModalOpen, setIsFormativeModalOpen] = useState(false);
   const [isFormativeExcelOpen, setIsFormativeExcelOpen] = useState(false);
+  const [activeCategoryModal, setActiveCategoryModal] = useState<AssessmentMode | null>(null);
+  const [activeExcelModalCategory, setActiveExcelModalCategory] = useState<AssessmentMode | null>(null);
   const [excelSuccessNotification, setExcelSuccessNotification] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -101,41 +115,63 @@ export default function TeacherAssessmentsView({
   const [isEditingIntegrity, setIsEditingIntegrity] = useState(false);
   const [tempDeductionPoints, setTempDeductionPoints] = useState<number>(integritySettings.violationDeductionPoints);
 
-  // Custom Diagnostic Assessments List (persisted in local storage)
-  const [customDiagnosticList, setCustomDiagnosticList] = useState<Array<{
-    id: string;
-    title: string;
-    topicTitle: string;
-    targetSection: string;
-    questionsCount: number;
-    accessCode: string;
-    schedule: string;
-    questions: ParsedDepEdQuestion[];
-    createdAt: string;
-  }>>(() => {
-    try {
-      const cached = localStorage.getItem('mathquest_diagnostic_assessments');
-      if (cached) return JSON.parse(cached);
-    } catch (e) {}
+  // 1. Custom Diagnostic Assessments List
+  const [customDiagnosticList, setCustomDiagnosticList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_diagnostic_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
     return [];
   });
 
-  // Custom Formative Assessments List (persisted in local storage)
-  const [customFormativeList, setCustomFormativeList] = useState<Array<{
-    id: string;
-    title: string;
-    topicTitle: string;
-    targetSection: string;
-    questionsCount: number;
-    accessCode: string;
-    schedule: string;
-    questions: ParsedDepEdQuestion[];
-    createdAt: string;
-  }>>(() => {
-    try {
-      const cached = localStorage.getItem('mathquest_formative_assessments');
-      if (cached) return JSON.parse(cached);
-    } catch (e) {}
+  // 2. Custom Pre-Test Assessments List
+  const [customPretestList, setCustomPretestList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_pretest_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
+    return [];
+  });
+
+  // 3. Custom Post-Test Assessments List
+  const [customPosttestList, setCustomPosttestList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_posttest_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
+    return [];
+  });
+
+  // 4. Custom Formative Assessments List
+  const [customFormativeList, setCustomFormativeList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_formative_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
+    return [];
+  });
+
+  // 5. Custom Summative Assessments List
+  const [customSummativeList, setCustomSummativeList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_summative_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
+    return [];
+  });
+
+  // 6. Custom Quarterly Assessments List
+  const [customQuarterlyList, setCustomQuarterlyList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_quarterly_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
+    return [];
+  });
+
+  // 7. Custom Performance Assessments List
+  const [customPerformanceList, setCustomPerformanceList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_performance_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
+    return [];
+  });
+
+  // 8. Custom Written Assessments List
+  const [customWrittenList, setCustomWrittenList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_written_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
+    return [];
+  });
+
+  // 9. Custom Oral Assessments List
+  const [customOralList, setCustomOralList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_oral_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
+    return [];
+  });
+
+  // 10. Custom Authentic Assessments List
+  const [customAuthenticList, setCustomAuthenticList] = useState<any[]>(() => {
+    try { const cached = localStorage.getItem('mathquest_authentic_assessments'); if (cached) return JSON.parse(cached); } catch (e) {}
     return [];
   });
 
@@ -330,6 +366,84 @@ export default function TeacherAssessmentsView({
     }, 6000);
   };
 
+  const saveCategoryEntry = (cat: AssessmentMode, entry: any) => {
+    let currentList: any[] = [];
+    let setList: (l: any[]) => void = () => {};
+    let storageKey = `mathquest_${cat}_assessments`;
+
+    switch (cat) {
+      case 'diagnostic': currentList = customDiagnosticList; setList = setCustomDiagnosticList; break;
+      case 'pretest': currentList = customPretestList; setList = setCustomPretestList; break;
+      case 'posttest': currentList = customPosttestList; setList = setCustomPosttestList; break;
+      case 'formative': currentList = customFormativeList; setList = setCustomFormativeList; break;
+      case 'summative': currentList = customSummativeList; setList = setCustomSummativeList; break;
+      case 'quarterly': currentList = customQuarterlyList; setList = setCustomQuarterlyList; break;
+      case 'performance': currentList = customPerformanceList; setList = setCustomPerformanceList; break;
+      case 'written': currentList = customWrittenList; setList = setCustomWrittenList; break;
+      case 'oral': currentList = customOralList; setList = setCustomOralList; break;
+      case 'authentic': currentList = customAuthenticList; setList = setCustomAuthenticList; break;
+    }
+
+    const updated = [entry, ...currentList];
+    setList(updated);
+    try { localStorage.setItem(storageKey, JSON.stringify(updated)); } catch (e) {}
+  };
+
+  const handleImportGenericExcel = (imported: ParsedDepEdQuestion[], securityConfig?: SecurityGateConfig) => {
+    if (imported.length === 0) return;
+    const cat = activeExcelModalCategory || 'formative';
+    const newId = `${cat}-excel-${Date.now()}`;
+    const targetSec = securityConfig?.targetSection || 'Grade 11 - STEM A';
+    const customTitle = securityConfig?.assessmentTitle || `${cat.toUpperCase()} Assessment: Item Bank (${imported.length} Items)`;
+    const assignedCode = securityConfig?.accessCode || cat.slice(0, 4).toUpperCase() + Math.floor(10 + Math.random() * 90);
+    const isPub = securityConfig ? securityConfig.publishedToStudents : true;
+
+    const newEntry = {
+      id: newId,
+      category: cat,
+      title: customTitle,
+      topicTitle: imported[0]?.competency ? `MELC: ${imported[0].competency.slice(0, 45)}...` : 'Grade 11 General Mathematics',
+      targetSection: targetSec,
+      questionsCount: imported.length,
+      accessCode: assignedCode,
+      schedule: 'Today (08:00 AM - 05:00 PM)',
+      questions: imported.map(q => ({ ...q, published: isPub })),
+      published: isPub,
+      status: isPub ? 'Published' : 'Draft',
+      createdAt: new Date().toISOString()
+    };
+
+    saveCategoryEntry(cat, newEntry);
+
+    setUnlockedAssessments(prev => ({ ...prev, [newId]: true }));
+    setAccessCodes(prev => ({ ...prev, [newId]: assignedCode }));
+    setExcelSuccessNotification(`🛡️ Security Gate Authorized: Deployed ${imported.length} ${cat.toUpperCase()} questions to ${targetSec}!`);
+    setTimeout(() => setExcelSuccessNotification(null), 6000);
+  };
+
+  const handleSaveCreatedAssessment = (assessmentData: any) => {
+    const cat = (assessmentData.category || activeCategoryModal || 'formative') as AssessmentMode;
+    const newEntry = {
+      id: assessmentData.id || `${cat}-${Date.now()}`,
+      category: cat,
+      title: assessmentData.title,
+      topicTitle: assessmentData.topicTitle || assessmentData.subject || 'Grade 11 General Mathematics',
+      targetSection: assessmentData.targetSection || 'Grade 11 - STEM A',
+      questionsCount: assessmentData.questionsCount || (assessmentData.questions ? assessmentData.questions.length : 0),
+      accessCode: assessmentData.accessCode || 'CODE11',
+      schedule: assessmentData.schedule || 'Today (08:00 AM - 05:00 PM)',
+      questions: assessmentData.questions || [],
+      published: assessmentData.status === 'Published',
+      status: assessmentData.status || 'Published',
+      createdAt: new Date().toISOString()
+    };
+
+    saveCategoryEntry(cat, newEntry);
+
+    setExcelSuccessNotification(`📢 Successfully published new ${cat.toUpperCase()} assessment: "${assessmentData.title}"!`);
+    setTimeout(() => setExcelSuccessNotification(null), 5000);
+  };
+
   // Live Permission & Schedule State
   const [unlockedAssessments, setUnlockedAssessments] = useState<Record<string, boolean>>({
     'diag-1': true,
@@ -370,6 +484,78 @@ export default function TeacherAssessmentsView({
     } catch (e) {
       return false;
     }
+  });
+
+  const [defaultPretestDeleted, setDefaultPretestDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_pretest_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [defaultPosttestDeleted, setDefaultPosttestDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_posttest_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [defaultQ1QuarterlyDeleted, setDefaultQ1QuarterlyDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_q1_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [defaultQ2QuarterlyDeleted, setDefaultQ2QuarterlyDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_q2_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [defaultPerformanceDeleted, setDefaultPerformanceDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_performance_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [defaultWrittenDeleted, setDefaultWrittenDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_written_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [defaultOralDeleted, setDefaultOralDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_oral_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [defaultAuthenticDeleted, setDefaultAuthenticDeleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('mathquest_default_authentic_deleted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [deletedSummativeExamIds, setDeletedSummativeExamIds] = useState<string[]>(() => {
+    try {
+      const cached = localStorage.getItem('mathquest_deleted_summative_exam_ids');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return [];
   });
 
   const [editingCustomAssessment, setEditingCustomAssessment] = useState<any | null>(null);
@@ -573,6 +759,162 @@ export default function TeacherAssessmentsView({
     });
   };
 
+  const handleDeleteDefaultPretest = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Pre-Test',
+      message: 'Are you sure you want to delete the default entry baseline pre-test?',
+      confirmLabel: 'Yes, Delete Pre-Test',
+      onConfirm: () => {
+        setDefaultPretestDeleted(true);
+        try {
+          localStorage.setItem('mathquest_default_pretest_deleted', 'true');
+        } catch (e) {}
+        setExcelSuccessNotification('Default pre-test assessment removed.');
+        setTimeout(() => setExcelSuccessNotification(null), 3000);
+      }
+    });
+  };
+
+  const handleDeleteDefaultPosttest = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Post-Test',
+      message: 'Are you sure you want to delete the default exit mastery post-test?',
+      confirmLabel: 'Yes, Delete Post-Test',
+      onConfirm: () => {
+        setDefaultPosttestDeleted(true);
+        try {
+          localStorage.setItem('mathquest_default_posttest_deleted', 'true');
+        } catch (e) {}
+        setExcelSuccessNotification('Default post-test assessment removed.');
+        setTimeout(() => setExcelSuccessNotification(null), 3000);
+      }
+    });
+  };
+
+  const handleDeleteDefaultQ1Quarterly = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Quarter 1 Exam',
+      message: 'Are you sure you want to delete the Quarter 1 Comprehensive Examination?',
+      confirmLabel: 'Yes, Delete Q1 Exam',
+      onConfirm: () => {
+        setDefaultQ1QuarterlyDeleted(true);
+        try {
+          localStorage.setItem('mathquest_default_q1_deleted', 'true');
+        } catch (e) {}
+        setExcelSuccessNotification('Quarter 1 examination removed.');
+        setTimeout(() => setExcelSuccessNotification(null), 3000);
+      }
+    });
+  };
+
+  const handleDeleteDefaultQ2Quarterly = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Quarter 2 Exam',
+      message: 'Are you sure you want to delete the Quarter 2 Comprehensive Examination?',
+      confirmLabel: 'Yes, Delete Q2 Exam',
+      onConfirm: () => {
+        setDefaultQ2QuarterlyDeleted(true);
+        try {
+          localStorage.setItem('mathquest_default_q2_deleted', 'true');
+        } catch (e) {}
+        setExcelSuccessNotification('Quarter 2 examination removed.');
+        setTimeout(() => setExcelSuccessNotification(null), 3000);
+      }
+    });
+  };
+
+  const handleDeleteDefaultPerformance = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Performance Task',
+      message: 'Are you sure you want to delete the Mathematical Modeling Portfolio performance task?',
+      confirmLabel: 'Yes, Delete Performance Task',
+      onConfirm: () => {
+        setDefaultPerformanceDeleted(true);
+        try {
+          localStorage.setItem('mathquest_default_performance_deleted', 'true');
+        } catch (e) {}
+        setExcelSuccessNotification('Performance task removed.');
+        setTimeout(() => setExcelSuccessNotification(null), 3000);
+      }
+    });
+  };
+
+  const handleDeleteDefaultWritten = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Written Work',
+      message: 'Are you sure you want to delete the Rational Equations problem set written work?',
+      confirmLabel: 'Yes, Delete Written Work',
+      onConfirm: () => {
+        setDefaultWrittenDeleted(true);
+        try {
+          localStorage.setItem('mathquest_default_written_deleted', 'true');
+        } catch (e) {}
+        setExcelSuccessNotification('Written work task removed.');
+        setTimeout(() => setExcelSuccessNotification(null), 3000);
+      }
+    });
+  };
+
+  const handleDeleteDefaultOral = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Oral Prompt',
+      message: 'Are you sure you want to delete the Vertical Line Test oral defense prompt?',
+      confirmLabel: 'Yes, Delete Oral Defense',
+      onConfirm: () => {
+        setDefaultOralDeleted(true);
+        try {
+          localStorage.setItem('mathquest_default_oral_deleted', 'true');
+        } catch (e) {}
+        setExcelSuccessNotification('Oral defense prompt removed.');
+        setTimeout(() => setExcelSuccessNotification(null), 3000);
+      }
+    });
+  };
+
+  const handleDeleteDefaultAuthentic = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Authentic Task',
+      message: 'Are you sure you want to delete the Local Cooperative Loan authentic task?',
+      confirmLabel: 'Yes, Delete Authentic Task',
+      onConfirm: () => {
+        setDefaultAuthenticDeleted(true);
+        try {
+          localStorage.setItem('mathquest_default_authentic_deleted', 'true');
+        } catch (e) {}
+        setExcelSuccessNotification('Authentic assessment task removed.');
+        setTimeout(() => setExcelSuccessNotification(null), 3000);
+      }
+    });
+  };
+
+  const handleDeleteSummativeExam = (examId: string, examTitle: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Summative Exam',
+      message: `Are you sure you want to delete "${examTitle}"? This will remove this exam blueprint.`,
+      confirmLabel: 'Yes, Delete Exam',
+      onConfirm: () => {
+        setDeletedSummativeExamIds(prev => {
+          const next = [...prev, examId];
+          try {
+            localStorage.setItem('mathquest_deleted_summative_exam_ids', JSON.stringify(next));
+          } catch (e) {}
+          return next;
+        });
+        setExcelSuccessNotification(`Summative exam "${examTitle}" removed.`);
+        setTimeout(() => setExcelSuccessNotification(null), 3000);
+      }
+    });
+  };
+
   const handlePrintDiagnostic = () => {
     setPrintableData({
       title: 'Grade 11 General Mathematics Quarter 1 Diagnostic Checkpoint',
@@ -630,6 +972,122 @@ export default function TeacherAssessmentsView({
     setUnlockedAssessments(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const renderCustomAssessmentList = (
+    list: any[],
+    categoryTitle: string,
+    onDelete: (id: string) => void
+  ) => {
+    if (!list || list.length === 0) return null;
+
+    return (
+      <div className="space-y-4">
+        {list.map((item) => (
+          <div
+            key={item.id}
+            className="p-5 sm:p-6 bg-white rounded-3xl border border-slate-200 shadow-xs hover:border-indigo-400 transition-all space-y-4"
+          >
+            <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 pb-3 border-b border-slate-100">
+              <div className="space-y-2 min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black uppercase text-indigo-800 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-md">
+                    Custom {categoryTitle}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-md">
+                    {item.topicTitle || 'Grade 11 General Mathematics'}
+                  </span>
+                  <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-md">
+                    Target: {item.targetSection || 'Grade 11 - STEM A'}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md">
+                    {item.questionsCount || item.questions?.length || 0} Questions
+                  </span>
+                </div>
+                <h4 className="font-black text-slate-900 text-lg sm:text-xl leading-snug tracking-tight">
+                  {item.title}
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {categoryTitle} created for {item.targetSection || 'Grade 11 students'}.
+                </p>
+              </div>
+
+              {/* Action Toolbar */}
+              <div className="flex flex-col sm:flex-row xl:flex-col gap-2 w-full xl:w-auto xl:min-w-[280px] shrink-0 justify-end">
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-2 bg-indigo-50 text-indigo-800 border border-indigo-200 font-black text-xs rounded-xl flex items-center gap-1 whitespace-nowrap">
+                    <Check className="w-3.5 h-3.5 text-indigo-600" />
+                    {item.status || 'Published'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                  <button
+                    onClick={() => handleRepostAssessment(item.title, categoryTitle)}
+                    className="flex-1 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1 border border-amber-200 whitespace-nowrap"
+                  >
+                    <Send className="w-3.5 h-3.5 text-amber-700" />
+                    <span>Repost</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveCategoryModal(item.category || 'formative');
+                    }}
+                    className="flex-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 border border-slate-300 whitespace-nowrap"
+                  >
+                    <span>✏️ Edit</span>
+                  </button>
+
+                  <button
+                    onClick={() => onDelete(item.id)}
+                    className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1 border border-rose-200 whitespace-nowrap"
+                    title={`Delete ${categoryTitle}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Schedule & Permission Live Bar */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-4 flex-wrap text-slate-700 font-bold">
+                <div className="flex items-center gap-2 text-slate-900">
+                  <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>Schedule: <strong className="text-slate-900">{item.schedule || 'Today (08:00 AM - 05:00 PM)'}</strong></span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-900">
+                  <Award className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Passcode: <strong className="bg-white px-2.5 py-1 rounded-lg border border-slate-300 tracking-wider font-mono text-indigo-950 text-xs">{item.accessCode || accessCodes[item.id] || 'CODE11'}</strong></span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                <button
+                  onClick={() => toggleUnlockStatus(item.id)}
+                  className={`flex-1 sm:flex-initial justify-center px-4 py-2.5 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
+                    unlockedAssessments[item.id] !== false
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white'
+                  }`}
+                >
+                  <span>{unlockedAssessments[item.id] !== false ? '🔓 Unlocked for STEM-A' : '🔒 Locked (Permission Required)'}</span>
+                </button>
+
+                <button
+                  onClick={() => setShowPermissionModal(true)}
+                  className="flex-1 sm:flex-initial justify-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <span>Student Requests ({pendingRequests.length})</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const approveRequest = (reqId: string) => {
     setPendingRequests(prev => prev.filter(r => r.id !== reqId));
     alert('Student permission granted! The student can now start the assessment.');
@@ -645,7 +1103,7 @@ export default function TeacherAssessmentsView({
   // Collect summative assessments
   const summativeExams: { topic: Topic; exam: SummativeAssessment }[] = [];
   topics.forEach(t => {
-    if (t.summativeAssessment) {
+    if (t.summativeAssessment && !deletedSummativeExamIds.includes(t.summativeAssessment.id)) {
       summativeExams.push({ topic: t, exam: t.summativeAssessment });
     }
   });
@@ -831,15 +1289,73 @@ export default function TeacherAssessmentsView({
         </button>
 
         <button
-          onClick={() => setSubTab('exams')}
+          onClick={() => setSubTab('pretest')}
           className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-            subTab === 'exams'
-              ? 'bg-amber-600 text-white shadow-sm font-black'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            subTab === 'pretest' ? 'bg-blue-600 text-white shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
-          <GraduationCap className="w-4 h-4 text-amber-300" />
-          <span>Summative Tests (TOS)</span>
+          <Sparkles className="w-4 h-4 text-blue-200" />
+          <span>Pre-Test Manager</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('posttest')}
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            subTab === 'posttest' ? 'bg-purple-600 text-white shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Award className="w-4 h-4 text-purple-200" />
+          <span>Post-Test Manager</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('quarterly')}
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            subTab === 'quarterly' ? 'bg-amber-600 text-white shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Trophy className="w-4 h-4 text-amber-200" />
+          <span>Quarterly Assessment</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('performance')}
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            subTab === 'performance' ? 'bg-emerald-600 text-white shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Zap className="w-4 h-4 text-emerald-200" />
+          <span>Performance Assessment</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('written')}
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            subTab === 'written' ? 'bg-blue-700 text-white shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <FileText className="w-4 h-4 text-blue-200" />
+          <span>Written Assessment</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('oral')}
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            subTab === 'oral' ? 'bg-teal-600 text-white shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Compass className="w-4 h-4 text-teal-200" />
+          <span>Oral Assessment</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('authentic')}
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            subTab === 'authentic' ? 'bg-rose-600 text-white shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4 text-rose-200" />
+          <span>Authentic Assessment</span>
         </button>
 
         <button
@@ -1843,6 +2359,562 @@ export default function TeacherAssessmentsView({
         </div>
       )}
 
+      {/* PRE-TEST MANAGER */}
+      {subTab === 'pretest' && (
+        <div className="space-y-5">
+          <div className="p-6 bg-gradient-to-r from-blue-900 to-slate-900 text-white rounded-3xl shadow-md space-y-2">
+            <span className="bg-blue-500/30 border border-blue-400/40 text-blue-200 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Entry Baseline Check
+            </span>
+            <h2 className="text-xl font-black">Pre-Test Diagnostic Manager</h2>
+            <p className="text-xs text-blue-100 max-w-2xl leading-relaxed">
+              Manage entry pre-tests to evaluate student baseline prerequisite skills prior to starting General Mathematics units.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+            <span className="text-xs font-black text-slate-800 uppercase">Pre-Test Assessments ({customPretestList.length + (defaultPretestDeleted ? 0 : 1)})</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setActiveExcelModalCategory('pretest')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Import DepEd Excel (Pre-Test)</span>
+              </button>
+              <button
+                onClick={() => setActiveCategoryModal('pretest')}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Pre-Test</span>
+              </button>
+            </div>
+          </div>
+
+          {renderCustomAssessmentList(customPretestList, 'Pre-Test', (id) => {
+            const updated = customPretestList.filter(item => item.id !== id);
+            setCustomPretestList(updated);
+            try { localStorage.setItem('mathquest_pretest_assessments', JSON.stringify(updated)); } catch (e) {}
+          })}
+
+          {!defaultPretestDeleted && (
+            <div className="space-y-4">
+              <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded-full">Quarter 1 Baseline Pre-Test</span>
+                  <span className="text-xs text-slate-500 font-bold">26 Items • 2PL IRT Adaptive</span>
+                </div>
+                <h3 className="text-lg font-black text-slate-900">General Mathematics Entry Pre-Test</h3>
+                <p className="text-xs text-slate-600">Assesses prior algebraic knowledge, functions, and problem-solving readiness.</p>
+                
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                  <button
+                    onClick={() => handleRepostAssessment('General Mathematics Entry Pre-Test', 'Pre-Test')}
+                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Repost to Students</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveCategoryModal('pretest')}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all"
+                  >
+                    Edit Pre-Test
+                  </button>
+                  <button
+                    onClick={handleDeleteDefaultPretest}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                    title="Delete Pre-Test"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* POST-TEST MANAGER */}
+      {subTab === 'posttest' && (
+        <div className="space-y-5">
+          <div className="p-6 bg-gradient-to-r from-purple-900 to-slate-900 text-white rounded-3xl shadow-md space-y-2">
+            <span className="bg-purple-500/30 border border-purple-400/40 text-purple-200 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Exit Mastery Check
+            </span>
+            <h2 className="text-xl font-black">Post-Test Assessment Manager</h2>
+            <p className="text-xs text-purple-100 max-w-2xl leading-relaxed">
+              Evaluate exit competency mastery and compare learning growth gains against pre-test baseline data.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+            <span className="text-xs font-black text-slate-800 uppercase">Post-Test Examinations ({customPosttestList.length + (defaultPosttestDeleted ? 0 : 1)})</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setActiveExcelModalCategory('posttest')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Import DepEd Excel (Post-Test)</span>
+              </button>
+              <button
+                onClick={() => setActiveCategoryModal('posttest')}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create New Post-Test</span>
+              </button>
+            </div>
+          </div>
+
+          {renderCustomAssessmentList(customPosttestList, 'Post-Test', (id) => {
+            const updated = customPosttestList.filter(item => item.id !== id);
+            setCustomPosttestList(updated);
+            try { localStorage.setItem('mathquest_posttest_assessments', JSON.stringify(updated)); } catch (e) {}
+          })}
+
+          {!defaultPosttestDeleted && (
+            <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-purple-800 bg-purple-50 px-2.5 py-0.5 rounded-full">Exit Assessment</span>
+                <span className="text-xs text-slate-500 font-bold">26 Items • Exit Standard</span>
+              </div>
+              <h3 className="text-lg font-black text-slate-900">General Mathematics Post-Test Exit Check</h3>
+              <p className="text-xs text-slate-600">Measures exit skill gains and competency mastery following unit completion.</p>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  onClick={() => handleRepostAssessment('General Mathematics Post-Test Exit Check', 'Post-Test')}
+                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Repost to Students</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategoryModal('posttest')}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all"
+                >
+                  Edit Post-Test
+                </button>
+                <button
+                  onClick={handleDeleteDefaultPosttest}
+                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                  title="Delete Post-Test"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* QUARTERLY ASSESSMENT */}
+      {subTab === 'quarterly' && (
+        <div className="space-y-5">
+          <div className="p-6 bg-gradient-to-r from-amber-700 to-slate-900 text-white rounded-3xl shadow-md space-y-2">
+            <span className="bg-amber-500/30 border border-amber-400/40 text-amber-200 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Standardized Exam
+            </span>
+            <h2 className="text-xl font-black">Quarterly Assessment Manager</h2>
+            <p className="text-xs text-amber-100 max-w-2xl leading-relaxed">
+              Manage Quarter 1 and Quarter 2 comprehensive examinations aligned with DepEd TOS standards.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+            <span className="text-xs font-black text-slate-800 uppercase">Quarterly Exams ({customQuarterlyList.length + (defaultQ1QuarterlyDeleted ? 0 : 1) + (defaultQ2QuarterlyDeleted ? 0 : 1)})</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setActiveExcelModalCategory('quarterly')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Import DepEd Excel (Quarterly)</span>
+              </button>
+              <button
+                onClick={() => setActiveCategoryModal('quarterly')}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Quarterly Exam</span>
+              </button>
+            </div>
+          </div>
+
+          {renderCustomAssessmentList(customQuarterlyList, 'Quarterly Assessment', (id) => {
+            const updated = customQuarterlyList.filter(item => item.id !== id);
+            setCustomQuarterlyList(updated);
+            try { localStorage.setItem('mathquest_quarterly_assessments', JSON.stringify(updated)); } catch (e) {}
+          })}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {!defaultQ1QuarterlyDeleted && (
+              <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+                <span className="text-xs font-black text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full">Quarter 1</span>
+                <h3 className="text-lg font-black text-slate-900">Quarter 1 Comprehensive Examination</h3>
+                <p className="text-xs text-slate-600">40 Items • Table of Specifications Blueprint</p>
+
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                  <button
+                    onClick={() => handleRepostAssessment('Quarter 1 Comprehensive Examination', 'Quarterly Assessment')}
+                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Repost</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveCategoryModal('quarterly')}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all"
+                  >
+                    Edit Exam
+                  </button>
+                  <button
+                    onClick={handleDeleteDefaultQ1Quarterly}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                    title="Delete Quarter 1 Exam"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!defaultQ2QuarterlyDeleted && (
+              <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+                <span className="text-xs font-black text-indigo-800 bg-indigo-50 px-2.5 py-0.5 rounded-full">Quarter 2</span>
+                <h3 className="text-lg font-black text-slate-900">Quarter 2 Comprehensive Examination</h3>
+                <p className="text-xs text-slate-600">40 Items • Consumer & Business Math</p>
+
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                  <button
+                    onClick={() => handleRepostAssessment('Quarter 2 Comprehensive Examination', 'Quarterly Assessment')}
+                    className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Repost</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveCategoryModal('quarterly')}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all"
+                  >
+                    Edit Exam
+                  </button>
+                  <button
+                    onClick={handleDeleteDefaultQ2Quarterly}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                    title="Delete Quarter 2 Exam"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* PERFORMANCE ASSESSMENT */}
+      {subTab === 'performance' && (
+        <div className="space-y-5">
+          <div className="p-6 bg-gradient-to-r from-emerald-800 to-slate-900 text-white rounded-3xl shadow-md space-y-2">
+            <span className="bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Performance Tasks (PT)
+            </span>
+            <h2 className="text-xl font-black">Performance Assessment Manager</h2>
+            <p className="text-xs text-emerald-100 max-w-2xl leading-relaxed">
+              Create, grade, and repost output-based performance tasks, modeling portfolios, and real-world projects.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+            <span className="text-xs font-black text-slate-800 uppercase">Performance Tasks ({customPerformanceList.length + (defaultPerformanceDeleted ? 0 : 1)})</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setActiveExcelModalCategory('performance')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Import DepEd Excel (Performance)</span>
+              </button>
+              <button
+                onClick={() => setActiveCategoryModal('performance')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Performance Task</span>
+              </button>
+            </div>
+          </div>
+
+          {renderCustomAssessmentList(customPerformanceList, 'Performance Task', (id) => {
+            const updated = customPerformanceList.filter(item => item.id !== id);
+            setCustomPerformanceList(updated);
+            try { localStorage.setItem('mathquest_performance_assessments', JSON.stringify(updated)); } catch (e) {}
+          })}
+
+          {!defaultPerformanceDeleted && (
+            <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full">Performance Task #1</span>
+                <span className="text-xs text-slate-500 font-bold">Rubric Graded</span>
+              </div>
+              <h3 className="text-lg font-black text-slate-900">Mathematical Modeling Portfolio</h3>
+              <p className="text-xs text-slate-600">Students construct real-world piecewise and exponential models with graphical presentation.</p>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  onClick={() => handleRepostAssessment('Mathematical Modeling Portfolio', 'Performance Task')}
+                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Repost</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategoryModal('performance')}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all"
+                >
+                  Edit Task
+                </button>
+                <button
+                  onClick={handleDeleteDefaultPerformance}
+                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                  title="Delete Performance Task"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* WRITTEN ASSESSMENT */}
+      {subTab === 'written' && (
+        <div className="space-y-5">
+          <div className="p-6 bg-gradient-to-r from-blue-800 to-slate-900 text-white rounded-3xl shadow-md space-y-2">
+            <span className="bg-blue-500/30 border border-blue-400/40 text-blue-200 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Written Works (WW)
+            </span>
+            <h2 className="text-xl font-black">Written Assessment Manager</h2>
+            <p className="text-xs text-blue-100 max-w-2xl leading-relaxed">
+              Step-by-step problem sets, algebraic proofs, and written computation exercises.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+            <span className="text-xs font-black text-slate-800 uppercase">Written Works ({customWrittenList.length + (defaultWrittenDeleted ? 0 : 1)})</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setActiveExcelModalCategory('written')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Import DepEd Excel (Written)</span>
+              </button>
+              <button
+                onClick={() => setActiveCategoryModal('written')}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Written Task</span>
+              </button>
+            </div>
+          </div>
+
+          {renderCustomAssessmentList(customWrittenList, 'Written Work', (id) => {
+            const updated = customWrittenList.filter(item => item.id !== id);
+            setCustomWrittenList(updated);
+            try { localStorage.setItem('mathquest_written_assessments', JSON.stringify(updated)); } catch (e) {}
+          })}
+
+          {!defaultWrittenDeleted && (
+            <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <span className="text-xs font-black text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded-full">Written Work #1</span>
+              <h3 className="text-lg font-black text-slate-900">Rational Equations & Inequalities Problem Set</h3>
+              <p className="text-xs text-slate-600">Solve rational expressions, determine extraneous roots, and state interval notations.</p>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  onClick={() => handleRepostAssessment('Rational Equations & Inequalities Problem Set', 'Written Work')}
+                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Repost</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategoryModal('written')}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all"
+                >
+                  Edit Task
+                </button>
+                <button
+                  onClick={handleDeleteDefaultWritten}
+                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                  title="Delete Written Task"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ORAL ASSESSMENT */}
+      {subTab === 'oral' && (
+        <div className="space-y-5">
+          <div className="p-6 bg-gradient-to-r from-teal-800 to-slate-900 text-white rounded-3xl shadow-md space-y-2">
+            <span className="bg-teal-500/30 border border-teal-400/40 text-teal-200 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Oral Recitation
+            </span>
+            <h2 className="text-xl font-black">Oral Assessment Manager</h2>
+            <p className="text-xs text-teal-100 max-w-2xl leading-relaxed">
+              Oral recitation defense prompts, mathematical reasoning explanations, and conceptual discussions.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+            <span className="text-xs font-black text-slate-800 uppercase">Oral Defense Prompts ({customOralList.length + (defaultOralDeleted ? 0 : 1)})</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setActiveExcelModalCategory('oral')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Import DepEd Excel (Oral)</span>
+              </button>
+              <button
+                onClick={() => setActiveCategoryModal('oral')}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Oral Prompt</span>
+              </button>
+            </div>
+          </div>
+
+          {renderCustomAssessmentList(customOralList, 'Oral Defense', (id) => {
+            const updated = customOralList.filter(item => item.id !== id);
+            setCustomOralList(updated);
+            try { localStorage.setItem('mathquest_oral_assessments', JSON.stringify(updated)); } catch (e) {}
+          })}
+
+          {!defaultOralDeleted && (
+            <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <span className="text-xs font-black text-teal-800 bg-teal-50 px-2.5 py-0.5 rounded-full">Oral Defense</span>
+              <h3 className="text-lg font-black text-slate-900">Vertical Line Test & One-to-One Function Defense</h3>
+              <p className="text-xs text-slate-600">Oral explanation and defense of function uniqueness and horizontal line tests.</p>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  onClick={() => handleRepostAssessment('Vertical Line Test Oral Defense', 'Oral Assessment')}
+                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Repost</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategoryModal('oral')}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all"
+                >
+                  Edit Defense
+                </button>
+                <button
+                  onClick={handleDeleteDefaultOral}
+                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                  title="Delete Oral Prompt"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* AUTHENTIC ASSESSMENT */}
+      {subTab === 'authentic' && (
+        <div className="space-y-5">
+          <div className="p-6 bg-gradient-to-r from-rose-800 to-slate-900 text-white rounded-3xl shadow-md space-y-2">
+            <span className="bg-rose-500/30 border border-rose-400/40 text-rose-200 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+              Authentic Contextualized Tasks
+            </span>
+            <h2 className="text-xl font-black">Authentic Assessment Manager</h2>
+            <p className="text-xs text-rose-100 max-w-2xl leading-relaxed">
+              Create, edit, delete, and repost authentic community math applications, financial planning scenarios, and real-world modeling tasks.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+            <span className="text-xs font-black text-slate-800 uppercase">Authentic Scenarios ({customAuthenticList.length + (defaultAuthenticDeleted ? 0 : 1)})</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setActiveExcelModalCategory('authentic')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Import DepEd Excel (Authentic)</span>
+              </button>
+              <button
+                onClick={() => setActiveCategoryModal('authentic')}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Authentic Task</span>
+              </button>
+            </div>
+          </div>
+
+          {renderCustomAssessmentList(customAuthenticList, 'Authentic Assessment', (id) => {
+            const updated = customAuthenticList.filter(item => item.id !== id);
+            setCustomAuthenticList(updated);
+            try { localStorage.setItem('mathquest_authentic_assessments', JSON.stringify(updated)); } catch (e) {}
+          })}
+
+          {!defaultAuthenticDeleted && (
+            <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <span className="text-xs font-black text-rose-800 bg-rose-50 px-2.5 py-0.5 rounded-full">Authentic Task #1</span>
+              <h3 className="text-lg font-black text-slate-900">Local Cooperative Loan & Investment Project</h3>
+              <p className="text-xs text-slate-600">Students analyze authentic financial data, compound interest models, and loan repayment options.</p>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  onClick={() => handleRepostAssessment('Local Cooperative Loan Project', 'Authentic Assessment')}
+                  className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl transition-all flex items-center gap-1"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Repost to Students</span>
+                </button>
+                <button
+                  onClick={() => setActiveCategoryModal('authentic')}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all"
+                >
+                  Edit Task
+                </button>
+                <button
+                  onClick={handleDeleteDefaultAuthentic}
+                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                  title="Delete Authentic Task"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 2. EXAMS (TOS) */}
       {subTab === 'exams' && (
         <div className="space-y-4">
@@ -1878,10 +2950,19 @@ export default function TeacherAssessmentsView({
                     <h3 className="text-lg font-black text-slate-900 mt-1">{exam.title}</h3>
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs font-bold text-slate-600">
+                  <div className="flex items-center gap-3 text-xs font-bold text-slate-600 flex-wrap">
                     <span>{exam.durationMinutes} mins</span>
                     <span>•</span>
                     <span className="text-emerald-600">{exam.passingScorePercentage}% Passing Mark</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSummativeExam(exam.id, exam.title)}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1 cursor-pointer border border-rose-200 ml-2"
+                      title="Delete Summative Exam Blueprint"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Delete Exam</span>
+                    </button>
                   </div>
                 </div>
 
@@ -2048,7 +3129,7 @@ export default function TeacherAssessmentsView({
         isOpen={isDiagnosticModalOpen}
         onClose={() => setIsDiagnosticModalOpen(false)}
         onSave={(data) => {
-          alert(`Diagnostic Assessment "${data.title}" saved as ${data.status}!`);
+          handleSaveCreatedAssessment({ ...data, category: 'diagnostic' });
         }}
       />
 
@@ -2056,11 +3137,31 @@ export default function TeacherAssessmentsView({
         isOpen={isFormativeModalOpen}
         onClose={() => setIsFormativeModalOpen(false)}
         onSave={(data) => {
-          alert(`Formative Check "${data.title}" saved as ${data.status}!`);
+          handleSaveCreatedAssessment({ ...data, category: 'formative' });
         }}
       />
 
-      {/* Formative DepEd Excel Importer Modal */}
+      {/* Dynamic Category Specific Assessment Creator */}
+      {activeCategoryModal && (
+        <CreateAssessmentModal
+          isOpen={!!activeCategoryModal}
+          onClose={() => setActiveCategoryModal(null)}
+          category={activeCategoryModal}
+          onSave={handleSaveCreatedAssessment}
+        />
+      )}
+
+      {/* Dynamic Category Specific Excel Importer */}
+      {activeExcelModalCategory && (
+        <DepEdExcelImporter
+          isOpen={!!activeExcelModalCategory}
+          onClose={() => setActiveExcelModalCategory(null)}
+          onImportQuestions={handleImportGenericExcel}
+          mode={activeExcelModalCategory}
+        />
+      )}
+
+      {/* Legacy Formative DepEd Excel Importer Modal */}
       <DepEdExcelImporter
         isOpen={isFormativeExcelOpen}
         onClose={() => setIsFormativeExcelOpen(false)}
@@ -2068,7 +3169,7 @@ export default function TeacherAssessmentsView({
         mode="formative"
       />
 
-      {/* Diagnostic DepEd Excel Importer Modal */}
+      {/* Legacy Diagnostic DepEd Excel Importer Modal */}
       <DepEdExcelImporter
         isOpen={isDiagnosticExcelOpen}
         onClose={() => setIsDiagnosticExcelOpen(false)}

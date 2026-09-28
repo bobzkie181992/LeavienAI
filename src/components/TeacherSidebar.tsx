@@ -50,6 +50,13 @@ export type TeacherNavSection =
   | 'activities-submissions'
   // Assessments
   | 'assessments-diagnostic'
+  | 'assessments-pretest'
+  | 'assessments-posttest'
+  | 'assessments-quarterly'
+  | 'assessments-performance'
+  | 'assessments-written'
+  | 'assessments-oral'
+  | 'assessments-authentic'
   | 'assessments-formative'
   | 'assessments-create'
   | 'assessments-diagnostic-results'
@@ -145,7 +152,14 @@ export default function TeacherSidebar({
       icon: <FileText className="w-4 h-4 text-violet-400" />,
       defaultOpen: currentSection.startsWith('assessments'),
       children: [
-        { id: 'assessments-diagnostic', label: 'Diagnostic Assessments (Pre & Post)' },
+        { id: 'assessments-diagnostic', label: 'Diagnostic Hub' },
+        { id: 'assessments-pretest', label: 'Pre-Test Manager' },
+        { id: 'assessments-posttest', label: 'Post-Test Manager' },
+        { id: 'assessments-quarterly', label: 'Quarterly Assessment' },
+        { id: 'assessments-performance', label: 'Performance Assessment' },
+        { id: 'assessments-written', label: 'Written Assessment' },
+        { id: 'assessments-oral', label: 'Oral Assessment' },
+        { id: 'assessments-authentic', label: 'Authentic Assessment' },
         { id: 'assessments-formative', label: 'Formative Assessments' },
         { id: 'assessments-exams', label: 'Summative Tests (TOS)' },
         { id: 'assessments-diagnostic-results', label: 'Diagnostic Results (Pre vs Post)' },

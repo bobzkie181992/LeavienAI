@@ -820,9 +820,46 @@ export default function StudentModule({
                 <StudentDiagnosticAssessmentPage
                   topics={topics}
                   profile={profile}
-                  onStartDiagnosticTest={(testType) => handleRetakeDiagnostic(testType)}
+                  initialTestType="pre-test"
+                  onStartDiagnosticTest={(testType) => handleRetakeDiagnostic(testType || 'pre-test')}
                   onSaveDiagnosticResult={(ability, scores, pathway, violations, testType, totalItems) => {
                     saveDiagnosticResult(ability, scores, pathway, violations, testType, totalItems);
+                  }}
+                  onBackToOverview={() => setCurrentSection('dashboard')}
+                />
+              </motion.div>
+            ) : currentSection === 'assessments-pretest' ? (
+              <motion.div
+                key="sec-assessments-pretest"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <StudentDiagnosticAssessmentPage
+                  topics={topics}
+                  profile={profile}
+                  initialTestType="pre-test"
+                  onStartDiagnosticTest={() => handleRetakeDiagnostic('pre-test')}
+                  onSaveDiagnosticResult={(ability, scores, pathway, violations, testType, totalItems) => {
+                    saveDiagnosticResult(ability, scores, pathway, violations, testType || 'pre-test', totalItems);
+                  }}
+                  onBackToOverview={() => setCurrentSection('dashboard')}
+                />
+              </motion.div>
+            ) : currentSection === 'assessments-posttest' ? (
+              <motion.div
+                key="sec-assessments-posttest"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <StudentDiagnosticAssessmentPage
+                  topics={topics}
+                  profile={profile}
+                  initialTestType="post-test"
+                  onStartDiagnosticTest={() => handleRetakeDiagnostic('post-test')}
+                  onSaveDiagnosticResult={(ability, scores, pathway, violations, testType, totalItems) => {
+                    saveDiagnosticResult(ability, scores, pathway, violations, testType || 'post-test', totalItems);
                   }}
                   onBackToOverview={() => setCurrentSection('dashboard')}
                 />
@@ -854,6 +891,11 @@ export default function StudentModule({
                   initialTab={
                     currentSection === 'assessments-exams' ? 'exams' :
                     currentSection === 'assessments-results' ? 'results' :
+                    currentSection === 'assessments-quarterly' ? 'quarterly' :
+                    currentSection === 'assessments-performance' ? 'performance' :
+                    currentSection === 'assessments-written' ? 'written' :
+                    currentSection === 'assessments-oral' ? 'oral' :
+                    currentSection === 'assessments-authentic' ? 'authentic' :
                     'quizzes'
                   }
                   onStartQuiz={(quiz, mode) => {

@@ -28,6 +28,7 @@ import DiagnosticAssessment from './DiagnosticAssessment';
 interface StudentDiagnosticAssessmentPageProps {
   topics: Topic[];
   profile: UserProfile;
+  initialTestType?: 'pre-test' | 'post-test';
   onStartDiagnosticTest: (testType?: 'pre-test' | 'post-test') => void;
   onSaveDiagnosticResult?: (
     ability: string,
@@ -43,14 +44,15 @@ interface StudentDiagnosticAssessmentPageProps {
 export default function StudentDiagnosticAssessmentPage({
   topics,
   profile,
+  initialTestType = 'pre-test',
   onStartDiagnosticTest,
   onSaveDiagnosticResult,
   onBackToOverview
 }: StudentDiagnosticAssessmentPageProps) {
   const { questions: fetchedQuestions } = useDiagnosticExam();
-  const [activeTab, setActiveTab] = useState<'pre-test' | 'post-test' | 'growth'>('pre-test');
+  const [activeTab, setActiveTab] = useState<'pre-test' | 'post-test' | 'growth'>(initialTestType === 'post-test' ? 'post-test' : 'pre-test');
   const [isTestActive, setIsTestActive] = useState(false);
-  const [currentTestType, setCurrentTestType] = useState<'pre-test' | 'post-test'>('pre-test');
+  const [currentTestType, setCurrentTestType] = useState<'pre-test' | 'post-test'>(initialTestType);
   const [showQuestionsPreview, setShowQuestionsPreview] = useState(false);
 
   // Status computation

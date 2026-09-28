@@ -45,12 +45,287 @@ export interface SecurityGateConfig {
   publishedToStudents: boolean;
 }
 
+export type AssessmentMode =
+  | 'diagnostic'
+  | 'pretest'
+  | 'posttest'
+  | 'formative'
+  | 'summative'
+  | 'quarterly'
+  | 'performance'
+  | 'written'
+  | 'oral'
+  | 'authentic';
+
 interface DepEdExcelImporterProps {
   isOpen: boolean;
   onClose: () => void;
   onImportQuestions: (questions: ParsedDepEdQuestion[], securityConfig?: SecurityGateConfig) => void;
-  mode: 'diagnostic' | 'formative';
+  mode: AssessmentMode;
 }
+
+const ASSESSMENT_MODE_CONFIGS: Record<AssessmentMode, {
+  badge: string;
+  title: string;
+  description: string;
+  themeClass: string;
+  badgeClass: string;
+  codePrefix: string;
+  instructions: string;
+  sampleTemplate: any[];
+}> = {
+  diagnostic: {
+    badge: "DIAGNOSTIC BASELINE CHECK",
+    title: "Grade 11 General Math: Diagnostic Assessment",
+    description: "Evaluates student prior knowledge and baseline gaps before commencing unit instruction.",
+    themeClass: "bg-amber-600",
+    badgeClass: "bg-amber-400 text-slate-950",
+    codePrefix: "DIAG",
+    instructions: "Sheet requires Item ID, Competency, IRT Difficulty (-3.0 to +3.0), Question, Options A-D, Correct Answer, and Diagnostic Feedback.",
+    sampleTemplate: [
+      {
+        'Item ID': 'DIAG-01',
+        'Competency': 'Represents real-life situations using functions (M11GM-Ia-1)',
+        'Cognitive Level': 'Understand',
+        'Question': 'Which of the following relations represents a function?',
+        'Choice A': '{(1, 2), (2, 3), (3, 4)}',
+        'Choice B': '{(1, 5), (1, 6), (2, 7)}',
+        'Choice C': '{(0, 0), (0, 1), (0, 2)}',
+        'Choice D': '{(3, 1), (3, 2), (4, 5)}',
+        'Correct Answer': 'A',
+        'Difficulty': 'easy',
+        'Correct Feedback': '✓ Correct! Each domain element is paired with exactly one range value.',
+        'Incorrect Feedback': '✗ A relation is not a function if an x-value repeats with different y-values.'
+      }
+    ]
+  },
+  pretest: {
+    badge: "PRE-TEST ENTRY ASSESSMENT",
+    title: "General Mathematics Entry Pre-Test Questionnaire",
+    description: "Measures entry readiness and prerequisite skills prior to starting new topics.",
+    themeClass: "bg-blue-600",
+    badgeClass: "bg-blue-400 text-slate-950",
+    codePrefix: "PRE",
+    instructions: "Sheet requires Prerequisite Item ID, Prerequisite Competency Code, Entry Question, Choices A-D, and Diagnostic Remediation.",
+    sampleTemplate: [
+      {
+        'Item ID': 'PRE-01',
+        'Competency': 'Prerequisite Algebra: Factoring Polynomials',
+        'Cognitive Level': 'Apply',
+        'Question': 'Factor completely: x^2 - 9',
+        'Choice A': '(x - 3)(x + 3)',
+        'Choice B': '(x - 3)^2',
+        'Choice C': '(x + 3)^2',
+        'Choice D': 'x(x - 9)',
+        'Correct Answer': 'A',
+        'Difficulty': 'easy',
+        'Correct Feedback': '✓ Correct! Difference of two squares formula: a^2 - b^2 = (a-b)(a+b).',
+        'Incorrect Feedback': '✗ Recall: Difference of squares factors into conjugate binomials.'
+      }
+    ]
+  },
+  posttest: {
+    badge: "POST-TEST EXIT ASSESSMENT",
+    title: "General Mathematics Post-Test Exit Check",
+    description: "Evaluates exit competency mastery and learning growth gains following instruction.",
+    themeClass: "bg-purple-600",
+    badgeClass: "bg-purple-400 text-slate-950",
+    codePrefix: "POST",
+    instructions: "Sheet requires Exit Item ID, Target Competency Standard, Question, Choices A-D, Correct Answer, and Exit Mastery Rationale.",
+    sampleTemplate: [
+      {
+        'Item ID': 'POST-01',
+        'Competency': 'Solves rational equations and inequalities (M11GM-Ib-1)',
+        'Cognitive Level': 'Analyze',
+        'Question': 'Solve for x: (x + 2) / (x - 1) = 2',
+        'Choice A': 'x = 4',
+        'Choice B': 'x = 2',
+        'Choice C': 'x = -1',
+        'Choice D': 'x = 1 (extraneous)',
+        'Correct Answer': 'A',
+        'Difficulty': 'medium',
+        'Correct Feedback': '✓ Correct! x + 2 = 2(x - 1) => x + 2 = 2x - 2 => x = 4.',
+        'Incorrect Feedback': '✗ Multiply both sides by (x - 1) and check for non-zero denominators.'
+      }
+    ]
+  },
+  formative: {
+    badge: "FORMATIVE QUICK CHECK",
+    title: "Lesson Formative Knowledge Checkpoint",
+    description: "Low-stakes continuous checks during lessons with immediate answer feedback & remediation hints.",
+    themeClass: "bg-indigo-600",
+    badgeClass: "bg-indigo-400 text-slate-950",
+    codePrefix: "FORM",
+    instructions: "Sheet requires Item ID, PPT Slide, Competency, Question, Choices A-D, Correct Answer, Positive Feedback, and Remediation Hint.",
+    sampleTemplate: [
+      {
+        'Item ID': 'FORM-01',
+        'PPT Slide': 'Slide 6',
+        'Competency': 'Evaluates piecewise functions accurately (M11GM-Ia-2)',
+        'Cognitive Level': 'Apply',
+        'Question': 'Evaluate f(3) if f(x) = 2x + 1.',
+        'Choice A': '5',
+        'Choice B': '6',
+        'Choice C': '7',
+        'Choice D': '8',
+        'Correct Answer': 'C',
+        'Difficulty': 'easy',
+        'Correct Feedback': '✓ Correct! f(3) = 2(3) + 1 = 7.',
+        'Incorrect Feedback': '✗ Substitute x = 3 directly into f(x) = 2x + 1.'
+      }
+    ]
+  },
+  summative: {
+    badge: "SUMMATIVE UNIT EXAMINATION",
+    title: "Unit Summative Examination (DepEd TOS)",
+    description: "Calibrated against Bloom's cognitive taxonomy (Remembering, Understanding, Applying, Analyzing).",
+    themeClass: "bg-violet-600",
+    badgeClass: "bg-violet-400 text-slate-950",
+    codePrefix: "SUMM",
+    instructions: "Sheet requires Item ID, Unit Topic, Cognitive Taxonomy Level, Question, Choices A-D, Correct Answer, and Full Solution Rationale.",
+    sampleTemplate: [
+      {
+        'Item ID': 'SUMM-01',
+        'Competency': 'Solves real-life problems involving functions (M11GM-Ia-4)',
+        'Cognitive Level': 'Apply',
+        'Question': 'A jeepney fare charges ₱13 for the first 4 km and ₱1.75 for each additional km. Find the fare for 10 km.',
+        'Choice A': '₱23.50',
+        'Choice B': '₱20.50',
+        'Choice C': '₱17.50',
+        'Choice D': '₱25.00',
+        'Correct Answer': 'A',
+        'Difficulty': 'medium',
+        'Correct Feedback': '✓ Correct! Fare = 13 + 1.75(10 - 4) = 13 + 1.75(6) = 13 + 10.50 = ₱23.50.',
+        'Incorrect Feedback': '✗ Calculate additional distance: 10 - 4 = 6 km, then multiply by ₱1.75.'
+      }
+    ]
+  },
+  quarterly: {
+    badge: "QUARTERLY ASSESSMENT EXAM",
+    title: "Quarterly Comprehensive Examination",
+    description: "Quarterly examination covering all competencies with TOS distribution.",
+    themeClass: "bg-amber-700",
+    badgeClass: "bg-amber-300 text-slate-950",
+    codePrefix: "QTR",
+    instructions: "Sheet requires Item ID, Quarter (Q1/Q2), TOS Cognitive Level, Question, Choices A-D, Correct Answer, and Rationale.",
+    sampleTemplate: [
+      {
+        'Item ID': 'Q1-EXAM-01',
+        'Competency': 'General Mathematics Quarter 1 Comprehensive',
+        'Cognitive Level': 'Understand',
+        'Question': 'Which line test is used to determine if a graph represents a one-to-one function?',
+        'Choice A': 'Horizontal Line Test',
+        'Choice B': 'Vertical Line Test',
+        'Choice C': 'Diagonal Line Test',
+        'Choice D': 'Parallel Line Test',
+        'Correct Answer': 'A',
+        'Difficulty': 'easy',
+        'Correct Feedback': '✓ Correct! Horizontal Line Test determines if a function is one-to-one (injective).',
+        'Incorrect Feedback': '✗ Vertical line test checks if a relation is a function; Horizontal line test checks if it is one-to-one.'
+      }
+    ]
+  },
+  performance: {
+    badge: "PERFORMANCE TASK ASSESSMENT",
+    title: "Performance Task (Output & Portfolio)",
+    description: "Output-based performance tasks, modeling portfolios, and real-world mathematical rubrics.",
+    themeClass: "bg-emerald-600",
+    badgeClass: "bg-emerald-400 text-slate-950",
+    codePrefix: "PERF",
+    instructions: "Sheet requires Task ID, Output Title, Performance Standard, Rubric Criteria 1-4, Maximum Points, Submission Format, and Prompt.",
+    sampleTemplate: [
+      {
+        'Item ID': 'PT-01',
+        'Competency': 'Mathematical Modeling Portfolio (M11GM-Ia-4)',
+        'Cognitive Level': 'Create',
+        'Question': 'Construct a piecewise model representing the electricity consumption rates of your local barangay. Include domain intervals and graphical analysis.',
+        'Choice A': 'Rubric: Mathematical Accuracy (40 pts)',
+        'Choice B': 'Rubric: Model Design & Domain Intervals (30 pts)',
+        'Choice C': 'Rubric: Real-World Application & Analysis (20 pts)',
+        'Choice D': 'Rubric: Presentation & Clarity (10 pts)',
+        'Correct Answer': 'A',
+        'Difficulty': 'hard',
+        'Correct Feedback': '✓ Complete modeling portfolio meeting all DepEd rubric standards.',
+        'Incorrect Feedback': '✗ Ensure piecewise functions have non-overlapping domain subsets.'
+      }
+    ]
+  },
+  written: {
+    badge: "WRITTEN WORK ASSESSMENT",
+    title: "Written Work & Problem Set Assessment",
+    description: "Step-by-step problem sets, algebraic proofs, and written computation exercises.",
+    themeClass: "bg-blue-700",
+    badgeClass: "bg-blue-300 text-slate-950",
+    codePrefix: "WRIT",
+    instructions: "Sheet requires Item ID, Problem Statement, Proof & Working Steps, Final Solution Key, Partial Credit Breakdown, and Misconception Analysis.",
+    sampleTemplate: [
+      {
+        'Item ID': 'WW-01',
+        'Competency': 'Solves rational equations step-by-step (M11GM-Ib-1)',
+        'Cognitive Level': 'Apply',
+        'Question': 'Find all real solutions for: (2 / x) + (1 / 3) = 5 / 6. Show step-by-step written proof.',
+        'Choice A': 'x = 4 (Step 1: LCD = 6x => 12 + 2x = 5x => 3x = 12 => x = 4)',
+        'Choice B': 'x = 2',
+        'Choice C': 'x = 6',
+        'Choice D': 'x = -4',
+        'Correct Answer': 'A',
+        'Difficulty': 'medium',
+        'Correct Feedback': '✓ Correct step-by-step written solution key.',
+        'Incorrect Feedback': '✗ Multiply the entire equation by the LCD 6x to eliminate denominators.'
+      }
+    ]
+  },
+  oral: {
+    badge: "ORAL RECITATION ASSESSMENT",
+    title: "Oral Defense & Verbal Reasoning Assessment",
+    description: "Oral recitation defense prompts, mathematical reasoning explanations, and conceptual discussions.",
+    themeClass: "bg-teal-600",
+    badgeClass: "bg-teal-300 text-slate-950",
+    codePrefix: "ORAL",
+    instructions: "Sheet requires Prompt ID, Recitation Topic, Verbal Probe Question, Expected Conceptual Rationale, Follow-up Probe, and Articulation Rubric.",
+    sampleTemplate: [
+      {
+        'Item ID': 'ORAL-01',
+        'Competency': 'Oral Defense: Function Uniqueness & Vertical Line Test',
+        'Cognitive Level': 'Evaluate',
+        'Question': 'Explain verbally why a circle equation x^2 + y^2 = r^2 fails the vertical line test and is NOT a function.',
+        'Choice A': 'Expected Response: A vertical line x = c intersects the circle at two y-points (y = ±√(r^2 - c^2)), violating function single-output definition.',
+        'Choice B': 'Expected Response: It has a negative radius.',
+        'Choice C': 'Expected Response: It is not a straight line.',
+        'Choice D': 'Expected Response: It passes through the origin.',
+        'Correct Answer': 'A',
+        'Difficulty': 'medium',
+        'Correct Feedback': '✓ Excellent verbal articulation of function domain-to-range mapping.',
+        'Incorrect Feedback': '✗ Focus answer on single input yielding multiple output points.'
+      }
+    ]
+  },
+  authentic: {
+    badge: "AUTHENTIC SCENARIO TASK",
+    title: "Authentic Contextualized Application Task",
+    description: "Real-world community math scenarios, financial planning cases, and practical modeling tasks.",
+    themeClass: "bg-rose-600",
+    badgeClass: "bg-rose-300 text-slate-950",
+    codePrefix: "AUTH",
+    instructions: "Sheet requires Scenario ID, Real-World Context, Community Situation, Core Math Challenge, Data Table/Variables, and Solution Matrix.",
+    sampleTemplate: [
+      {
+        'Item ID': 'AUTH-01',
+        'Competency': 'Authentic Community Finance: Local Cooperative Loans',
+        'Cognitive Level': 'Create',
+        'Question': 'Barangay San Jose Cooperative offers a ₱50,000 loan at 6% annual simple interest for 3 years versus 5.5% compounded monthly. Which option yields lower total interest paid?',
+        'Choice A': 'Simple Interest total interest = ₱9,000 vs Compound total interest = ₱8,944 (Compound is ₱56 cheaper)',
+        'Choice B': 'Simple Interest is cheaper by ₱500',
+        'Choice C': 'Both yield identical interest',
+        'Choice D': 'Compound Interest total interest = ₱12,000',
+        'Correct Answer': 'A',
+        'Difficulty': 'hard',
+        'Correct Feedback': '✓ Authentic community financial calculation verified.',
+        'Incorrect Feedback': '✗ Apply I = Prt for simple interest and A = P(1 + r/n)^(nt) for compound interest.'
+      }
+    ]
+  }
+};
 
 interface DiagnosticInfo {
   workbookLoaded: boolean;
@@ -80,18 +355,16 @@ export default function DepEdExcelImporter({
   const [diagnostics, setDiagnostics] = useState<DiagnosticInfo | null>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
+  const modeConfig = ASSESSMENT_MODE_CONFIGS[mode] || ASSESSMENT_MODE_CONFIGS.diagnostic;
+
   // Security Gate Verification State
   const [facultyPin, setFacultyPin] = useState('DEPED-G11');
   const [targetSection, setTargetSection] = useState('Grade 11 - STEM A');
   const [assessmentTitle, setAssessmentTitle] = useState(
-    mode === 'diagnostic'
-      ? 'Grade 11 General Math: Diagnostic Baseline Questionnaire'
-      : 'Grade 11 General Math: In-Lesson Formative Assessment Checkpoint'
+    modeConfig.title
   );
   const [accessCode, setAccessCode] = useState(
-    mode === 'diagnostic'
-      ? 'DIAG' + Math.floor(100 + Math.random() * 900)
-      : 'FORM' + Math.floor(100 + Math.random() * 900)
+    modeConfig.codePrefix + Math.floor(100 + Math.random() * 900)
   );
   const [isLockedForClass, setIsLockedForClass] = useState(false);
   const [publishedToStudents, setPublishedToStudents] = useState(true);
@@ -121,45 +394,9 @@ export default function DepEdExcelImporter({
 
   if (!isOpen) return null;
 
-  // Download DepEd Template Excel file
+  // Download DepEd Template Excel file tailored specifically for this assessment mode
   const handleDownloadTemplate = () => {
-    const templateData = [
-      {
-        'Item ID': 'W1D1-01',
-        'Day': 'Monday',
-        'PPT Slide': 'Slides 5-6 (Concept)',
-        'Competency': 'Illustrate a piecewise function in practical contexts (M11GM-Ia-1)',
-        'Cognitive Level': 'Understand',
-        'Tier': 1,
-        'Question': 'What makes a mathematical relation a piecewise function?',
-        'Choice A': 'It has different rule expressions for distinct subsets of its domain',
-        'Choice B': 'It is always a single continuous straight linear equation',
-        'Choice C': 'It cannot be evaluated at negative real values',
-        'Choice D': 'It contains multiple y-intercepts for a single input',
-        'Correct Answer': 'A',
-        'Difficulty': 'easy',
-        'Correct Feedback': '✓ Correct! Piecewise functions are defined by different formulas over different domain intervals.',
-        'Incorrect Feedback': '✗ Recall: Piecewise functions partition the domain into sub-intervals.'
-      },
-      {
-        'Item ID': 'W1D1-02',
-        'Day': 'Monday',
-        'PPT Slide': 'Slide 7-8 (Worked Example)',
-        'Competency': 'Evaluates piecewise functions in real-world situations (M11GM-Ia-2)',
-        'Cognitive Level': 'Apply',
-        'Tier': 2,
-        'Question': 'A taxi charges ₱40 base fare for the first 500 meters, then ₱13.50 for each succeeding kilometer. What is the fare for a 400-meter trip?',
-        'Choice A': '₱40.00',
-        'Choice B': '₱53.50',
-        'Choice C': '₱26.00',
-        'Choice D': '₱13.50',
-        'Correct Answer': 'A',
-        'Difficulty': 'medium',
-        'Correct Feedback': '✓ Correct! 400 meters falls within the first 500 meters flat rate boundary.',
-        'Incorrect Feedback': '✗ Check the piecewise domain interval: 400m <= 500m.'
-      }
-    ];
-
+    const templateData = modeConfig.sampleTemplate;
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Item Bank');
@@ -414,17 +651,13 @@ export default function DepEdExcelImporter({
         {/* Header Bar */}
         <div className="bg-slate-900 text-white p-4 sm:p-6 flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md ${
-              mode === 'diagnostic' ? 'bg-amber-600' : 'bg-indigo-600'
-            }`}>
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-md ${modeConfig.themeClass}`}>
               {currentStep === 'security-gate' ? <ShieldCheck className="w-5 h-5 text-amber-300" /> : <FileSpreadsheet className="w-5 h-5" />}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
-                  mode === 'diagnostic' ? 'bg-amber-400 text-slate-950' : 'bg-indigo-400 text-slate-950'
-                }`}>
-                  {mode.toUpperCase()} Questionnaire Importer
+                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${modeConfig.badgeClass}`}>
+                  {modeConfig.badge}
                 </span>
                 <span className="text-[10px] bg-slate-800 text-slate-300 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-emerald-400" />
@@ -432,8 +665,8 @@ export default function DepEdExcelImporter({
                 </span>
               </div>
               <h2 className="text-sm sm:text-base font-black text-white mt-0.5">
-                {currentStep === 'upload' && 'Upload DepEd Excel Item Bank'}
-                {currentStep === 'preview' && `Preview & Audit Questionnaire (${parsedQuestions.length} Items)`}
+                {currentStep === 'upload' && `Upload ${modeConfig.title} Excel File`}
+                {currentStep === 'preview' && `Preview & Audit ${mode.toUpperCase()} Questionnaire (${parsedQuestions.length} Items)`}
                 {currentStep === 'security-gate' && 'Faculty Security Gate & Deployment Authorization'}
               </h2>
             </div>

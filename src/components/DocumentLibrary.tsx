@@ -51,6 +51,32 @@ export default function DocumentLibrary({
   const [previewDoc, setPreviewDoc] = useState<ImportedDocument | null>(null);
   const [deletingDoc, setDeletingDoc] = useState<ImportedDocument | null>(null);
 
+  const handleDownloadDoc = (doc: ImportedDocument, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const content = `DepEd Shared Resource / Lesson Plan
+---------------------------------------
+File Name: ${doc.fileName}
+Topic: ${doc.topicTitle}
+Subject: ${doc.extractedMetadata.subject}
+Grade & Section: ${doc.extractedMetadata.gradeLevel} - ${doc.extractedMetadata.section}
+School: ${doc.extractedMetadata.schoolName}
+Teacher: ${doc.extractedMetadata.teacherName}
+Learning Competency: ${doc.extractedMetadata.learningCompetency}
+
+ILAW Framework & Content:
+${doc.lessonPlan?.ilaw ? JSON.stringify(doc.lessonPlan.ilaw, null, 2) : 'No raw ILAW data available.'}
+`;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${doc.fileName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_resource.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const filteredDocs = documents.filter(doc => {
     const matchesSearch = doc.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.topicTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -214,6 +240,13 @@ export default function DocumentLibrary({
                     title="Preview Document"
                   >
                     <Eye className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => handleDownloadDoc(doc, e)}
+                    className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition"
+                    title="Download Shared Resource"
+                  >
+                    <Download className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => onDuplicateDocument(doc)}

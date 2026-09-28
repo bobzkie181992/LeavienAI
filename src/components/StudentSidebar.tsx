@@ -48,6 +48,13 @@ export type StudentNavSection =
   | 'activities-completed'
   | 'assessments'
   | 'assessments-diagnostic'
+  | 'assessments-pretest'
+  | 'assessments-posttest'
+  | 'assessments-quarterly'
+  | 'assessments-performance'
+  | 'assessments-written'
+  | 'assessments-oral'
+  | 'assessments-authentic'
   | 'assessments-formative'
   | 'assessments-exams'
   | 'assessments-results'
@@ -104,7 +111,6 @@ export default function StudentSidebar({
 }: StudentSidebarProps) {
   // Expanded groups state
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    lessons: true,
     curriculum: true,
     activities: false,
     assessments: true,
@@ -124,16 +130,6 @@ export default function StudentSidebar({
       id: 'dashboard',
       label: 'Dashboard',
       icon: <Home className="w-4 h-4" />
-    },
-    {
-      id: 'lessons',
-      label: 'My Lessons',
-      icon: <BookOpen className="w-4 h-4 text-emerald-500" />,
-      subItems: [
-        { id: 'lessons-my', label: 'All Lessons (DLP)', icon: <FileText className="w-3.5 h-3.5 text-emerald-600" /> },
-        { id: 'lessons-ilaw', label: 'ILAW Exemplars', icon: <Compass className="w-3.5 h-3.5 text-amber-500" /> },
-        { id: 'lessons-topics', label: 'Topic Modules', icon: <Layers className="w-3.5 h-3.5 text-indigo-500" /> }
-      ]
     },
     {
       id: 'curriculum',
@@ -163,7 +159,14 @@ export default function StudentSidebar({
       label: 'Assessments',
       icon: <BarChart3 className="w-4 h-4 text-violet-500" />,
       subItems: [
-        { id: 'assessments-diagnostic', label: 'Diagnostic Assessment', icon: <Sparkles className="w-3.5 h-3.5 text-amber-500" />, badge: 'Pre & Post' },
+        { id: 'assessments-diagnostic', label: 'Diagnostic Hub', icon: <Sparkles className="w-3.5 h-3.5 text-amber-500" /> },
+        { id: 'assessments-pretest', label: 'Pre-Test Assessment', icon: <Sparkles className="w-3.5 h-3.5 text-blue-500" /> },
+        { id: 'assessments-posttest', label: 'Post-Test Assessment', icon: <Award className="w-3.5 h-3.5 text-purple-500" /> },
+        { id: 'assessments-quarterly', label: 'Quarterly Assessment', icon: <Trophy className="w-3.5 h-3.5 text-amber-600" /> },
+        { id: 'assessments-performance', label: 'Performance Assessment', icon: <Zap className="w-3.5 h-3.5 text-emerald-500" /> },
+        { id: 'assessments-written', label: 'Written Assessment', icon: <FileText className="w-3.5 h-3.5 text-indigo-500" /> },
+        { id: 'assessments-oral', label: 'Oral Assessment', icon: <Compass className="w-3.5 h-3.5 text-teal-500" /> },
+        { id: 'assessments-authentic', label: 'Authentic Assessment', icon: <CheckSquare className="w-3.5 h-3.5 text-rose-500" /> },
         { id: 'assessments-formative', label: 'Formative Assessment', icon: <CheckSquare className="w-3.5 h-3.5 text-indigo-500" /> },
         { id: 'assessments-exams', label: 'Summative Test (TOS)', icon: <Award className="w-3.5 h-3.5 text-amber-500" /> },
         { id: 'assessments-results', label: 'Assessment Results', icon: <PieChart className="w-3.5 h-3.5 text-emerald-500" /> }
